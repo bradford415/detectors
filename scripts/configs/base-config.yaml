@@ -1,0 +1,68 @@
+# Base config file which stores the default parameters which apply to all model configurations
+---
+
+# Root directory of your project; type "pwd" in the command line to find it
+root_dir: "C:/Users/bsele/Documents/Programming/machine-learning/detectors"
+
+input_data: "data/input.txt"
+
+model: "bigram"
+
+bigram:
+  ## Note: In original transformer paper, typically, head_size/n_heads=n_embed.
+  ##       This implies the projected dim for each head equals n_embed.
+
+  # Token embedding dimension
+  n_embed: 32
+
+  # Number of heads in multi-headed attention
+  n_heads: 4
+
+  # q, k, v projection size; will also be the input size to the linear layer after self-attention
+  head_size: 32
+
+  # How much to multiply the inner layer in the FFN by, specified in section 3.3 of "Attention is all you need"
+  inner_dim_multiplier: 4
+
+# Name of dataset; must be one of the names in the dataset_map dict
+dataset_name: "CocoDetection"
+
+# Parameters for the dataset class
+dataset:
+
+  # Path to the root of the dataset
+  root: "C:/Users/bsele/Documents/Datasets"
+
+train:
+  batch_size: 4
+  learning_rate: 0.001 #1e-3
+
+  # Epochs
+  start_epoch: 0
+  epochs: 50
+
+  # Sequence length
+  block_size: 8
+
+validation:
+  batch_size: 1
+
+# GPU parameters
+cuda:
+
+  # List of GPU devices to use
+  gpus: [0]
+
+  num_workers: 2
+
+# Logging parameters
+logging:
+
+  # Estimate loss every eval_iters iterations
+  eval_interval: 100
+
+# Reproducibility information
+reproducibility:
+  seed: 42
+
+
