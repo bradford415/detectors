@@ -50,7 +50,7 @@ def main(base_config_path: str):
     dataset_kwargs = base_config["dataset"]
     dataset_train = dataset_map[base_config["dataset_name"]](split="train", **dataset_kwargs)
     dataset_val = dataset_map[base_config["dataset_name"]](split="val", **dataset_kwargs)
-
+    ## ############## START HERE###################### work on getting the dataset loaded, need to modifi self.prepare to just normalize to yolo
     exit()
 
     corpus_path = Path(base_config["root_dir"]) / base_config["input_data"]
