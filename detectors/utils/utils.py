@@ -20,7 +20,7 @@ def load_text_file(file_name: Path, mode: str = "r") -> str:
 
 def reproducibility(seed: int) -> None:
     """Set the seed for the sources of randomization. This allows for more reproducible results"""
-    
+
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)

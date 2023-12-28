@@ -13,12 +13,11 @@ class YoloV4(nn.Module):
         """
         super().__init__()
 
-
     def forward(self, x):
         """Forward pass through the model
 
         Args:
-           
+
         """
         B, T = idx.shape
         # idx and targets are both (batch, time_steps) tensor of integers

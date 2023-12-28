@@ -1,5 +1,8 @@
 # Copied and modified from: https://github.com/github/gitignore/blob/main/Python.gitignore
 
+# Outputs
+output/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 

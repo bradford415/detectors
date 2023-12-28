@@ -25,13 +25,13 @@ bigram:
   inner_dim_multiplier: 4
 
 # Name of dataset; must be one of the names in the dataset_map dict
-dataset_name: "CocoDetection"
+dataset_name: "CocoDetectionMiniTrain"
 
 # Parameters for the dataset class
 dataset:
 
   # Path to the root of the dataset
-  root: "C:/Users/bsele/Documents/Datasets"
+  root: "C:/Users/bsele/Documents/Datasets/coco_minitrain_25k"
 
 train:
   batch_size: 4

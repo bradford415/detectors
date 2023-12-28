@@ -105,8 +105,7 @@ class Trainer:
     def _train_one_epcoh(self):
         pass
 
-    #def train():
-
+    # def train():
 
     def train(
         self,
