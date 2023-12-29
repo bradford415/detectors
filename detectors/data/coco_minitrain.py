@@ -31,7 +31,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         explore_coco(self.coco)
 
-        #self.prepare = ConvertCocoToYolo()
+        self.prepare = ConvertCocoToYolo()
 
     def __getitem__(self, index):
         """Retrieve and preprocess samples from the dataset"""
@@ -47,7 +47,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         # Preprocess the input data before passing it to the model
         target = {"image_id": image_id, "annotations": annotations}
-        #image, target = self.prepare(image, target)
+        image, target = self.prepare(image, target)
         if self._transforms is not None:
             image, target = self._transforms(image, target)
 
