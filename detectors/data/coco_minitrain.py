@@ -8,8 +8,7 @@ import torchvision
 import torchvision.transforms as T
 from pycocotools import mask as coco_mask
 
-from detectors.data.coco_utils import ConvertCocoToYolo
-from detectors.utils.display import explore_coco
+from detectors.data.coco_utils import PreprocessCoco, explore_coco
 
 
 class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
@@ -31,11 +30,11 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         explore_coco(self.coco)
 
-        self.prepare = ConvertCocoToYolo()
+        self.prepare = PreprocessCoco()
 
     def __getitem__(self, index):
         """Retrieve and preprocess samples from the dataset"""
-        
+
         # Retrieve the pil image and its annotations
         # annotations is a list of dicts corresponding to every object in the image
         # Each dict contains ground truth information of the object such as bbox and segementation
@@ -55,15 +54,15 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
 
 class Preprocess:
-    """
-    """
+    """ """
 
     def __init__(self):
         pass
-    
-    def __call__(self, ):
-        pass
 
+    def __call__(
+        self,
+    ):
+        pass
 
 
 def build_coco_mini(

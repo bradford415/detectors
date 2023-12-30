@@ -3,17 +3,17 @@
 Usage:
     python scripts/visualizations/explore_coco.py
 """
-import numpy as np
 import matplotlib
-matplotlib.use('Agg')
+import numpy as np
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from PIL import Image
 import requests
+from PIL import Image
 from pycocotools.coco import COCO
 
 
 def main():
-
     # Modify this path to use on a different annotation file
     coco_annotation_file_path = "C:/Users/bsele/Documents/Datasets/coco_minitrain_25k/annotations/instances_minitrain2017.json"
 
@@ -56,9 +56,7 @@ def main():
     img_info = coco_annotation.loadImgs([img_id])[0]
     img_file_name = img_info["file_name"]
     img_url = img_info["coco_url"]
-    print(
-        f"Image ID: {img_id}, File Name: {img_file_name}, Image URL: {img_url}"
-    )
+    print(f"Image ID: {img_id}, File Name: {img_file_name}, Image URL: {img_url}")
 
     # Get all the annotations for the specified image.
     ann_ids = coco_annotation.getAnnIds(imgIds=[img_id], iscrowd=None)
@@ -72,14 +70,19 @@ def main():
     # Save image and its labeled version.
     plt.axis("off")
     plt.imshow(np.asarray(im))
-    plt.savefig(f"scripts/visualizations/{img_id}.jpg", bbox_inches="tight", pad_inches=0)
+    plt.savefig(
+        f"scripts/visualizations/{img_id}.jpg", bbox_inches="tight", pad_inches=0
+    )
     # Plot segmentation and bounding box.
     coco_annotation.showAnns(anns, draw_bbox=True)
-    plt.savefig(f"scripts/visualizations/{img_id}_annotated.jpg", bbox_inches="tight", pad_inches=0)
+    plt.savefig(
+        f"scripts/visualizations/{img_id}_annotated.jpg",
+        bbox_inches="tight",
+        pad_inches=0,
+    )
 
     return
 
 
 if __name__ == "__main__":
-
     main()
