@@ -1,22 +1,24 @@
 from typing import Any, Dict, Tuple
 
 import torch
-from torch import Tensor
 from PIL import Image
 from pycocotools.coco import COCO
+from torch import Tensor
 
 
 class PreprocessCoco(object):
     def __init__(self, return_masks=False):
         self.return_masks = return_masks
 
-    def __call__(self, image: Image.Image, target: Dict[str, Any]) -> Tuple[Image.Image, Dict[str, Tensor]]:
+    def __call__(
+        self, image: Image.Image, target: Dict[str, Any]
+    ) -> Tuple[Image.Image, Dict[str, Tensor]]:
         """Preprocesses the coco formatted dataset in the following way:
 
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
             3. converts bbox from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]
-     
+
         Args:
             image: pil image
             target dictionary with keys image_id and annotations
@@ -72,8 +74,6 @@ class PreprocessCoco(object):
         # TODO comment this
         target["orig_size"] = torch.as_tensor([int(h), int(w)])
         target["size"] = torch.as_tensor([int(h), int(w)])
-        ########### START HEREE########### Continue following detr to preprocess the images and begin training
-        exit()
 
         return image, target
 

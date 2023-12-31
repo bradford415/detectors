@@ -42,7 +42,6 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         # Match the randomly sampled index with the image_id
         image_id = self.ids[index]
-        print()
 
         # Preprocess the input data before passing it to the model
         target = {"image_id": image_id, "annotations": annotations}
@@ -53,37 +52,79 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         return image, target
 
 
-class Preprocess:
-    """ """
+def make_coco_transforms(dataset_split):
+    """Initialize transforms for the coco dataset
 
-    def __init__(self):
-        pass
+    These transforms are based on torchvision transforms but are overrided in data/transforms.py
+    This allows for slight modifications in the the transform
 
-    def __call__(
-        self,
-    ):
-        pass
+    Args:
+        dataset_split: which dataset split to use; `train` or `val`
+
+    """
+
+    normalize = T.Compose(
+        [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
+    )
+
+    scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+
+    if dataset_split == "train":
+        return T.Compose(
+            [
+                T.RandomHorizontalFlip(),
+                T.RandomSelect(
+                    T.RandomResize(scales, max_size=1333),
+                    T.Compose(
+                        [
+                            T.RandomResize([400, 500, 600]),
+                            T.RandomSizeCrop(384, 600),
+                            T.RandomResize(scales, max_size=1333),
+                        ]
+                    ),
+                ),
+                normalize,
+            ]
+        )
+
+    if dataset_split == "val":
+        return T.Compose(
+            [
+                T.RandomResize([800], max_size=1333),
+                normalize,
+            ]
+        )
+
+    raise ValueError(f"unknown {dataset_split}")
 
 
 def build_coco_mini(
     root: str,
-    split: str,
+    dataset_split: str,
 ):
     """Initialize the COCO dataset class
 
     Args:
         root: full path to the dataset root
-        split: which dataset split to use
+        split: which dataset split to use; `train` or `val`
     """
     coco_root = Path(root)
 
-    if split == "train":
+    # Set path to images and annotations
+    if dataset_split == "train":
         images_dir = coco_root / "images" / "train2017"
         annotation_file = coco_root / "annotations" / "instances_minitrain2017.json"
-    elif split == "val":
+    elif dataset_split == "val":
         images_dir = coco_root / "images" / "val2017"
         annotation_file = coco_root / "annotations" / "instances_val2017.json"
 
-    dataset = CocoDetectionMiniTrain(images_dir, annotation_file)
+    # Create the data augmentation transforms
+    data_transforms = make_coco_transforms(dataset_split)
+
+    dataset = CocoDetectionMiniTrain(
+        image_folder=images_dir,
+        annotation_file=annotation_file,
+        transforms=data_transforms,
+    )
 
     return dataset
