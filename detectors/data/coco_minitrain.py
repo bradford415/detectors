@@ -5,9 +5,9 @@ from pathlib import Path
 import torch
 import torch.utils.data
 import torchvision
-import torchvision.transforms as T
 from pycocotools import mask as coco_mask
 
+from detectors.data import transforms as T
 from detectors.data.coco_utils import PreprocessCoco, explore_coco
 
 

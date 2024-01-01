@@ -9,6 +9,7 @@ from detectors.data.coco_minitrain import build_coco_mini
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import utils
+from detectors.data import coco_utils
 
 model_map: Dict[str, Any] = {"YoloV4": YoloV4}
 
@@ -56,14 +57,13 @@ def main(base_config_path: str):
 
     dataset_kwargs = base_config["dataset"]
     dataset_train = dataset_map[base_config["dataset_name"]](
-        split="train", **dataset_kwargs
+        dataset_split="train", **dataset_kwargs
     )
     dataset_val = dataset_map[base_config["dataset_name"]](
-        split="val", **dataset_kwargs
+        dataset_split="val", **dataset_kwargs
     )
-    # work on getting the dataset loaded, need to modifi self.prepare to just normalize to yolo
-    dataset_train[5]
-    exit()
+
+    coco_api = 
 
     corpus_path = Path(base_config["root_dir"]) / base_config["input_data"]
     corpus = utils.load_text_file(corpus_path)

@@ -1,9 +1,11 @@
 from typing import Any, Dict, Tuple
 
 import torch
+import torchvision
 from PIL import Image
 from pycocotools.coco import COCO
 from torch import Tensor
+from torch.utils.data import Dataset
 
 
 class PreprocessCoco(object):
@@ -76,6 +78,17 @@ class PreprocessCoco(object):
         target["size"] = torch.as_tensor([int(h), int(w)])
 
         return image, target
+
+
+def get_coco_object(dataset: Dataset):
+    """Return COCO object from pycocotools
+
+    Args:
+        dataset: torch dataset containing the COCO object 
+    """
+
+    if isinstance(dataset, torchvision.datasets.CocoDetection):
+        return dataset.coco
 
 
 def explore_coco(coco_annotation: COCO):
