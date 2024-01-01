@@ -9,7 +9,7 @@ from detectors.data.coco_minitrain import build_coco_mini
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import utils
-from detectors.data import coco_utils
+from detectors.data.coco_utils import get_coco_object
 
 model_map: Dict[str, Any] = {"YoloV4": YoloV4}
 
@@ -63,7 +63,9 @@ def main(base_config_path: str):
         dataset_split="val", **dataset_kwargs
     )
 
-    coco_api = 
+    coco_api = get_coco_object(dataset_train)
+
+    ########### TEST THEN CONTINUE HERE ##############
 
     corpus_path = Path(base_config["root_dir"]) / base_config["input_data"]
     corpus = utils.load_text_file(corpus_path)
