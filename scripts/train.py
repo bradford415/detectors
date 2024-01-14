@@ -4,6 +4,7 @@ from typing import Any, Dict
 import torch
 import yaml
 from fire import Fire
+from torch.utils.data import DataLoader
 
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.models.yolov4 import YoloV4
@@ -63,14 +64,15 @@ def main(base_config_path: str):
         dataset_split="val", **dataset_kwargs
     )
 
+    dataloader_train = DataLoader(dataset_train, num_workers=base_config["cuda"]["num_workers"])
+    dataloader_test = DataLoader(dataset_val, num_workers=base_config["cuda"]["num_workers"])
+
+    # Return the Coco object from PyCocoTools
     coco_api = get_coco_object(dataset_train)
 
-    ########### TEST THEN CONTINUE HERE ##############
-
-    corpus_path = Path(base_config["root_dir"]) / base_config["input_data"]
-    corpus = utils.load_text_file(corpus_path)
-
     runner = Trainer(corpus)
+
+    ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 
     model = base_config["model"]
     runner_args = {

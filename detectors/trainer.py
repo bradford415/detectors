@@ -1,3 +1,4 @@
+import time
 from typing import Any, Dict
 
 import numpy as np
@@ -5,6 +6,10 @@ import torch
 
 from detectors.utils import utils
 from detectors.vocab import Vocab
+
+optimizer_map = {"adam": torch.optim.Adam,
+                 "adamw": torch.optim.AdamW,
+                 "sgd": torch.optim.SGD}
 
 
 class Trainer:
@@ -16,9 +21,12 @@ class Trainer:
         Args:
             corpus: body of text to encode/decode
         """
-        self.full_text = corpus
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using {self.device}")
+
+        # Initialize training objects
+        self.optimizer = 
+        self.lr_scheduler
 
     def run(
         self,
@@ -102,43 +110,24 @@ class Trainer:
         # print(f"Encoded corpus: {encoded_sentence}")
         # print(f"Decoded corpus: {decoded_sentence}\n")
 
-    def _train_one_epcoh(self):
+    def _train_one_epoch(self):
         pass
 
     # def train():
 
     def train(
         self,
-        train_data,
-        val_data,
-        model,
-        optimizer,
-        batch_size,
-        block_size,
-        max_iters,
-        eval_iters,
-        eval_interval,
+        start_epoch,
+        epochs,
+
     ):
         """ """
-        print("\nTraining...")
-
-        for iter in range(max_iters):
-            if iter % eval_interval == 0:
-                losses = self.estimate_loss(
-                    train_data, val_data, model, eval_iters, batch_size, block_size
-                )
-                print(
-                    f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
-                )
-
-            # Sample a batch of data
-            x_batch, y_batch = Vocab.get_batch(train_data, batch_size, block_size)
-
-            # Evaluate the loss
-            logits, loss = model(x_batch, y_batch)
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
+        print("Start training")
+        start_time = time.time()
+        #################### START HERE work on training loop, similar to detr paper#############
+        for epoch in range(start_epoch, epochs):
+            train_stats = self._train_one_epoch()
+            lr_scheduler.step()
 
     @torch.no_grad()
     def estimate_loss(
