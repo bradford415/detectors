@@ -1,21 +1,20 @@
 import time
-from typing import Any, Dict
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Iterable
 
 import numpy as np
 import torch
+from torch import nn
 
 from detectors.utils import utils
 from detectors.vocab import Vocab
-
-optimizer_map = {"adam": torch.optim.Adam,
-                 "adamw": torch.optim.AdamW,
-                 "sgd": torch.optim.SGD}
 
 
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, corpus):
+    def __init__(self, optimizer: str, lr_scheduler: str, output_path):
         """Constructor for the Trainer class
 
         Args:
@@ -24,9 +23,16 @@ class Trainer:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using {self.device}")
 
-        # Initialize training objects
-        self.optimizer = 
-        self.lr_scheduler
+        ## TODO: PROBALBY REMOVE THESE Initialize training objects
+        # self.optimizer = optimizer_map[optimizer]
+        # self.lr_scheduler = "test"
+
+        # Paths
+        self.output_paths = {
+            "output_dir": Path(
+                f"{output_path}_{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
+            ),
+        }
 
     def run(
         self,
@@ -110,24 +116,68 @@ class Trainer:
         # print(f"Encoded corpus: {encoded_sentence}")
         # print(f"Decoded corpus: {decoded_sentence}\n")
 
-    def _train_one_epoch(self):
-        pass
+    def _train_one_epoch(
+        self,
+        model: nn.Module,
+        criterion: nn.Module,
+        data_loader: Iterable,
+        optimizer: torch.optim.Optimizer,
+        device: torch.device,
+        epoch: int,
+    ):
+    #################### START HERE work on training loop, similar to detr paper#############
+
 
     # def train():
 
     def train(
         self,
+        model,
+        optimizer,
+        lr_scheduler,
         start_epoch,
         epochs,
-
+        ckpt_epochs=None,
     ):
-        """ """
+        """Train a model
+
+        Args:
+            model:
+            optimizer:
+            ckpt_epochs:
+        """
         print("Start training")
         start_time = time.time()
-        #################### START HERE work on training loop, similar to detr paper#############
         for epoch in range(start_epoch, epochs):
             train_stats = self._train_one_epoch()
             lr_scheduler.step()
+
+            # Save the model every ckpt_epochs
+            if ckpt_epochs is not None and (epoch + 1) % ckpt_epochs == 0:
+                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
+                self._save_model(
+                    model,
+                    optimizer,
+                    lr_scheduler,
+                    epoch,
+                    ckpt_epochs,
+                    save_path=ckpt_path,
+                )
+
+                
+
+    def _save_model(
+        self, model, optimizer, lr_scheduler, current_epoch, ckpt_epochs, save_path
+    ):
+        torch.save(
+            {
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "lr_scheduler": lr_scheduler.state_dict(),
+                "epoch": current_epoch,
+            },
+            save_path,
+        )
 
     @torch.no_grad()
     def estimate_loss(

@@ -7,15 +7,20 @@ from fire import Fire
 from torch.utils.data import DataLoader
 
 from detectors.data.coco_minitrain import build_coco_mini
+from detectors.data.coco_utils import get_coco_object
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import utils
-from detectors.data.coco_utils import get_coco_object
 
 model_map: Dict[str, Any] = {"YoloV4": YoloV4}
 
 dataset_map: Dict[str, Any] = {"CocoDetectionMiniTrain": build_coco_mini}
 
+optimizer_map = {
+    "adam": torch.optim.Adam,
+    "adamw": torch.optim.AdamW,
+    "sgd": torch.optim.SGD,
+}
 
 def main(base_config_path: str):
     """Entrypoint for the project
@@ -64,8 +69,12 @@ def main(base_config_path: str):
         dataset_split="val", **dataset_kwargs
     )
 
-    dataloader_train = DataLoader(dataset_train, num_workers=base_config["cuda"]["num_workers"])
-    dataloader_test = DataLoader(dataset_val, num_workers=base_config["cuda"]["num_workers"])
+    dataloader_train = DataLoader(
+        dataset_train, num_workers=base_config["cuda"]["num_workers"]
+    )
+    dataloader_test = DataLoader(
+        dataset_val, num_workers=base_config["cuda"]["num_workers"]
+    )
 
     # Return the Coco object from PyCocoTools
     coco_api = get_coco_object(dataset_train)

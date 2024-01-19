@@ -84,7 +84,7 @@ def get_coco_object(dataset: Dataset):
     """Return COCO object from pycocotools
 
     Args:
-        dataset: torch dataset containing the COCO object 
+        dataset: torch dataset containing the COCO object
     """
 
     if isinstance(dataset, torchvision.datasets.CocoDetection):

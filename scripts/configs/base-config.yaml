@@ -6,6 +6,8 @@ root_dir: "C:/Users/bsele/Documents/Programming/machine-learning/detectors"
 
 input_data: "data/input.txt"
 
+output_path: "output"
+
 model: "bigram"
 
 bigram:
@@ -40,6 +42,9 @@ train:
   # Epochs
   start_epoch: 0
   epochs: 50
+
+  # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+  checkpoint_every: 10
 
   # Sequence length
   block_size: 8
