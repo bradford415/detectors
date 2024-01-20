@@ -14,7 +14,7 @@ from detectors.vocab import Vocab
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, optimizer: str, lr_scheduler: str, output_path):
+    def __init__(self, output_path: str):
         """Constructor for the Trainer class
 
         Args:
@@ -123,51 +123,57 @@ class Trainer:
         data_loader: Iterable,
         optimizer: torch.optim.Optimizer,
         device: torch.device,
-        epoch: int,
     ):
-    #################### START HERE work on training loop, similar to detr paper#############
-
+        for steps, (samples, targets) in enumerate(data_loader):
+            samples = samples.to(device)
+            print(samples)
+            exit()
+            # tagerts
 
     # def train():
 
     def train(
         self,
         model,
+        criterion,
+        data_loader,
         optimizer,
-        lr_scheduler,
-        start_epoch,
-        epochs,
-        ckpt_epochs=None,
+        scheduler,
+        start_epoch=0,
+        epochs=100,
+        ckpt_every=None,
+        device="cpu",
     ):
         """Train a model
 
         Args:
             model:
             optimizer:
-            ckpt_epochs:
+            ckpt_every:
         """
+        ############### START HERE, RUN project and pass correct params ##################
         print("Start training")
         start_time = time.time()
         for epoch in range(start_epoch, epochs):
-            train_stats = self._train_one_epoch()
-            lr_scheduler.step()
+            train_stats = self._train_one_epoch(
+                model, criterion, data_loader, optimizer, device
+            )
+            scheduler.step()
 
-            # Save the model every ckpt_epochs
-            if ckpt_epochs is not None and (epoch + 1) % ckpt_epochs == 0:
+            # Save the model every ckpt_every
+            if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
                 ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
                 self._save_model(
                     model,
                     optimizer,
-                    lr_scheduler,
+                    scheduler,
                     epoch,
-                    ckpt_epochs,
+                    ckpt_every,
                     save_path=ckpt_path,
                 )
 
-                
-
     def _save_model(
-        self, model, optimizer, lr_scheduler, current_epoch, ckpt_epochs, save_path
+        self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
     ):
         torch.save(
             {

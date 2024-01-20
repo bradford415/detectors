@@ -36,14 +36,14 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         """Retrieve and preprocess samples from the dataset"""
 
         # Retrieve the pil image and its annotations
-        # annotations is a list of dicts corresponding to every object in the image
-        # Each dict contains ground truth information of the object such as bbox and segementation
+        # Annotations is a list of dicts; each dict in the list is an object in the image
+        # Each dict contains ground truth information of the object such as bbox, segementation and image_id
         image, annotations = super().__getitem__(index)
 
         # Match the randomly sampled index with the image_id
         image_id = self.ids[index]
 
-        # Preprocess the input data before passing it to the model
+        # Preprocess the input data before passing it to the model; see PreprocessCoco() for more info
         target = {"image_id": image_id, "annotations": annotations}
         image, target = self.prepare(image, target)
         if self._transforms is not None:

@@ -1,10 +1,12 @@
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 
 import torch
 import yaml
 from fire import Fire
+from torch import nn
 from torch.utils.data import DataLoader
+from torchvision.models import resnet50
 
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.coco_utils import get_coco_object
@@ -21,6 +23,9 @@ optimizer_map = {
     "adamw": torch.optim.AdamW,
     "sgd": torch.optim.SGD,
 }
+
+scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
+
 
 def main(base_config_path: str):
     """Entrypoint for the project
@@ -79,18 +84,55 @@ def main(base_config_path: str):
     # Return the Coco object from PyCocoTools
     coco_api = get_coco_object(dataset_train)
 
-    runner = Trainer(corpus)
+    # Initalize model
+    model = resnet50()  # Using temp resnet50 model
+    criterion = nn.CrossEntropyLoss()
+
+    # Extract the train arguments from base config
+    train_args = {**base_config["train"]}
+
+    # Initialize training objects
+    optimizer, lr_scheduler = _init_training_objects(
+        model_params=model.parameters(),
+        optimizer=train_args["optimizer"],
+        scheduler=train_args["scheduler"],
+        learning_rate=train_args["learning_rate"],
+        weight_decay=train_args["weight_decay"],
+        lr_drop=train_args["lr_drop"],
+    )
+
+    runner = Trainer(output_path=base_config["output_path"])
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 
     model = base_config["model"]
-    runner_args = {
-        "text": corpus,
-        "model": base_config["model"],
-        "model_args": base_config[model],
-        **base_config["train"],
+
+    # Build trainer args used for the training
+    trainer_args = {
+        "model": model,
+        "criterion": criterion,
+        "data_loader": dataloader_train,
+        "optimizer": optimizer,
+        "scheduler": lr_scheduler,
+        "device": device,
+        **train_args["epochs"],
     }
-    runner.train(**runner_args)
+    runner.train(**trainer_args)
+
+
+def _init_training_objects(
+    model_params: Iterable,
+    optimizer: str = "sgd",
+    scheduler: str = "step_lr",
+    learning_rate: float = 1e-4,
+    weight_decay: float = 1e-4,
+    lr_drop: int = 200,
+):
+    optimizer = optimizer_map[optimizer](
+        model_params, lr=learning_rate, weight_decay=weight_decay
+    )
+    lr_scheduler = scheduler_map[scheduler](optimizer, lr_drop)
+    return optimizer, lr_scheduler
 
 
 if __name__ == "__main__":

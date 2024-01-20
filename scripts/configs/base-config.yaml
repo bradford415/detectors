@@ -36,18 +36,23 @@ dataset:
   root: "C:/Users/bsele/Documents/Datasets/coco_minitrain_25k"
 
 train:
+  optimizer: "adamw"
+  scheduler: "step_lr"
+
   batch_size: 4
   learning_rate: 0.001 #1e-3
+  weight_decay: 0.0001
+  lr_drop: 200
 
-  # Epochs
-  start_epoch: 0
-  epochs: 50
+  
 
-  # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-  checkpoint_every: 10
+  # Various epochs used during training
+  epochs:
+    start_epoch: 0
+    epochs: 50
 
-  # Sequence length
-  block_size: 8
+    # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+    ckpt_every: 10
 
 validation:
   batch_size: 1
