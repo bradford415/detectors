@@ -27,6 +27,13 @@ optimizer_map = {
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
 
+def collate_fn(batch):
+
+    batch = list(zip(*batch))
+
+    # This is what will be returned in the main for loop (samples, targets)
+    return tuple(batch)
+
 def main(base_config_path: str):
     """Entrypoint for the project
 
@@ -66,6 +73,7 @@ def main(base_config_path: str):
     else:
         print("Using CPU")
 
+
     dataset_kwargs = base_config["dataset"]
     dataset_train = dataset_map[base_config["dataset_name"]](
         dataset_split="train", **dataset_kwargs
@@ -75,10 +83,10 @@ def main(base_config_path: str):
     )
 
     dataloader_train = DataLoader(
-        dataset_train, num_workers=base_config["cuda"]["num_workers"]
+        dataset_train, num_workers=base_config["cuda"]["num_workers"], collate_fn=collate_fn, **train_kwargs
     )
     dataloader_test = DataLoader(
-        dataset_val, num_workers=base_config["cuda"]["num_workers"]
+        dataset_val, num_workers=base_config["cuda"]["num_workers"], collate_fn=collate_fn, **val_kwargs
     )
 
     # Return the Coco object from PyCocoTools

@@ -39,12 +39,10 @@ train:
   optimizer: "adamw"
   scheduler: "step_lr"
 
-  batch_size: 4
+  batch_size: 2
   learning_rate: 0.001 #1e-3
   weight_decay: 0.0001
   lr_drop: 200
-
-  
 
   # Various epochs used during training
   epochs:
@@ -55,7 +53,7 @@ train:
     ckpt_every: 10
 
 validation:
-  batch_size: 1
+  batch_size: 2
 
 # GPU parameters
 cuda:

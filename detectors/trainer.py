@@ -124,9 +124,19 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         device: torch.device,
     ):
+        
         for steps, (samples, targets) in enumerate(data_loader):
+            ############### START HERE, UNDERSTAND SAMPLES RETURN, maybe use ghithub yolov4 collate ##################
+            print("#########################")
+            print(f"{samples[0].shape = }")
+            #print(targets)
+            exit()
+            # samples:  
             samples = samples.to(device)
-            print(samples)
+            #print(samples.shape)
+            #print(targets)
+            targets = [{key: value.to(device) for key, value in targets.items()} for t in targets]
+            
             exit()
             # tagerts
 
@@ -151,7 +161,6 @@ class Trainer:
             optimizer:
             ckpt_every:
         """
-        ############### START HERE, RUN project and pass correct params ##################
         print("Start training")
         start_time = time.time()
         for epoch in range(start_epoch, epochs):
