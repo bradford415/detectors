@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Tuple
 
 import torch
 import yaml
@@ -27,12 +27,29 @@ optimizer_map = {
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
 
-def collate_fn(batch):
+def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None :
+    """Collect samples appropriately to be used at each iteration in the train loop
+    
+    At each train iteration, the DataLoader returns a batch of samples.
+    E.g., for images, annotations in train_loader
 
-    batch = list(zip(*batch))
+    Args:
+        batch: A batch of samples from the dataset. The batch is a list of
+               samples, each sample containg a tuple of (image, image_annotations).
+    """
 
-    # This is what will be returned in the main for loop (samples, targets)
-    return tuple(batch)
+    # Convert [(image, annoations), (image, annoations)] 
+    # to (image, image), (annotations, annotations) *example uses batch_size=2*
+    images, annotations = zip(*batch) # images (C, H, W)
+
+    ###### START HERE, USE PYTORCH YOLOV4 GITHUB TRANSFORMS SO H AND W ARE SAME SHAPE ###############
+    #### OR AT LEAST INVESTIGATE IT, THEN TRY COLLATE AND RESUME WORKING ON TRAINING LOOP ############
+
+    # (B, C, H, W)
+    images = torch.stack(images, dim=0)
+
+    # This is what will be returned in the main train for loop (samples, targets)
+    return images, annotations
 
 def main(base_config_path: str):
     """Entrypoint for the project

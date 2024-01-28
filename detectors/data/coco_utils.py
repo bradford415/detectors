@@ -19,10 +19,10 @@ class PreprocessCoco(object):
 
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
-            3. converts bbox from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]
+            3. converts bboxes from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]
 
         Args:
-            image: pil image
+            image: singular PIL image
             target dictionary with keys image_id and annotations
 
         """
@@ -65,7 +65,8 @@ class PreprocessCoco(object):
         target["labels"] = classes
         target["image_id"] = image_id
 
-        # Extract area and iscrowd for conversion to coco api; required keys for the cocapi but no used in object detection
+        # Extract area and iscrowd for conversion to coco api
+        # Area is used during evaluation with the COCO metric, to separate the metric scores between small, medium and large boxes.
         area = torch.tensor([obj["area"] for obj in annotations])
         iscrowd = torch.tensor(
             [obj["iscrowd"] if "iscrowd" in obj else 0 for obj in annotations]
