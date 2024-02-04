@@ -49,6 +49,8 @@ class Trainer:
             samples = samples.to(device)
             targets = [{key: value.to(device) for key, value in t.items()} for t in targets]
             
+            
+            ############ START HERE, DEVELOP MODEL ###############
             bbox_predictions = model(samples)
             
             ## TOOD: understand this and rename variables if needed
