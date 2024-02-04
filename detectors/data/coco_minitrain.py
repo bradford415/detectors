@@ -2,6 +2,7 @@
 # Mostly taken from here: https://github.com/facebookresearch/detr/blob/main/datasets/coco.py
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.utils.data
 import torchvision
@@ -39,7 +40,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         # Annotations is a list of dicts; each dict in the list is an object in the image
         # Each dict contains ground truth information of the object such as bbox, segementation and image_id
         image, annotations = super().__getitem__(index)
-
+        
         # Match the randomly sampled index with the image_id
         image_id = self.ids[index]
 
@@ -67,22 +68,23 @@ def make_coco_transforms(dataset_split):
         [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
     )
 
-    scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+    scales = [1024]
 
     if dataset_split == "train":
         return T.Compose(
             [
                 T.RandomHorizontalFlip(),
-                T.RandomSelect(
-                    T.RandomResize(scales, max_size=1333),
-                    T.Compose(
-                        [
-                            T.RandomResize([400, 500, 600]),
-                            T.RandomSizeCrop(384, 600),
-                            T.RandomResize(scales, max_size=1333),
-                        ]
-                    ),
-                ),
+                T.RandomResize(scales),
+                T.RandomSizeCrop(512,512),
+                # T.RandomSelect(
+                #     T.Compose(
+                #         [
+                #             T.RandomResize(scales),
+                #             T.RandomSizeCrop(384, 600),
+                #             T.RandomResize(scales, max_size=1333),
+                #         ]
+                #     ),
+                # ),
                 normalize,
             ]
         )

@@ -38,12 +38,9 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
                samples, each sample containg a tuple of (image, image_annotations).
     """
 
-    # Convert [(image, annoations), (image, annoations)] 
+    # Convert [(image, annoations), (image, annoations), ...] 
     # to (image, image), (annotations, annotations) *example uses batch_size=2*
     images, annotations = zip(*batch) # images (C, H, W)
-
-    ###### START HERE, USE PYTORCH YOLOV4 GITHUB TRANSFORMS SO H AND W ARE SAME SHAPE ###############
-    #### OR AT LEAST INVESTIGATE IT, THEN TRY COLLATE AND RESUME WORKING ON TRAINING LOOP ############
 
     # (B, C, H, W)
     images = torch.stack(images, dim=0)

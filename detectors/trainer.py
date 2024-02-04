@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable
 import numpy as np
 import torch
 from torch import nn
+from tqdm import tqdm
 
 from detectors.utils import utils
 from detectors.vocab import Vocab
@@ -34,88 +35,6 @@ class Trainer:
             ),
         }
 
-    def run(
-        self,
-        text: str,
-        model: str,
-        model_args: Dict[str, any],
-        batch_size: int,
-        block_size: int,
-        learning_rate=1e-3,
-        max_iters: int = 1000,
-        eval_interval: int = 100,
-        eval_iters: int = 1000,
-    ):
-        """Excecute the Runner class
-
-        Args:
-            text: The text to encode and decode
-        """
-        # New line for formatting output
-        print()
-
-        # Instantiate the Vocab class
-        nlp = Vocab(text)
-
-        encoded_text = nlp.encode(text)
-
-        # Split encoded data into 90% train and 10% val
-        train_split_n = int(0.9 * len(encoded_text))
-        train_data = encoded_text[:train_split_n]
-        val_data = encoded_text[train_split_n:]
-
-        block_size = 8
-        print(train_data[: block_size + 1])  # first 9 chars in the sequence
-
-        x = train_data[:block_size]  # first 8 input chars
-        y = train_data[
-            1 : block_size + 1
-        ]  # labels chars 1-9; offset by 1 to predict the next character
-        for t in range(block_size):
-            context = x[0 : t + 1]
-            target = y[t]
-            print(f"When the input is {context} the target: {target}")
-
-        x_batch, y_batch = Vocab.get_batch(
-            train_data, batch_size, block_size, self.device
-        )
-
-        model = model_map[model](
-            **model_args,
-            block_size=block_size,
-            vocab_size=len(nlp),
-        )
-        model = model.to(self.device)
-        logits, loss = model(x_batch, y_batch)
-
-        # Create a PyTorch optimizer
-        optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-
-        self.train(
-            train_data,
-            val_data,
-            model=model,
-            optimizer=optimizer,
-            batch_size=batch_size,
-            block_size=block_size,
-            max_iters=max_iters,
-            eval_iters=eval_iters,
-            eval_interval=eval_interval,
-        )
-
-        # Feed in token 0 to 'kick off' the generation; token 0 is the new line character in our vocab
-        idx = torch.zeros((1, 1), dtype=torch.long, device=self.device)
-
-        # Generate a sequence of 100 tokens, grab the batch output with [0], and decode the predicted tokens
-        print(nlp.decode(model.generate(idx, block_size, max_new_tokens=100)[0]))
-
-        print(loss.item())
-
-        # decoded_sentence = nlp.decode(encoded_sentence)
-
-        # print(f"Encoded corpus: {encoded_sentence}")
-        # print(f"Decoded corpus: {decoded_sentence}\n")
-
     def _train_one_epoch(
         self,
         model: nn.Module,
@@ -125,20 +44,18 @@ class Trainer:
         device: torch.device,
     ):
         
-        for steps, (samples, targets) in enumerate(data_loader):
-            ############### START HERE, UNDERSTAND SAMPLES RETURN, maybe use ghithub yolov4 collate ##################
-            print("#########################")
-            print(f"{samples[0].shape = }")
-            #print(targets)
-            exit()
-            # samples:  
+        for steps, (samples, targets) in enumerate(tqdm(data_loader, ascii=' >=')):
+           
             samples = samples.to(device)
-            #print(samples.shape)
-            #print(targets)
-            targets = [{key: value.to(device) for key, value in targets.items()} for t in targets]
+            targets = [{key: value.to(device) for key, value in t.items()} for t in targets]
+            
+            bbox_predictions = model(samples)
+            
+            ## TOOD: understand this and rename variables if needed
+            loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(bbox_predictions, targets["bboxes"])
+            
             
             exit()
-            # tagerts
 
     # def train():
 
