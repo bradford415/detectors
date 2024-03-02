@@ -17,6 +17,7 @@ pyyaml = "*"
 fire = "*"
 torch = "*"
 torchvision = "*"
+tqdm = "*"
 pycocotools = "*"
 
 # Linters/formatters

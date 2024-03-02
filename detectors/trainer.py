@@ -9,7 +9,6 @@ from torch import nn
 from tqdm import tqdm
 
 from detectors.utils import utils
-from detectors.vocab import Vocab
 
 
 class Trainer:
@@ -43,20 +42,24 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         device: torch.device,
     ):
-        
-        for steps, (samples, targets) in enumerate(tqdm(data_loader, ascii=' >=')):
-           
+        for steps, (samples, targets) in enumerate(tqdm(data_loader, ascii=" >=")):
             samples = samples.to(device)
-            targets = [{key: value.to(device) for key, value in t.items()} for t in targets]
-            
-            
+            targets = [
+                {key: value.to(device) for key, value in t.items()} for t in targets
+            ]
+
             ############ START HERE, DEVELOP MODEL ###############
             bbox_predictions = model(samples)
-            
-            ## TOOD: understand this and rename variables if needed
-            loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(bbox_predictions, targets["bboxes"])
-            
-            
+
+            ## TODO: Get GPUs to work
+            print(bbox_predictions.shape)
+            exit()
+
+            ## TODO: understand this and rename variables if needed
+            loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+                bbox_predictions, targets["bboxes"]
+            )
+
             exit()
 
     # def train():

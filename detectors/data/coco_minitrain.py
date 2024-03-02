@@ -40,7 +40,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         # Annotations is a list of dicts; each dict in the list is an object in the image
         # Each dict contains ground truth information of the object such as bbox, segementation and image_id
         image, annotations = super().__getitem__(index)
-        
+
         # Match the randomly sampled index with the image_id
         image_id = self.ids[index]
 
@@ -75,7 +75,7 @@ def make_coco_transforms(dataset_split):
             [
                 T.RandomHorizontalFlip(),
                 T.RandomResize(scales),
-                T.RandomSizeCrop(512,512),
+                T.RandomSizeCrop(512, 512),
                 # T.RandomSelect(
                 #     T.Compose(
                 #         [

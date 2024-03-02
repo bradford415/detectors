@@ -6,15 +6,15 @@ import yaml
 from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision.models import resnet50
 
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.coco_utils import get_coco_object
+from detectors.models.backbones import backbone_map
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import utils
 
-model_map: Dict[str, Any] = {"YoloV4": YoloV4}
+model_map: Dict[str, Any] = {"yolov4": YoloV4}
 
 dataset_map: Dict[str, Any] = {"CocoDetectionMiniTrain": build_coco_mini}
 
@@ -27,9 +27,9 @@ optimizer_map = {
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
 
-def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None :
+def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:
     """Collect samples appropriately to be used at each iteration in the train loop
-    
+
     At each train iteration, the DataLoader returns a batch of samples.
     E.g., for images, annotations in train_loader
 
@@ -38,9 +38,9 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
                samples, each sample containg a tuple of (image, image_annotations).
     """
 
-    # Convert [(image, annoations), (image, annoations), ...] 
+    # Convert [(image, annoations), (image, annoations), ...]
     # to (image, image), (annotations, annotations) *example uses batch_size=2*
-    images, annotations = zip(*batch) # images (C, H, W)
+    images, annotations = zip(*batch)  # images (C, H, W)
 
     # (B, C, H, W)
     images = torch.stack(images, dim=0)
@@ -48,11 +48,13 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
     # This is what will be returned in the main train for loop (samples, targets)
     return images, annotations
 
-def main(base_config_path: str):
+
+def main(base_config_path: str, model_config_path):
     """Entrypoint for the project
 
     Args:
         base_config_path: path to the desired configuration file
+        model_config_path: path to the detection model configuration file
 
     """
 
@@ -60,6 +62,9 @@ def main(base_config_path: str):
 
     with open(base_config_path, "r") as f:
         base_config = yaml.safe_load(f)
+
+    with open(model_config_path, "r") as f:
+        model_config = yaml.safe_load(f)
 
     # Apply reproducibility seeds
     utils.reproducibility(**base_config["reproducibility"])
@@ -87,7 +92,6 @@ def main(base_config_path: str):
     else:
         print("Using CPU")
 
-
     dataset_kwargs = base_config["dataset"]
     dataset_train = dataset_map[base_config["dataset_name"]](
         dataset_split="train", **dataset_kwargs
@@ -97,17 +101,34 @@ def main(base_config_path: str):
     )
 
     dataloader_train = DataLoader(
-        dataset_train, num_workers=base_config["cuda"]["num_workers"], collate_fn=collate_fn, **train_kwargs
+        dataset_train,
+        num_workers=base_config["cuda"]["num_workers"],
+        collate_fn=collate_fn,
+        **train_kwargs,
     )
     dataloader_test = DataLoader(
-        dataset_val, num_workers=base_config["cuda"]["num_workers"], collate_fn=collate_fn, **val_kwargs
+        dataset_val,
+        num_workers=base_config["cuda"]["num_workers"],
+        collate_fn=collate_fn,
+        **val_kwargs,
     )
 
     # Return the Coco object from PyCocoTools
     coco_api = get_coco_object(dataset_train)
 
-    # Initalize model
-    model = resnet50()  # Using temp resnet50 model
+    # Initalize model components
+    backbone = backbone_map[model_config["backbone"]["name"]](
+        pretrain=model_config["backbone"]["pretrained"],
+        remove_top=model_config["backbone"]["remove_top"],
+    )
+
+    model_components = {
+        "backbone": backbone,
+    }
+
+    # model = resnet50()  # Using temp resnet50 model
+    # Initialize detection model
+    model = model_map[model_config["detector"]](**model_components)
     criterion = nn.CrossEntropyLoss()
 
     # Extract the train arguments from base config
@@ -126,8 +147,6 @@ def main(base_config_path: str):
     runner = Trainer(output_path=base_config["output_path"])
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
-
-    model = base_config["model"]
 
     # Build trainer args used for the training
     trainer_args = {

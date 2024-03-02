@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
-# The primary use of overwriting the transforms is to handle 
+# The primary use of overwriting the transforms is to handle
 # the bounding box transformations as well
 """
 Transforms and data augmentation for both image + bbox.
