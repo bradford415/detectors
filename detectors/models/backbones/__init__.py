@@ -1,3 +1,3 @@
 from .resnet import *
 
-backbone_map = {"resnet50": build_resnet50}
+backbone_map = {"resnet18": resnet18}

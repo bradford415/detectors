@@ -118,8 +118,8 @@ def main(base_config_path: str, model_config_path):
 
     # Initalize model components
     backbone = backbone_map[model_config["backbone"]["name"]](
-        pretrain=model_config["backbone"]["pretrained"],
-        remove_top=model_config["backbone"]["remove_top"],
+        #pretrain=model_config["backbone"]["pretrained"],
+        #remove_top=model_config["backbone"]["remove_top"],
     )
 
     model_components = {
