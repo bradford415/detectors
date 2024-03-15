@@ -147,6 +147,7 @@ class ResNet(nn.Module):
         self,
         block: Type[Union[BasicBlock, Bottleneck]],
         layers: List[int],
+        remove_top: bool = True,
         num_classes: int = 1000,
         zero_init_residual: bool = False,
         groups: int = 1,
@@ -155,6 +156,7 @@ class ResNet(nn.Module):
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
+        self.remove_top = remove_top
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
@@ -180,8 +182,10 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        
+        if not remove_top:
+            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+            self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -253,9 +257,10 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
+        if not self.remove_top:
+            x = self.avgpool(x)
+            x = torch.flatten(x, 1)
+            x = self.fc(x)
 
         return x
 
@@ -281,25 +286,22 @@ def _resnet(
     progress: bool = True,
     **kwargs: Any,
 ) -> ResNet:
-    breakpoint()
 
-    model = ResNet(block, layers, **kwargs)
-
+    model = ResNet(block, layers, remove_top=remove_top, **kwargs)
+    
     if pretrain:
         state_dict = torch.hub.load_state_dict_from_url(model_urls[architecture], progress=progress, check_hash=True)
-        model.load_state_dict(state_dict)
-        
-    if remove_top:
-        model.avgpool = Identity()
-        model.fc = Identity()
-        
-    ################## START HERE, PASS REMOVE_TOP PARAMETER FROM TRAIN.PY AND TEST SHAPE################
-        
+        model.load_state_dict(state_dict, strict=False)
+    
+    #if remove_top:
+    #    model.avgpool = Identity()
+    #    model.fc = Identity()
+    #    
 
     return model
 
 
-def resnet18(*, pretrain = True, progress: bool = True, **kwargs: Any) -> ResNet:
+def resnet18(pretrain = True, remove_top=True, progress: bool = True, **kwargs: Any) -> ResNet:
     """ResNet-18 from `Deep Residual Learning for Image Recognition <https://arxiv.org/abs/1512.03385>`__.
 
     Args:
@@ -319,5 +321,5 @@ def resnet18(*, pretrain = True, progress: bool = True, **kwargs: Any) -> ResNet
         :members:
     """
 
-    return _resnet("resnet18", BasicBlock, [2, 2, 2, 2], pretrain, progress, **kwargs)
+    return _resnet("resnet18", BasicBlock, [2, 2, 2, 2], pretrain, remove_top, progress, **kwargs)
 

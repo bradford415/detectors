@@ -18,7 +18,7 @@ class Trainer:
         """Constructor for the Trainer class
 
         Args:
-            corpus: body of text to encode/decode
+            c
         """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using {self.device}")
@@ -50,9 +50,9 @@ class Trainer:
 
             ############ START HERE, DEVELOP MODEL ###############
             bbox_predictions = model(samples)
-
+            
+            
             ## TODO: Get GPUs to work
-            print(bbox_predictions.shape)
             exit()
 
             ## TODO: understand this and rename variables if needed

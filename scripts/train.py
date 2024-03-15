@@ -14,7 +14,7 @@ from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import utils
 
-model_map: Dict[str, Any] = {"yolov4": YoloV4}
+detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
 dataset_map: Dict[str, Any] = {"CocoDetectionMiniTrain": build_coco_mini}
 
@@ -118,8 +118,8 @@ def main(base_config_path: str, model_config_path):
 
     # Initalize model components
     backbone = backbone_map[model_config["backbone"]["name"]](
-        #pretrain=model_config["backbone"]["pretrained"],
-        #remove_top=model_config["backbone"]["remove_top"],
+        pretrain=model_config["backbone"]["pretrained"],
+        remove_top=model_config["backbone"]["remove_top"],
     )
 
     model_components = {
@@ -128,7 +128,7 @@ def main(base_config_path: str, model_config_path):
 
     # model = resnet50()  # Using temp resnet50 model
     # Initialize detection model
-    model = model_map[model_config["detector"]](**model_components)
+    model = detectors_map[model_config["detector"]](**model_components)
     criterion = nn.CrossEntropyLoss()
 
     # Extract the train arguments from base config
