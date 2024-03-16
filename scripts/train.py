@@ -130,7 +130,7 @@ def main(base_config_path: str, model_config_path):
     # Initialize detection model
     model = detectors_map[model_config["detector"]](**model_components)
     criterion = nn.CrossEntropyLoss()
-
+    breakpoint()
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}
 
