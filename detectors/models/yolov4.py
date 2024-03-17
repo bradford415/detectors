@@ -47,7 +47,10 @@ class Upsample(nn.Module):
 
 
 class Neck(nn.Module):
-    """Neck for a ResNet18 backbone input. A few minor changes were made to work with ResNet"""
+    """Neck for a ResNet18 backbone input. A few minor changes were made to work with ResNet
+    
+    Derived from YoloV4 paper section 3.4 and https://github.com/Tianxiaomo/pytorch-YOLOv4/blob/master/models.py#L239
+    """
     def __init__(self, inference=False):
         super().__init__()
         self.inference = inference
@@ -153,7 +156,7 @@ class YoloV4(nn.Module):
         """
         super().__init__()
         self.backbone = backbone
-        self.neck = Neck() #################### START HERE, BUILD NECK FROM SCRATCH, REFEREANCE PAN PAPER, CAN BE FOUND FROM YOLOV4 SECTION 3.4#####################
+        self.neck = Neck() #################### START HERE, BUILD NECK FROM SCRATCH, REFEREANCE PAN PAPER, CAN BE FOUND FROM #####################
         self.head = head # Due this after neck
 
     def forward(self, x):
