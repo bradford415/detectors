@@ -36,14 +36,8 @@ class Upsample(nn.Module):
 
     def forward(self, x, target_size, inference=False):
         assert (x.data.dim() == 4)
-        # _, _, tH, tW = target_size
 
         if inference:
-
-            #B = x.data.size(0)
-            #C = x.data.size(1)
-            #H = x.data.size(2)
-            #W = x.data.size(3)
 
             return x.view(x.size(0), x.size(1), x.size(2), 1, x.size(3), 1).\
                     expand(x.size(0), x.size(1), x.size(2), target_size[2] // x.size(2), x.size(3), target_size[3] // x.size(3)).\
@@ -52,12 +46,13 @@ class Upsample(nn.Module):
             return F.interpolate(x, size=(target_size[2], target_size[3]), mode='nearest')
 
 
-class Neck:
+class Neck(nn.Module):
+    """Neck for a ResNet18 backbone input. A few minor changes were made to work with ResNet"""
     def __init__(self, inference=False):
         super().__init__()
         self.inference = inference
 
-        self.conv1 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
+        self.conv1 = Conv_Bn_Activation(512, 512, 1, 1, 'leaky')
         self.conv2 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
         self.conv3 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
         # SPP
@@ -74,7 +69,7 @@ class Neck:
         # UP
         self.upsample1 = Upsample()
         # R 85
-        self.conv8 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
+        self.conv8 = Conv_Bn_Activation(256, 256, 1, 1, 'leaky')
         # R -1 -3
         self.conv9 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
         self.conv10 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
@@ -85,7 +80,7 @@ class Neck:
         # UP
         self.upsample2 = Upsample()
         # R 54
-        self.conv15 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
+        self.conv15 = Conv_Bn_Activation(128, 128, 1, 1, 'leaky')
         # R -1 -3
         self.conv16 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
         self.conv17 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
@@ -93,7 +88,14 @@ class Neck:
         self.conv19 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
         self.conv20 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
 
-    def forward(self, input, downsample4, downsample3, inference=False):
+    def forward(self, input, downsample3, downsample2, inference=False):
+        """
+
+        Args:
+            input: Input to the neck module; final output from the backbone
+        """
+        
+        breakpoint()
         x1 = self.conv1(input)
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
@@ -108,11 +110,11 @@ class Neck:
         x6 = self.conv6(x5)
         x7 = self.conv7(x6)
         # UP
-        up = self.upsample1(x7, downsample4.size(), self.inference)
+        x7_up = self.upsample1(x7, downsample3.shape, self.inference)
         # R 85
-        x8 = self.conv8(downsample4)
+        x8 = self.conv8(downsample3)
         # R -1 -3
-        x8 = torch.cat([x8, up], dim=1)
+        x8 = torch.cat([x8, x7_up], dim=1)
 
         x9 = self.conv9(x8)
         x10 = self.conv10(x9)
@@ -122,17 +124,19 @@ class Neck:
         x14 = self.conv14(x13)
 
         # UP
-        up = self.upsample2(x14, downsample3.size(), self.inference)
+        x14_up = self.upsample2(x14, downsample2.shape, self.inference)
         # R 54
-        x15 = self.conv15(downsample3)
+        x15 = self.conv15(downsample2)
         # R -1 -3
-        x15 = torch.cat([x15, up], dim=1)
+        x15 = torch.cat([x15, x14_up], dim=1)
 
         x16 = self.conv16(x15)
         x17 = self.conv17(x16)
         x18 = self.conv18(x17)
         x19 = self.conv19(x18)
         x20 = self.conv20(x19)
+        
+        # Output is the final neck output and each of the 2nd to last convolution before upsampling
         return x20, x13, x6
 
 
@@ -149,7 +153,7 @@ class YoloV4(nn.Module):
         """
         super().__init__()
         self.backbone = backbone
-        self.neck = neck #################### START HERE, BUILD NECK FROM SCRATCH, REFEREANCE PAN PAPER, CAN BE FOUND FROM YOLOV4 SECTION 3.4#####################
+        self.neck = Neck() #################### START HERE, BUILD NECK FROM SCRATCH, REFEREANCE PAN PAPER, CAN BE FOUND FROM YOLOV4 SECTION 3.4#####################
         self.head = head # Due this after neck
 
     def forward(self, x):
@@ -159,6 +163,6 @@ class YoloV4(nn.Module):
 
         """
         downsample1, downsample2, downsample3, backbone_out = self.backbone(x)
-        neck_out = self.backbone(backbone_out)
+        neck_out = self.neck(backbone_out, downsample3, downsample2, downsample1)  
 
-        return out
+        return neck_out
