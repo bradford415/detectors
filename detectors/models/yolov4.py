@@ -143,6 +143,98 @@ class Neck(nn.Module):
         return x20, x13, x6
 
 
+class Yolov4Head(nn.Module):
+    """YoloV4 head (final prediction)
+    
+    Architecture described here: https://github.com/Tianxiaomo/pytorch-YOLOv4/blob/a65d219f9066bae4e12003bd7cdc04531860c672/models.py#L323
+    """
+    def __init__(self, output_ch, n_classes, inference=False):
+        super().__init__()
+        self.inference = inference
+
+        self.conv1 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
+        self.conv2 = Conv_Bn_Activation(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+        self.yolo1 = YoloLayer(
+                                anchor_mask=[0, 1, 2], num_classes=n_classes,
+                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
+                                num_anchors=9, stride=8)
+
+        # R -4
+        self.conv3 = Conv_Bn_Activation(128, 256, 3, 2, 'leaky')
+
+        # R -1 -16
+        self.conv4 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
+        self.conv5 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
+        self.conv6 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
+        self.conv7 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
+        self.conv8 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
+        self.conv9 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
+        self.conv10 = Conv_Bn_Activation(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        
+        self.yolo2 = YoloLayer(
+                                anchor_mask=[3, 4, 5], num_classes=n_classes,
+                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
+                                num_anchors=9, stride=16)
+
+        # R -4
+        self.conv11 = Conv_Bn_Activation(256, 512, 3, 2, 'leaky')
+
+        # R -1 -37
+        self.conv12 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
+        self.conv13 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
+        self.conv14 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
+        self.conv15 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
+        self.conv16 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
+        self.conv17 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
+        self.conv18 = Conv_Bn_Activation(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        
+        self.yolo3 = YoloLayer(
+                                anchor_mask=[6, 7, 8], num_classes=n_classes,
+                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
+                                num_anchors=9, stride=32)
+    
+    def forward(self, input1, input2, input3):
+        x1 = self.conv1(input1)
+        predictions_scale1= self.conv2(x1)
+
+        x3 = self.conv3(input1)
+        # R -1 -16
+        x3 = torch.cat([x3, input2], dim=1)
+        x4 = self.conv4(x3)
+        x5 = self.conv5(x4)
+        x6 = self.conv6(x5)
+        x7 = self.conv7(x6)
+        x8 = self.conv8(x7)
+        x9 = self.conv9(x8)
+        predictions_scale2 = self.conv10(x9)
+
+        # R -4
+        x11 = self.conv11(x8)
+        # R -1 -37
+        x11 = torch.cat([x11, input3], dim=1)
+
+        x12 = self.conv12(x11)
+        x13 = self.conv13(x12)
+        x14 = self.conv14(x13)
+        x15 = self.conv15(x14)
+        x16 = self.conv16(x15)
+        x17 = self.conv17(x16)
+        predictions_scale3 = self.conv18(x17)
+        
+        ############################ START HERE, GO THROUGH YOLO LAYERS ##########################
+        if self.inference:
+            y1 = self.yolo1(predictions_scale1)
+            y2 = self.yolo2(predictions_scale2)
+            y3 = self.yolo3(predictions_scale3)
+
+            return get_region_boxes([y1, y2, y3])
+        
+        else:
+            # scale1 has the largest dimensions, scale2 medium, scale3 smallest dimensions (should verify this by viewing shape)
+            return [predictions_scale1, predictions_scale2, predictions_scale3]
+
+
 class YoloV4(nn.Module):
     """Yolov4 based on the architecture described here https://arxiv.org/pdf/2004.10934.pdf
 
@@ -155,9 +247,13 @@ class YoloV4(nn.Module):
 
         """
         super().__init__()
+        
+        # 4 = (tx, ty, tw, th), 1 = objectness, num_classes = number of classes in the ontology, num_bboxes = number of bounding box predictions per grid cell (3 in yolov4)
+        output_channels = (4 + 1 + num_classes) * num_bboxes
+        
         self.backbone = backbone
-        self.neck = Neck() #################### START HERE, BUILD NECK FROM SCRATCH, REFEREANCE PAN PAPER, CAN BE FOUND FROM #####################
-        self.head = head # Due this after neck
+        self.neck = Neck()
+        self.head = Yolov4Head(output_channels, num_classes) 
 
     def forward(self, x):
         """Forward pass through the model
@@ -166,6 +262,7 @@ class YoloV4(nn.Module):
 
         """
         downsample1, downsample2, downsample3, backbone_out = self.backbone(x)
-        neck_out = self.neck(backbone_out, downsample3, downsample2, downsample1)  
+        neck_out, x13, x6 = self.neck(backbone_out, downsample3, downsample2, downsample1)
+        head_out = self.head(neck_out, x13, x6)
 
         return neck_out
