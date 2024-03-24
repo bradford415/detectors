@@ -50,8 +50,7 @@ class Trainer:
 
             ############ START HERE, DEVELOP MODEL ###############
             bbox_predictions = model(samples)
-            
-            
+
             ## TODO: Get GPUs to work
             exit()
 

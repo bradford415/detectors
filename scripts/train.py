@@ -124,13 +124,14 @@ def main(base_config_path: str, model_config_path):
 
     model_components = {
         "backbone": backbone,
+        "num_classes": 80
     }
 
     # model = resnet50()  # Using temp resnet50 model
     # Initialize detection model
     model = detectors_map[model_config["detector"]](**model_components)
     criterion = nn.CrossEntropyLoss()
-    breakpoint()
+
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}
 
