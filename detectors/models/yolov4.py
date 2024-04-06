@@ -177,6 +177,12 @@ class Yolov4Head(nn.Module):
     """
 
     def __init__(self, output_ch, n_classes, inference=False):
+        """
+        
+
+        Args:
+            output_ch: Number of output channels for the predictions; (4 + 1 + num_classes) * num_bboxes
+        """
         super().__init__()
         self.inference = inference
 
@@ -323,6 +329,7 @@ class Yolov4Head(nn.Module):
         x16 = self.conv16(x15)
         x17 = self.conv17(x16)
         predictions_scale3 = self.conv18(x17)
+        breakpoint()
 
         ############################ START HERE, GO THROUGH YOLO LAYERS ##########################
         if self.inference:

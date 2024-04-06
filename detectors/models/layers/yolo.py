@@ -201,10 +201,10 @@ def yolo_forward_dynamic(
     breakpoint()
     
     # Extract prediction offsets, width/height, objectness, and class confidence by slicing the head output
-    ########################## start here, continue understanding ###########################################
+    # Each list will have length of num_anchors
     bxy_list = []
     bwh_list = []
-    det_confs_list = []
+    object_confs_list = []
     cls_confs_list = []
     for i in range(num_anchors):
         begin = i * (5 + num_classes)
@@ -217,39 +217,45 @@ def yolo_forward_dynamic(
         bwh_list.append(output[:, begin + 2 : begin + 4])
         
         # (batch_size, 1, output_w, output_h)
-        det_confs_list.append(output[:, begin + 4 : begin + 5])
+        object_confs_list.append(output[:, begin + 4 : begin + 5])
         
         # (batch_size, num_classes, output_w, output_h)
         cls_confs_list.append(output[:, begin + 5 : end])
 
-    # Shape: [batch, num_anchors * 2, H, W]
-    bxy = torch.cat(bxy_list, dim=1)
-    # Shape: [batch, num_anchors * 2, H, W]
-    bwh = torch.cat(bwh_list, dim=1)
-
-    # Shape: [batch, num_anchors, H, W]
-    det_confs = torch.cat(det_confs_list, dim=1)
-    # Shape: [batch, num_anchors * H * W]
-    det_confs = det_confs.view(
+    # Combine the list of tensors along channel dimension
+    bxy = torch.cat(bxy_list, dim=1) # (batch_size, num_anchors * 2, H, W)
+    bwh = torch.cat(bwh_list, dim=1) # (batch_size, num_anchors * 2, H, W)
+    object_confs = torch.cat(object_confs_list, dim=1) # (batch, num_anchors, H, W)
+    cls_confs = torch.cat(cls_confs_list, dim=1) # (batch, num_anchors * num_classes, H, W)
+    
+    # Reshape to (batch, num_anchors * H * W)
+    object_confs = object_confs.view(
         output.size(0), num_anchors * output.size(2) * output.size(3)
     )
 
-    # Shape: [batch, num_anchors * num_classes, H, W]
-    cls_confs = torch.cat(cls_confs_list, dim=1)
-    # Shape: [batch, num_anchors, num_classes, H * W]
+    # Reshape to [batch, num_anchors, num_classes, H * W]
     cls_confs = cls_confs.view(
         output.size(0), num_anchors, num_classes, output.size(2) * output.size(3)
     )
+    
+    # NOTE: view/reshape only changes the shape and the way you access the tensor, it does not change the memory layout.
+    #       permute/transpose DOES change the memory layout so this will affect how the data is processed 
+    
     # Shape: [batch, num_anchors, num_classes, H * W] --> [batch, num_anchors * H * W, num_classes]
     cls_confs = cls_confs.permute(0, 1, 3, 2).reshape(
         output.size(0), num_anchors * output.size(2) * output.size(3), num_classes
     )
 
-    # Apply sigmoid(), exp() and softmax() to slices
-    #
-    bxy = torch.sigmoid(bxy) * scale_x_y - 0.5 * (scale_x_y - 1)
+    # These next few equations are described in the YoloV2 paper in figure 3
+    # Contrain bxy to [0, 1] with sigmoid; this represents the center of the bounding box relative to the grid cell
+    # This is only computes the first part of bx and by because we still need to add CxCy
+    bxy = torch.sigmoid(bxy) * scale_x_y - 0.5 * (scale_x_y - 1) # scale_x_y in this case is 1
+
+    # Scale the w/h predictions by computing the first part of bw and bh, we still need to multiply by anchor dimensions
+    # The e^bwh is explained in the link below; basically, this is how the authors decided to parametize the scaling because it has nice properties, it does not have to be done like this 
+    # https://stats.stackexchange.com/questions/345251/coordinate-prediction-parameterization-in-object-detection-networks/345267#345267
     bwh = torch.exp(bwh)
-    det_confs = torch.sigmoid(det_confs)
+    object_confs = torch.sigmoid(object_confs)
     cls_confs = torch.sigmoid(cls_confs)
 
     # Prepare C-x, C-y, P-w, P-h (None of them are torch related)
@@ -362,10 +368,10 @@ def yolo_forward_dynamic(
     # cls_confs: [batch, num_anchors * H * W, num_classes]
     # det_confs: [batch, num_anchors * H * W]
 
-    det_confs = det_confs.view(
+    object_confs = object_confs.view(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1
     )
-    confs = cls_confs * det_confs
+    confs = cls_confs * object_confs
 
     # boxes: [batch, num_anchors * H * W, 1, 4]
     # confs: [batch, num_anchors * H * W, num_classes]
@@ -422,9 +428,8 @@ class YoloLayer(nn.Module):
 
         # Create a list of anchor points from all the anchors defined in self.anchors
         # The number of anchor points will be defined from len(anchor_mask)
-        # Ex: if len(anchor_mask) == 3, then lne(masked_anchors) == 6 (double for (x,y) coordinates)
+        # Ex: if len(anchor_mask) == 3, then len(masked_anchors) == 6 (double for (x,y) coordinates)
         # This should be rewritten, it's a bad way to do it
-        breakpoint()
         masked_anchors = []
         for m in self.anchor_mask:
             masked_anchors += self.anchors[
