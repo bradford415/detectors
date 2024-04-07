@@ -200,7 +200,7 @@ def yolo_forward_dynamic(
     # W = output.size(3)
     breakpoint()
     
-    # Extract prediction offsets, width/height, objectness, and class confidence by slicing the head output
+    # Extract prediction offsets (tx,ty), width/height, objectness, and class confidence by slicing the head output
     # Each list will have length of num_anchors
     bxy_list = []
     bwh_list = []
@@ -259,6 +259,9 @@ def yolo_forward_dynamic(
     cls_confs = torch.sigmoid(cls_confs)
 
     # Prepare C-x, C-y, P-w, P-h (None of them are torch related)
+    
+    # grid_x, and grid_y act as the grid cells and will be used to add Cx, Cy grid offsets to the predictions; each "grid cell" is a 1x1 unit
+    # (B, 1, H, W)
     grid_x = np.expand_dims(
         np.expand_dims(
             np.expand_dims(
@@ -268,6 +271,8 @@ def yolo_forward_dynamic(
         ),
         axis=0,
     )
+    
+    # (B, 1, H, W)
     grid_y = np.expand_dims(
         np.expand_dims(
             np.expand_dims(
@@ -277,8 +282,6 @@ def yolo_forward_dynamic(
         ),
         axis=0,
     )
-    # grid_x = torch.linspace(0, W - 1, W).reshape(1, 1, 1, W).repeat(1, 1, H, 1)
-    # grid_y = torch.linspace(0, H - 1, H).reshape(1, 1, H, 1).repeat(1, 1, 1, W)
 
     anchor_w = []
     anchor_h = []
@@ -296,7 +299,7 @@ def yolo_forward_dynamic(
     bw_list = []
     bh_list = []
 
-    # Apply C-x, C-y, P-w, P-h
+    # Apply C-x, C-y, P-w, P-h; add grid offsets and multiply anchor dimensions to predictions 
     for i in range(num_anchors):
         ii = i * 2
         # Shape: [batch, 1, H, W]
@@ -317,6 +320,10 @@ def yolo_forward_dynamic(
         bw_list.append(bw)
         bh_list.append(bh)
 
+##################################### START HERE ###########################
+
+
+    
     ########################################
     #   Figure out bboxes from slices     #
     ########################################
