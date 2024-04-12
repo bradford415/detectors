@@ -183,10 +183,25 @@ def yolo_forward_dynamic(
     only_objectness=1,
     validation=False,
 ):
-    """TODO
+    """Computes the normalized Yolo prediction bounding boxes (not input dim sized).
+    This function is only called during inference, once for each prediction scale.
     
     Args:
-    
+        output: Output feature maps from the head
+        conf_threshold:
+        num_class: Number of classes in ontology
+        anchors:
+        num_anchors: Number of anchor box priors
+        scal_x_y:
+        only_objectness:
+        validation:
+
+    Returns:
+        1. boxes: (B, num_anchors * H * W, 1, 4) Normalized bounding box predictions, predicts num_anchors per grid cell (H, W); 
+                  grid cell -> size of final feature map ; 4 = normalized upper left and lower right bbox coordinates;
+                  the coordinates are not the size of input dimensions, they are normalized
+        2. confs: (B, num_anchors * H * W, num_classes) confidences of each class in the ontology;
+                  these are NOT probabilities because they do not sum to 1 
     """
     # Output would be invalid if it does not satisfy this assert
     assert (output.shape[1] == (5 + num_classes) * num_anchors)
@@ -294,6 +309,8 @@ def yolo_forward_dynamic(
     if cuda_check:
         device = output.get_device()
 
+
+    # Lists to store final computations for each anchor
     bx_list = []
     by_list = []
     bw_list = []
@@ -323,30 +340,25 @@ def yolo_forward_dynamic(
 ##################################### START HERE ###########################
 
 
-    
-    ########################################
-    #   Figure out bboxes from slices     #
-    ########################################
+    breakpoint()
 
-    # Shape: [batch, num_anchors, H, W]
+    # Concat list of final computed predictions along anchor dimension
+    # bx, by, bw, bh: (batch_size, num_anchors, H, W)
     bx = torch.cat(bx_list, dim=1)
-    # Shape: [batch, num_anchors, H, W]
     by = torch.cat(by_list, dim=1)
-    # Shape: [batch, num_anchors, H, W]
     bw = torch.cat(bw_list, dim=1)
-    # Shape: [batch, num_anchors, H, W]
     bh = torch.cat(bh_list, dim=1)
 
-    # Shape: [batch, 2 * num_anchors, H, W]
-    bx_bw = torch.cat((bx, bw), dim=1)
-    # Shape: [batch, 2 * num_anchors, H, W]
+    # Concat [final x coord, final width] and [final y coord, final height]
+    # bx_bw, by_bh(B, 2 * num_anchors, H, W)
+    bx_bw = torch.cat((bx, bw), dim=1) 
     by_bh = torch.cat((by, bh), dim=1)
 
-    # normalize coordinates to [0, 1]
+    # Normalize coordinates to [0, 1]
     bx_bw /= output.size(3)
     by_bh /= output.size(2)
 
-    # Shape: [batch, num_anchors * H * W, 1]
+    # Extract each component and reshape to (batch, num_anchors * H * W, 1)
     bx = bx_bw[:, :num_anchors].view(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1
     )
@@ -360,17 +372,22 @@ def yolo_forward_dynamic(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1
     )
 
+    breakpoint()
+    # Get the x and y coordinates of the upper left and lower right of the bounding box prediction
+    # The coordinates are still normalized at this point and may contain negatives
     bx1 = bx - bw * 0.5
     by1 = by - bh * 0.5
     bx2 = bx1 + bw
     by2 = by1 + bh
 
-    # Shape: [batch, num_anchors * h * w, 4] -> [batch, num_anchors * h * w, 1, 4]
+    # Group upper left and low right coordinates to form num_anchors prediction for each grid_cell
+    # Shape: [batch, num_anchors * h * w, 4] -> [batch, num_anchors * h * w, 1, 4] ** Not sure why the 1 dim is needed **
     boxes = torch.cat((bx1, by1, bx2, by2), dim=2).view(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1, 4
     )
     # boxes = boxes.repeat(1, 1, num_classes, 1)
 
+    # Final prediction shapes
     # boxes:     [batch, num_anchors * H * W, 1, 4]
     # cls_confs: [batch, num_anchors * H * W, num_classes]
     # det_confs: [batch, num_anchors * H * W]
@@ -380,6 +397,7 @@ def yolo_forward_dynamic(
     )
     confs = cls_confs * object_confs
 
+    # Final prediction shapes
     # boxes: [batch, num_anchors * H * W, 1, 4]
     # confs: [batch, num_anchors * H * W, num_classes]
 

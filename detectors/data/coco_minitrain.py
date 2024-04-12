@@ -16,7 +16,24 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
     """COCO Minitrain dataset. This dataset is a curated set of 25,000 train images
     from the 2017 Train COOO dataset.
 
-    Dataset can be found here https://github.com/giddyyupp/coco-minitrain
+    Dataset can be found here https://github.com/giddyyupp/coco-minitrain. 
+
+    The dataset will need to be placed in a directory named "coco_minitrain_25k".
+
+    Create a file heiarchy as the following:
+    coco_minitrain25k/
+    ├─ images/
+    │  ├─ train_2017
+    │  │  ├─ train_images.jpg
+    │  ├─ val_2017
+    │  │  ├─ train_images.jpg
+    │  ├─ annotations
+    │  │  ├─ instances_mintrain2017.json
+    │  │  ├─ instances_val2017.json
+    
+    Inside "coco_minitrain_25k" create another directory named "annotations" and place the
+    "instances_minitrain2017.json" and "instances_val2017.json" inside.
+    The "instances_val2017.json" is from the original coco2017 dataset and can be found there.
     """
 
     def __init__(self, image_folder: str, annotation_file: str, transforms: T = None):
