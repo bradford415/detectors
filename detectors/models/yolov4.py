@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from detectors.models.layers.yolo import YoloLayer
-
+from detectors.utils.box_ops import get_region_boxes
 
 class Conv_Bn_Activation(nn.Module):
     def __init__(
@@ -176,12 +176,14 @@ class Yolov4Head(nn.Module):
     Architecture described here: https://github.com/Tianxiaomo/pytorch-YOLOv4/blob/a65d219f9066bae4e12003bd7cdc04531860c672/models.py#L323
     """
 
-    def __init__(self, output_ch, n_classes, inference=False):
+    def __init__(self, output_ch, n_classes, anchors, inference=False):
         """
-        
+
 
         Args:
-            output_ch: Number of output channels for the predictions; (4 + 1 + num_classes) * num_bboxes
+            output_ch: Number of output channels for the predictions; (4 + 1 + num_classes) * num_bboxesn
+            n_classes: Number of classes in the ontology
+            inference: Whether the model is inferencing
         """
         super().__init__()
         self.inference = inference
@@ -191,30 +193,10 @@ class Yolov4Head(nn.Module):
             256, output_ch, 1, 1, "linear", bn=False, bias=True
         )
 
+        # Largest head_output dimensions
         self.yolo1 = YoloLayer(
-            anchor_mask=[0, 1, 2],
             num_classes=n_classes,
-            anchors=[
-                12,
-                16,
-                19,
-                36,
-                40,
-                28,
-                36,
-                75,
-                76,
-                55,
-                72,
-                146,
-                142,
-                110,
-                192,
-                243,
-                459,
-                401,
-            ],
-            num_anchors=9,
+            anchors=anchors[:6],
             stride=8,
         )
 
@@ -232,30 +214,10 @@ class Yolov4Head(nn.Module):
             512, output_ch, 1, 1, "linear", bn=False, bias=True
         )
 
+        # Medium head_output dimensions
         self.yolo2 = YoloLayer(
-            anchor_mask=[3, 4, 5],
             num_classes=n_classes,
-            anchors=[
-                12,
-                16,
-                19,
-                36,
-                40,
-                28,
-                36,
-                75,
-                76,
-                55,
-                72,
-                146,
-                142,
-                110,
-                192,
-                243,
-                459,
-                401,
-            ],
-            num_anchors=9,
+            anchors=anchors[6:6*2],
             stride=16,
         )
 
@@ -273,33 +235,11 @@ class Yolov4Head(nn.Module):
             1024, output_ch, 1, 1, "linear", bn=False, bias=True
         )
 
+        # Smallest head_output dimensions
         self.yolo3 = YoloLayer(
-            anchor_mask=[6, 7, 8],
             num_classes=n_classes,
-            
-            # List of anchor points (x,y); alternates between x,y coordinates -> num_anchors is len(anchors)/2
-            anchors=[
-                12,
-                16,
-                19,
-                36,
-                40,
-                28,
-                36,
-                75,
-                76,
-                55,
-                72,
-                146,
-                142,
-                110,
-                192,
-                243,
-                459,
-                401,
-            ],
-            num_anchors=9,
-            stride=32,
+            anchors=anchors[6*2:6*3],
+            stride=32, # 512 input_dim / 16 head_output = 32
         )
 
     def forward(self, input1, input2, input3):
@@ -329,15 +269,14 @@ class Yolov4Head(nn.Module):
         x16 = self.conv16(x15)
         x17 = self.conv17(x16)
         predictions_scale3 = self.conv18(x17)
-        breakpoint()
 
-        ############################ START HERE, GO THROUGH YOLO LAYERS ##########################
         if self.inference:
             y1 = self.yolo1(predictions_scale1)
             y2 = self.yolo2(predictions_scale2)
             y3 = self.yolo3(predictions_scale3)
 
-            return get_region_boxes([y1, y2, y3])
+            return get_region_boxes([y1, y2, y3]) 
+            ############################################ START HERE (finished get_region_boxes) ###################
 
         else:
             # scale1 has the largest dimensions, scale2 medium, scale3 smallest dimensions (should verify this by viewing shape)
@@ -350,10 +289,13 @@ class YoloV4(nn.Module):
     Yolov4 implementation details in paper section 3.4
     """
 
-    def __init__(self, num_classes, backbone, neck=None, head=None, num_bboxes=3, inference=False):
+    def __init__(
+        self, num_classes, backbone, neck=None, head=None, num_bboxes=3, inference=False
+    ):
         """TODO
-        
+
         Args:
+            num_classes:
 
         """
         super().__init__()
@@ -361,9 +303,31 @@ class YoloV4(nn.Module):
         # 4 = (tx, ty, tw, th), 1 = objectness, num_classes = number of classes in the ontology, num_bboxes = number of bounding box predictions per grid cell (3 in yolov4)
         output_channels = (4 + 1 + num_classes) * num_bboxes
 
+        # List of anchor points (x,y); alternates between x,y coordinates -> num_anchors is len(anchors)/2
+        anchors = [
+                12,
+                16,
+                19,
+                36,
+                40,
+                28,
+                36,
+                75,
+                76,
+                55,
+                72,
+                146,
+                142,
+                110,
+                192,
+                243,
+                459,
+                401,
+            ]
+    
         self.backbone = backbone
         self.neck = Neck()
-        self.head = Yolov4Head(output_channels, num_classes, inference=True)
+        self.head = Yolov4Head(output_channels, num_classes, anchors, inference=inference)
 
     def forward(self, x):
         """Forward pass through the model

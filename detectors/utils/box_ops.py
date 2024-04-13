@@ -84,3 +84,33 @@ def masks_to_boxes(masks):
     y_min = y_mask.masked_fill(~(masks.bool()), 1e8).flatten(1).min(-1)[0]
 
     return torch.stack([x_min, y_min, x_max, y_max], 1)
+
+
+def get_region_boxes(boxes_and_confs):
+    """Unpack bboxes and confidences and combine into 1 tensor of boxes
+    and 1 tensor of confidences.
+
+    
+    Args:
+        boxes_and_confs: bboxes and cls confidences from YoloLayer
+
+    Returns:
+        1. Tensor of bboxes (B, num_pred_1 + num_pred_2 + num_pred_3, 1, 4)
+        2. Tensor of confidences (B, num_pred_1 + num_pred_2 + num_pred_3, num_classes)
+    """
+
+    boxes_list = []
+    confs_list = []
+
+    for bbox, confidence in boxes_and_confs:
+        boxes_list.append(bbox)
+        confs_list.append(confidence)
+
+    breakpoint()
+
+    # boxes: [batch, num1 + num2 + num3, 1, 4]
+    # confs: [batch, num1 + num2 + num3, num_classes]
+    boxes = torch.cat(boxes_list, dim=1)
+    confs = torch.cat(confs_list, dim=1)
+        
+    return [boxes, confs]

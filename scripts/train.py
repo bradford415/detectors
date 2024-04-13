@@ -122,10 +122,7 @@ def main(base_config_path: str, model_config_path):
         remove_top=model_config["backbone"]["remove_top"],
     )
 
-    model_components = {
-        "backbone": backbone,
-        "num_classes": 80
-    }
+    model_components = {"backbone": backbone, "num_classes": 80}
 
     # model = resnet50()  # Using temp resnet50 model
     # Initialize detection model

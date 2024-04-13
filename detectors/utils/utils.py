@@ -1,14 +1,10 @@
 import random
+import time
 from pathlib import Path
 
 import numpy as np
 import torch
 import torchvision
-
-
-import time
-import torch
-import numpy as np
 
 
 def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
@@ -34,7 +30,7 @@ def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
     uh = My - my
     cw = w1 + w2 - uw
     ch = h1 + h2 - uh
-    mask = ((cw <= 0) + (ch <= 0) > 0)
+    mask = (cw <= 0) + (ch <= 0) > 0
     area1 = w1 * h1
     area2 = w2 * h2
     carea = cw * ch
@@ -44,7 +40,6 @@ def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
 
 
 def get_region_boxes(boxes_and_confs):
-
     # print('Getting boxes from boxes and confs ...')
 
     boxes_list = []
@@ -58,7 +53,7 @@ def get_region_boxes(boxes_and_confs):
     # confs: [batch, num1 + num2 + num3, num_classes]
     boxes = torch.cat(boxes_list, dim=1)
     confs = torch.cat(confs_list, dim=1)
-        
+
     return [boxes, confs]
 
 
@@ -70,14 +65,15 @@ def convert2cpu_long(gpu_matrix):
     return torch.LongTensor(gpu_matrix.size()).copy_(gpu_matrix)
 
 
-
 def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
     model.eval()
     with torch.no_grad():
         t0 = time.time()
 
         if type(img) == np.ndarray and len(img.shape) == 3:  # cv2 image
-            img = torch.from_numpy(img.transpose(2, 0, 1)).float().div(255.0).unsqueeze(0)
+            img = (
+                torch.from_numpy(img.transpose(2, 0, 1)).float().div(255.0).unsqueeze(0)
+            )
         elif type(img) == np.ndarray and len(img.shape) == 4:
             img = torch.from_numpy(img.transpose(0, 3, 1, 2)).float().div(255.0)
         else:
@@ -94,10 +90,10 @@ def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
 
         t2 = time.time()
 
-        print('-----------------------------------')
-        print('           Preprocess : %f' % (t1 - t0))
-        print('      Model Inference : %f' % (t2 - t1))
-        print('-----------------------------------')
+        print("-----------------------------------")
+        print("           Preprocess : %f" % (t1 - t0))
+        print("      Model Inference : %f" % (t2 - t1))
+        print("-----------------------------------")
 
         return utils.post_processing(img, conf_thresh, nms_thresh, output)
 
@@ -132,4 +128,3 @@ def reproducibility(seed: int) -> None:
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-
