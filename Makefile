@@ -54,6 +54,7 @@ install: ## Install for linux only; we also need to upgrade pip to support edita
 	${activate}
 	pip install --upgrade pip
 	pip install -r ${REQUIREMENTS}
+ 	pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 	python -m pip install -e .
 
 install_windows:
