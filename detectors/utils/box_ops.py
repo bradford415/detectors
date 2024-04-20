@@ -89,7 +89,6 @@ def masks_to_boxes(masks):
 def get_region_boxes(boxes_and_confs):
     """Unpack bboxes and confidences and combine into 1 tensor of boxes
     and 1 tensor of confidences.
-
     
     Args:
         boxes_and_confs: bboxes and cls confidences from YoloLayer
@@ -113,4 +112,4 @@ def get_region_boxes(boxes_and_confs):
     boxes = torch.cat(boxes_list, dim=1)
     confs = torch.cat(confs_list, dim=1)
         
-    return [boxes, confs]
+    return (boxes, confs)

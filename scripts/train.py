@@ -24,6 +24,12 @@ optimizer_map = {
     "sgd": torch.optim.SGD,
 }
 
+loss_map = {
+    "cross_entropy": nn.CrossEntropyLoss(),
+    "adamw": torch.optim.AdamW,
+    "sgd": torch.optim.SGD,
+}
+
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
 
@@ -79,11 +85,13 @@ def main(base_config_path: str, model_config_path):
     }
 
     if use_cuda:
-        print(f"Using {len(base_config['gpus'])} GPU(s): ")
-        for gpu in range(len(base_config["gpus"])):
+
+        print(f"Using {len(base_config['cuda']['gpus'])} GPU(s): ")
+        for gpu in range(len(base_config["cuda"]["gpus"])):
             print(f"    -{torch.cuda.get_device_name(gpu)}")
+
         cuda_kwargs = {
-            "num_workers": base_config["cuda"]["workers"],
+            "num_workers": base_config["cuda"]["num_workers"],
             "pin_memory": True,
         }
 
@@ -102,13 +110,11 @@ def main(base_config_path: str, model_config_path):
 
     dataloader_train = DataLoader(
         dataset_train,
-        num_workers=base_config["cuda"]["num_workers"],
         collate_fn=collate_fn,
         **train_kwargs,
     )
-    dataloader_test = DataLoader(
+    dataloader_val = DataLoader(
         dataset_val,
-        num_workers=base_config["cuda"]["num_workers"],
         collate_fn=collate_fn,
         **val_kwargs,
     )
@@ -124,10 +130,11 @@ def main(base_config_path: str, model_config_path):
 
     model_components = {"backbone": backbone, "num_classes": 80}
 
-    # model = resnet50()  # Using temp resnet50 model
-    # Initialize detection model
+    # Initialize detection model and transfer to GPU
     model = detectors_map[model_config["detector"]](**model_components)
-    criterion = nn.CrossEntropyLoss()
+    model.to(device)
+    
+    criterion = 
 
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}
@@ -150,7 +157,8 @@ def main(base_config_path: str, model_config_path):
     trainer_args = {
         "model": model,
         "criterion": criterion,
-        "data_loader": dataloader_train,
+        "dataloader_train": dataloader_train,
+        "dataloader_val": dataloader_val,
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         "device": device,

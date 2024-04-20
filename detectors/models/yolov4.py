@@ -181,7 +181,7 @@ class Yolov4Head(nn.Module):
 
 
         Args:
-            output_ch: Number of output channels for the predictions; (4 + 1 + num_classes) * num_bboxesn
+            output_ch: Number of output channels for the predictions; (4 + 1 + num_classes) * num_bboxes
             n_classes: Number of classes in the ontology
             inference: Whether the model is inferencing
         """
@@ -276,7 +276,6 @@ class Yolov4Head(nn.Module):
             y3 = self.yolo3(predictions_scale3)
 
             return get_region_boxes([y1, y2, y3]) 
-            ############################################ START HERE (finished get_region_boxes) ###################
 
         else:
             # scale1 has the largest dimensions, scale2 medium, scale3 smallest dimensions (should verify this by viewing shape)
@@ -333,8 +332,17 @@ class YoloV4(nn.Module):
         """Forward pass through the model
 
         Args:
+            x: Batch of images to train the model
+
+        Return:
+            If training:
+                list of predictions feature maps at each scale (B, (4 + 1 + num_classes) * num_bboxes, H, W)
+            If inferencing:
+                post-processed training output; see dectors.utils.box_ops.get_region_boxes() for more infor
+
 
         """
+        breakpoint()
         downsample1, downsample2, downsample3, backbone_out = self.backbone(x)
         neck_out, x13, x6 = self.neck(
             backbone_out, downsample3, downsample2, downsample1

@@ -14,15 +14,13 @@ from detectors.utils import utils
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, output_path: str):
+    def __init__(self, output_path):
         """Constructor for the Trainer class
 
         Args:
-            c
+            output_path: Path to save the train outputs
+            use_cuda: Whether to use the GPU 
         """
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Using {self.device}")
-
         ## TODO: PROBALBY REMOVE THESE Initialize training objects
         # self.optimizer = optimizer_map[optimizer]
         # self.lr_scheduler = "test"
@@ -34,40 +32,12 @@ class Trainer:
             ),
         }
 
-    def _train_one_epoch(
-        self,
-        model: nn.Module,
-        criterion: nn.Module,
-        data_loader: Iterable,
-        optimizer: torch.optim.Optimizer,
-        device: torch.device,
-    ):
-        for steps, (samples, targets) in enumerate(tqdm(data_loader, ascii=" >=")):
-            samples = samples.to(device)
-            targets = [
-                {key: value.to(device) for key, value in t.items()} for t in targets
-            ]
-
-            ############ START HERE, DEVELOP MODEL ###############
-            bbox_predictions = model(samples)
-
-            ## TODO: Get GPUs to work
-            exit()
-
-            ## TODO: understand this and rename variables if needed
-            loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-                bbox_predictions, targets["bboxes"]
-            )
-
-            exit()
-
-    # def train():
-
     def train(
         self,
         model,
         criterion,
-        data_loader,
+        dataloader_train,
+        dataloader_val,
         optimizer,
         scheduler,
         start_epoch=0,
@@ -86,7 +56,7 @@ class Trainer:
         start_time = time.time()
         for epoch in range(start_epoch, epochs):
             train_stats = self._train_one_epoch(
-                model, criterion, data_loader, optimizer, device
+                model, criterion, dataloader_train, optimizer, device
             )
             scheduler.step()
 
@@ -101,6 +71,36 @@ class Trainer:
                     ckpt_every,
                     save_path=ckpt_path,
                 )
+
+    def _train_one_epoch(
+        self,
+        model: nn.Module,
+        criterion: nn.Module,
+        dataloader_train: Iterable,
+        optimizer: torch.optim.Optimizer,
+        device: torch.device,
+    ):
+        for steps, (samples, targets) in enumerate(tqdm(dataloader_train, ascii=" >=")):
+            samples = samples.to(device)
+            targets = [
+                {key: value.to(device) for key, value in t.items()} for t in targets
+            ]
+
+            breakpoint()
+            bbox_predictions = model(samples)
+
+            print("Here")
+            ## TODO: Get GPUs to work
+            exit()
+
+            ## TODO: understand this and rename variables if needed
+            loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+                bbox_predictions, targets["bboxes"]
+            )
+
+            exit()
+
+    # def train():
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
