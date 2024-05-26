@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch import nn
 
 class YoloV4Loss(nn.Module):
@@ -12,28 +13,38 @@ class YoloV4Loss(nn.Module):
     The original Yolo loss function is described in the original paper in section 2.2
     https://arxiv.org/pdf/1506.02640.pdf
 
+    Addtional info about the Yolo Loss
+    1. Yolo loss explained
+        - https://stats.stackexchange.com/questions/287486/yolo-loss-function-explanation
+    2. How the original Yolo loss differs from YoloV4 loss 
+        - https://stackoverflow.com/questions/68892124/whats-the-complete-loss-function-used-by-yolov4 
+
+
     ########### NEED TO READ THROUGH THE CODE MORE AND UNDERSTAND THIS BETTER 
-    MY UNDERSTANDING OF J MAY BE INCORRECT
+    MY UNDERSTANDING OF J MAY BE INCORRECT BUT I THINK IT'S RIGHT
     ##################
 
     YoloV4 loss function is composed of 5 terms which are calculated
-    for each grid cell:
+    for each grid cell and summed. The terms are explained below:
+        Note and TODO: This is technically the Yolo loss, the YoloV4 loss slightly differs so I need to update this eventually
         1. Squared sum error of x, y center point predictions if an object exists
-          AND the jth bounding box has the highest confidence score of all 
-          predictors in that grid cell (num_predictors=num_anchors);
-          0 if no object exists or the predictor does not have the highest 
-          confidence in that grid cell (highest confidence is the highest class probablity);
-          whether an object exists or not is determined by the ground truth object center,
-          not the objectness prediction score
+           AND the jth bounding box has the highest confidence score of all 
+           predictors in that grid cell (num_predictors=num_anchors);
+           0 if no object exists or the predictor does not have the highest 
+           confidence in that grid cell (highest confidence is the highest class probablity);
+           whether an object exists or not is determined by the ground truth object center,
+           not the objectness prediction score
         2. Sqrt sum error of w, h predictions, following the same conditions as
            the first term
         3. Squared error of objectness score, following the same conditions as the first term
         4. Squared error of objectness score if NO object exists 
            (penalizes for predicting objects when they don't exist)
-        5. 
+        5. If any object is predicted in the cell (for this term we don't care about which predictor, j, 
+           says an object exists) find the squared error of the predicted classes confidence probability 
+           and the ground-truth label confidence probability
     """
 
-    ################# start here #####################
+    ################# start here - UNDERSTAND THIS FUNCTION and document it#####################
     def __init__(self, n_classes=80, n_anchors=3, device=None, batch=2):
         """
         
