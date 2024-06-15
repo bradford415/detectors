@@ -9,4 +9,11 @@ backbone:
   remove_top: True
 
 neck:
+
 head:
+
+# Piror information to help the object detection model
+priors:
+  # List of anchor points (x,y); alternates between x,y coordinates -> num_anchors is len(anchors)/2
+  anchors: [12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 
+            146, 142, 110, 192, 243, 459, 401,]

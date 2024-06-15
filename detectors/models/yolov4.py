@@ -289,7 +289,7 @@ class YoloV4(nn.Module):
     """
 
     def __init__(
-        self, num_classes, backbone, neck=None, head=None, num_bboxes=3, inference=False
+        self, num_classes, backbone, anchors, neck=None, head=None, num_bboxes=3, inference=False
     ):
         """TODO
 
@@ -303,27 +303,7 @@ class YoloV4(nn.Module):
         output_channels = (4 + 1 + num_classes) * num_bboxes
 
         # List of anchor points (x,y); alternates between x,y coordinates -> num_anchors is len(anchors)/2
-        anchors = [
-                12,
-                16,
-                19,
-                36,
-                40,
-                28,
-                36,
-                75,
-                76,
-                55,
-                72,
-                146,
-                142,
-                110,
-                192,
-                243,
-                459,
-                401,
-            ]
-    
+        self.anchors = anchors
         self.backbone = backbone
         self.neck = Neck()
         self.head = Yolov4Head(output_channels, num_classes, anchors, inference=inference)

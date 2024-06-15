@@ -45,38 +45,51 @@ class YoloV4Loss(nn.Module):
     """
 
     ################# start here - UNDERSTAND THIS FUNCTION and document it#####################
-    def __init__(self, n_classes=80, n_anchors=3, device=None, batch=2):
-        """
+    def __init__(self, anchors, n_classes=80, n_anchors=3, device=None, batch=2):
+        """TODO
         
         Args:
             n_classes:
         """
+        breakpoint()
         super().__init__()
         self.device = device
         self.strides = [8, 16, 32]
-        image_size = 608
+        image_size = 512
         self.n_classes = n_classes
         self.n_anchors = n_anchors
 
-        self.anchors = [[12, 16], [19, 36], [40, 28], [36, 75], [76, 55], [72, 146], [142, 110], [192, 243], [459, 401]]
+        self.anchors = [[12, 16], [19, 36], [40, 28], [36, 75], [76, 55], 
+                        [72, 146], [142, 110], [192, 243], [459, 401]]
+        self.anchors_temp = anchors
         self.anch_masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
         self.ignore_thre = 0.5
 
         self.masked_anchors, self.ref_anchors, self.grid_x, self.grid_y, self.anchor_w, self.anchor_h = [], [], [], [], [], []
 
-        for i in range(3):
+        _anchors, _strides = np.array(self.anchors_temp).reshape(-1, 2), np.array(self.strides).repeat(self.n_anchors)[:, np.newaxis]
+        scaled_anchors = _anchors / _strides
+        _ref_anchors = np.zeros((_anchors.shape[0], 4), dtype=np.float32)
+        _ref_anchors[:, 2:] = scaled_anchors
+        ref_anchors = torch.from_numpy(_ref_anchors)
+
+        for i in range(self.n_anchors):
             all_anchors_grid = [(w / self.strides[i], h / self.strides[i]) for w, h in self.anchors]
             masked_anchors = np.array([all_anchors_grid[j] for j in self.anch_masks[i]], dtype=np.float32)
             ref_anchors = np.zeros((len(all_anchors_grid), 4), dtype=np.float32)
             ref_anchors[:, 2:] = np.array(all_anchors_grid, dtype=np.float32)
             ref_anchors = torch.from_numpy(ref_anchors)
             # calculate pred - xywh obj cls
-            fsize = image_size // self.strides[i]
-            grid_x = torch.arange(fsize, dtype=torch.float).repeat(batch, 3, fsize, 1).to(device)
-            grid_y = torch.arange(fsize, dtype=torch.float).repeat(batch, 3, fsize, 1).permute(0, 1, 3, 2).to(device)
-            anchor_w = torch.from_numpy(masked_anchors[:, 0]).repeat(batch, fsize, fsize, 1).permute(0, 3, 1, 2).to(
+            feature_map_sizes = image_size // self.strides[i]
+
+            # Create x & y grid of feature map pixel indices (B, num_anchors, H/stride, W/stride)
+            grid_x = torch.arange(feature_map_sizes, dtype=torch.float).repeat(batch, 3, feature_map_sizes, 1).to(device)
+            grid_y = torch.arange(feature_map_sizes, dtype=torch.float).repeat(batch, 3, feature_map_sizes, 1).permute(0, 1, 3, 2).to(device)
+
+            # Create grid of the w & h of each anchor box w/ size of the feature maps (B, num_anchors, H/stride, W/stride)
+            anchor_w = torch.from_numpy(masked_anchors[:, 0]).repeat(batch, feature_map_sizes, feature_map_sizes, 1).permute(0, 3, 1, 2).to(
                 device)
-            anchor_h = torch.from_numpy(masked_anchors[:, 1]).repeat(batch, fsize, fsize, 1).permute(0, 3, 1, 2).to(
+            anchor_h = torch.from_numpy(masked_anchors[:, 1]).repeat(batch, feature_map_sizes, feature_map_sizes, 1).permute(0, 3, 1, 2).to(
                 device)
 
             self.masked_anchors.append(masked_anchors)
@@ -86,7 +99,11 @@ class YoloV4Loss(nn.Module):
             self.anchor_w.append(anchor_w)
             self.anchor_h.append(anchor_h)
 
+
+    # START HERE!!!
     def build_target(self, pred, labels, batchsize, fsize, n_ch, output_id):
+        """TODO
+        """
         # target assignment
         tgt_mask = torch.zeros(batchsize, self.n_anchors, fsize, fsize, 4 + self.n_classes).to(device=self.device)
         obj_mask = torch.ones(batchsize, self.n_anchors, fsize, fsize).to(device=self.device)
