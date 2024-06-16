@@ -316,13 +316,11 @@ class YoloV4(nn.Module):
 
         Return:
             If training:
-                list of predictions feature maps at each scale (B, (4 + 1 + num_classes) * num_bboxes, H, W)
+                list of predictions feature maps at each scale (B, (4 + 1 + num_classes) * num_bboxes, H, W);
+                length of list should be 3 since there are threee outputs in the yolo head
             If inferencing:
-                post-processed training output; see dectors.utils.box_ops.get_region_boxes() for more infor
-
-
+                post-processed training output; see dectors.utils.box_ops.get_region_boxes() for more info
         """
-        breakpoint()
         downsample1, downsample2, downsample3, backbone_out = self.backbone(x)
         neck_out, x13, x6 = self.neck(
             backbone_out, downsample3, downsample2, downsample1

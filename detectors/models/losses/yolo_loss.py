@@ -51,7 +51,6 @@ class YoloV4Loss(nn.Module):
         Args:
             n_classes:
         """
-        breakpoint()
         super().__init__()
         self.device = device
         self.strides = [8, 16, 32]
@@ -171,42 +170,54 @@ class YoloV4Loss(nn.Module):
                     tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w_all[b, ti] * truth_h_all[b, ti] / fsize / fsize)
         return obj_mask, tgt_mask, tgt_scale, target
 
-    def forward(self, xin, labels=None):
-        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = 0, 0, 0, 0, 0, 0
-        for output_id, output in enumerate(xin):
-            batchsize = output.shape[0]
-            fsize = output.shape[2]
-            n_ch = 5 + self.n_classes
+    def forward(self, bbox_predictions, labels):
+        """Calculate the loss loss
 
-            output = output.view(batchsize, self.n_anchors, n_ch, fsize, fsize)
-            output = output.permute(0, 1, 3, 4, 2)  # .contiguous()
+        Args:
+            bbox_predictions: 
+            labels: 
+        """
+        breakpoint()
+        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = 0, 0, 0, 0, 0, 0
+
+        # Loop through each prediction scale
+        for bbox_id, bbox_predictions in enumerate(bbox_predictions):
+            batchsize = bbox_predictions.shape[0]
+            feature_size = bbox_predictions.shape[2]
+            anchor_num_ch = 5 + self.n_classes
+
+            # (B, num_anchors, ch_per_anchor, H, W)
+            bbox_predictions = bbox_predictions.view(batchsize, self.n_anchors, anchor_num_ch, feature_size, feature_size)
+
+            # (B, num_Anchors, H, W, ch_per_anchor); allows us to access each grid cell prediction
+            bbox_predictions = bbox_predictions.permute(0, 1, 3, 4, 2)  # .contiguous()
 
             # logistic activation for xy, obj, cls
-            output[..., np.r_[:2, 4:n_ch]] = torch.sigmoid(output[..., np.r_[:2, 4:n_ch]])
+            bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]] = torch.sigmoid(bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]])
 
-            pred = output[..., :4].clone()
-            pred[..., 0] += self.grid_x[output_id]
-            pred[..., 1] += self.grid_y[output_id]
-            pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[output_id]
-            pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[output_id]
+            pred = bbox_predictions[..., :4].clone()
+            pred[..., 0] += self.grid_x[bbox_id]
+            pred[..., 1] += self.grid_y[bbox_id]
+            pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[bbox_id]
+            pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
 
-            obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels, batchsize, fsize, n_ch, output_id)
+            obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels, batchsize, feature_size, anchor_num_ch, bbox_id)
 
             # loss calculation
-            output[..., 4] *= obj_mask
-            output[..., np.r_[0:4, 5:n_ch]] *= tgt_mask
-            output[..., 2:4] *= tgt_scale
+            bbox_predictions[..., 4] *= obj_mask
+            bbox_predictions[..., np.r_[0:4, 5:anchor_num_ch]] *= tgt_mask
+            bbox_predictions[..., 2:4] *= tgt_scale
 
             target[..., 4] *= obj_mask
-            target[..., np.r_[0:4, 5:n_ch]] *= tgt_mask
+            target[..., np.r_[0:4, 5:anchor_num_ch]] *= tgt_mask
             target[..., 2:4] *= tgt_scale
 
-            loss_xy += F.binary_cross_entropy(input=output[..., :2], target=target[..., :2],
+            loss_xy += F.binary_cross_entropy(input=bbox_predictions[..., :2], target=target[..., :2],
                                               weight=tgt_scale * tgt_scale, reduction='sum')
-            loss_wh += F.mse_loss(input=output[..., 2:4], target=target[..., 2:4], reduction='sum') / 2
-            loss_obj += F.binary_cross_entropy(input=output[..., 4], target=target[..., 4], reduction='sum')
-            loss_cls += F.binary_cross_entropy(input=output[..., 5:], target=target[..., 5:], reduction='sum')
-            loss_l2 += F.mse_loss(input=output, target=target, reduction='sum')
+            loss_wh += F.mse_loss(input=bbox_predictions[..., 2:4], target=target[..., 2:4], reduction='sum') / 2
+            loss_obj += F.binary_cross_entropy(input=bbox_predictions[..., 4], target=target[..., 4], reduction='sum')
+            loss_cls += F.binary_cross_entropy(input=bbox_predictions[..., 5:], target=target[..., 5:], reduction='sum')
+            loss_l2 += F.mse_loss(input=bbox_predictions, target=target, reduction='sum')
 
         loss = loss_xy + loss_wh + loss_obj + loss_cls
 
