@@ -193,6 +193,7 @@ class YoloV4Loss(nn.Module):
             bbox_predictions = bbox_predictions.permute(0, 1, 3, 4, 2)  # .contiguous()
 
             # logistic activation for xy, obj, cls
+            ## START HERE
             bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]] = torch.sigmoid(bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]])
 
             pred = bbox_predictions[..., :4].clone()
