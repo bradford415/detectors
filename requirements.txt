@@ -8,13 +8,12 @@ astroid==3.0.2
     # via pylint
 black==23.12.1
     # via detectors (pyproject.toml)
+certifi==2024.6.2
+    # via requests
+charset-normalizer==3.3.2
+    # via requests
 click==8.1.7
     # via black
-colorama==0.4.6
-    # via
-    #   click
-    #   pylint
-    #   pytest
 contourpy==1.2.0
     # via matplotlib
 cycler==0.12.1
@@ -24,13 +23,17 @@ dill==0.3.7
 exceptiongroup==1.2.0
     # via pytest
 filelock==3.13.1
-    # via torch
+    # via
+    #   torch
+    #   triton
 fire==0.5.0
     # via detectors (pyproject.toml)
 fonttools==4.47.0
     # via matplotlib
 fsspec==2023.12.2
     # via torch
+idna==3.7
+    # via requests
 iniconfig==2.0.0
     # via pytest
 isort==5.13.2
@@ -44,7 +47,9 @@ kiwisolver==1.4.5
 markupsafe==2.1.3
     # via jinja2
 matplotlib==3.8.2
-    # via detectors (pyproject.toml)
+    # via
+    #   detectors (pyproject.toml)
+    #   pycocotools
 mccabe==0.7.0
     # via pylint
 mpmath==1.3.0
@@ -61,6 +66,39 @@ numpy==1.26.2
     # via
     #   contourpy
     #   matplotlib
+    #   pycocotools
+    #   torchvision
+nvidia-cublas-cu12==12.1.3.1
+    # via
+    #   nvidia-cudnn-cu12
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-cuda-cupti-cu12==12.1.105
+    # via torch
+nvidia-cuda-nvrtc-cu12==12.1.105
+    # via torch
+nvidia-cuda-runtime-cu12==12.1.105
+    # via torch
+nvidia-cudnn-cu12==8.9.2.26
+    # via torch
+nvidia-cufft-cu12==11.0.2.54
+    # via torch
+nvidia-curand-cu12==10.3.2.106
+    # via torch
+nvidia-cusolver-cu12==11.4.5.107
+    # via torch
+nvidia-cusparse-cu12==12.1.0.106
+    # via
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-nccl-cu12==2.18.1
+    # via torch
+nvidia-nvjitlink-cu12==12.5.40
+    # via
+    #   nvidia-cusolver-cu12
+    #   nvidia-cusparse-cu12
+nvidia-nvtx-cu12==12.1.105
+    # via torch
 packaging==23.2
     # via
     #   black
@@ -69,13 +107,17 @@ packaging==23.2
 pathspec==0.12.1
     # via black
 pillow==10.1.0
-    # via matplotlib
+    # via
+    #   matplotlib
+    #   torchvision
 platformdirs==4.1.0
     # via
     #   black
     #   pylint
 pluggy==1.3.0
     # via pytest
+pycocotools==2.0.7
+    # via detectors (pyproject.toml)
 pylint==3.0.3
     # via detectors (pyproject.toml)
 pyparsing==3.1.1
@@ -86,6 +128,8 @@ python-dateutil==2.8.2
     # via matplotlib
 pyyaml==6.0.1
     # via detectors (pyproject.toml)
+requests==2.32.3
+    # via torchvision
 six==1.16.0
     # via
     #   fire
@@ -103,10 +147,20 @@ tomli==2.0.1
 tomlkit==0.12.3
     # via pylint
 torch==2.1.2
+    # via
+    #   detectors (pyproject.toml)
+    #   torchvision
+torchvision==0.16.2
     # via detectors (pyproject.toml)
+tqdm==4.66.4
+    # via detectors (pyproject.toml)
+triton==2.1.0
+    # via torch
 typing-extensions==4.9.0
     # via
     #   astroid
     #   black
     #   mypy
     #   torch
+urllib3==2.2.1
+    # via requests

@@ -12,13 +12,18 @@ REQUIREMENTS := requirements.txt
 
 ## Recursively expanded variables
 python_source = ${PROJECT_NAME} scripts/  # Location of python files 
-activate = source .venv/bin/activate
+activate = . .venv/bin/activate
 activate_windows = source .venv/Scripts/activate
 
 python = python3
 
 venv: ## Create virtual environment
+	sudo apt install python3-venv
+	sudo apt install python3-pip
 	${python} -m venv .venv
+
+venv_windows: ## Create virtual environment
+	python -m venv .venv
 
 test: ## Put pytests here
 	. 
@@ -54,17 +59,18 @@ require:
 
 install_reqs: ## Install for linux only; we also need to upgrade pip to support editable installation with only pyproject.toml file
 	${activate}
-	python -m pip install --upgrade pip
-	python -m pip install -r ${REQUIREMENTS}
- 	python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-	python -m ${python} -m pip install -e . --no-deps
+	${python} -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118 
+	${python} -m pip install --upgrade pip
+	${python} -m pip install -r ${REQUIREMENTS}
+	${python} -m pip install -e . --no-deps
 
 install_reqs_windows:
 	${activate_windows}
 	python -m pip install --upgrade pip
 	python -m pip install -r ${REQUIREMENTS}
+	python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 	python -m ${python} -m pip install -e . --no-deps
 
-create: venv install_deps ## Create virtual environment and install dependencies and the project itself
+create: venv install_reqs ## Create virtual environment and install dependencies and the project itself
 
-create_windows: venv install_deps_windows
+create_windows: venv_windows install_reqs_windows  

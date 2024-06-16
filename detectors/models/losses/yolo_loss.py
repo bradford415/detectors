@@ -192,10 +192,11 @@ class YoloV4Loss(nn.Module):
             # (B, num_Anchors, H, W, ch_per_anchor); allows us to access each grid cell prediction
             bbox_predictions = bbox_predictions.permute(0, 1, 3, 4, 2)  # .contiguous()
 
-            # logistic activation for xy, obj, cls
-            ## START HERE
+            # Apply sigmoid function to tx & ty, objectness, and cls predictions; this bounds all predictions between 0-1 except for tw, th (index 2 & 3); 
+            # yolov2 does not bound tw, th; shape does not change
             bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]] = torch.sigmoid(bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]])
 
+            # START HERE
             pred = bbox_predictions[..., :4].clone()
             pred[..., 0] += self.grid_x[bbox_id]
             pred[..., 1] += self.grid_y[bbox_id]

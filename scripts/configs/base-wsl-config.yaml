@@ -1,0 +1,58 @@
+# Base config file which stores the default parameters which apply to all model configurations
+---
+
+# Root directory of your project; type "pwd" in the command line to find it
+root_dir: "C:/Users/bsele/Documents/Programming/machine-learning/detectors"
+
+input_data: "data/input.txt"
+
+output_path: "output"
+
+# Name of dataset; must be one of the names in the dataset_map dict
+dataset_name: "CocoDetectionMiniTrain"
+
+# Parameters for the dataset class
+dataset:
+
+  # Path to the root of the dataset
+  root: "/mnt/c/Users/bsele/Documents/Datasets/coco_minitrain_25k"
+
+train:
+  optimizer: "adamw"
+  scheduler: "step_lr"
+
+  batch_size: 2
+  learning_rate: 0.001 #1e-3
+  weight_decay: 0.0001
+  lr_drop: 200
+
+  # Various epochs used during training
+  epochs:
+    start_epoch: 0
+    epochs: 50
+
+    # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+    ckpt_every: 10
+
+validation:
+  batch_size: 2
+
+# GPU parameters
+cuda:
+
+  # List of GPU devices to use
+  gpus: [0]
+
+  num_workers: 2
+
+# Logging parameters
+logging:
+
+  # Estimate loss every eval_iters iterations
+  eval_interval: 100
+
+# Reproducibility information
+reproducibility:
+  seed: 42
+
+
