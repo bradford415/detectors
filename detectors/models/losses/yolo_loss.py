@@ -100,14 +100,17 @@ class YoloV4Loss(nn.Module):
 
 
     # START HERE!!!
-    def build_target(self, pred, labels, batchsize, fsize, n_ch, output_id):
+    def build_target(self, pred, labels, batchsize, f_map_size, n_ch, output_id):
         """TODO
+        
+        Args:
+            pred:
         """
-        # target assignment
-        tgt_mask = torch.zeros(batchsize, self.n_anchors, fsize, fsize, 4 + self.n_classes).to(device=self.device)
-        obj_mask = torch.ones(batchsize, self.n_anchors, fsize, fsize).to(device=self.device)
-        tgt_scale = torch.zeros(batchsize, self.n_anchors, fsize, fsize, 2).to(self.device)
-        target = torch.zeros(batchsize, self.n_anchors, fsize, fsize, n_ch).to(self.device)
+        # Create mask of zeros and ones ##### START HERE
+        tgt_mask = torch.zeros(batchsize, self.n_anchors, f_map_size, f_map_size, 4 + self.n_classes).to(device=self.device)
+        obj_mask = torch.ones(batchsize, self.n_anchors, f_map_size, f_map_size).to(device=self.device)
+        tgt_scale = torch.zeros(batchsize, self.n_anchors, f_map_size, f_map_size, 2).to(self.device)
+        target = torch.zeros(batchsize, self.n_anchors, f_map_size, f_map_size, n_ch).to(self.device)
 
         # labels = labels.cpu().data
         nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
@@ -167,7 +170,7 @@ class YoloV4Loss(nn.Module):
                         truth_h_all[b, ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 1] + 1e-16)
                     target[b, a, j, i, 4] = 1
                     target[b, a, j, i, 5 + labels[b, ti, 4].to(torch.int16).cpu().numpy()] = 1
-                    tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w_all[b, ti] * truth_h_all[b, ti] / fsize / fsize)
+                    tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w_all[b, ti] * truth_h_all[b, ti] / f_map_size / f_map_size)
         return obj_mask, tgt_mask, tgt_scale, target
 
     def forward(self, bbox_predictions, labels):
@@ -177,7 +180,6 @@ class YoloV4Loss(nn.Module):
             bbox_predictions: 
             labels: 
         """
-        breakpoint()
         loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = 0, 0, 0, 0, 0, 0
 
         # Loop through each prediction scale
