@@ -193,16 +193,23 @@ class YoloV4Loss(nn.Module):
             bbox_predictions = bbox_predictions.permute(0, 1, 3, 4, 2)  # .contiguous()
 
             # Apply sigmoid function to tx & ty, objectness, and cls predictions; this bounds all predictions between 0-1 except for tw, th (index 2 & 3); 
-            # yolov2 does not bound tw, th; shape does not change
+            # tw, th not bound because they have to be able to predict a width and height that spans more than the grid cell
             bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]] = torch.sigmoid(bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]])
 
-            # START HERE
+            # Extract tx, ty, tw, th
             pred = bbox_predictions[..., :4].clone()
+            
+            # Add the grid coordinates to the prediction offsets
             pred[..., 0] += self.grid_x[bbox_id]
             pred[..., 1] += self.grid_y[bbox_id]
+            
+            # Calculate the bbox prediction w, h by scaling the anchors w, h for each cell prediction; 
+            # (B, num_bbox_pred, H, W, 4) * (B, num_anchors_per_scale, H, W)
             pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[bbox_id]
             pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
-
+            
+            #START HERE
+            breakpoint()
             obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels, batchsize, feature_size, anchor_num_ch, bbox_id)
 
             # loss calculation

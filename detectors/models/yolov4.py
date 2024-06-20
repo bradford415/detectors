@@ -302,7 +302,7 @@ class YoloV4(nn.Module):
         # 4 = (tx, ty, tw, th), 1 = objectness, num_classes = number of classes in the ontology, num_bboxes = number of bounding box predictions per grid cell (3 in yolov4)
         output_channels = (4 + 1 + num_classes) * num_bboxes
 
-        # List of anchor points (x,y); alternates between x,y coordinates -> num_anchors is len(anchors)/2
+        # List of anchor points (w,h); alternates between w,h coordinates -> num_anchors is len(anchors)/2
         self.anchors = anchors
         self.backbone = backbone
         self.neck = Neck()

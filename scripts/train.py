@@ -135,7 +135,7 @@ def main(base_config_path: str, model_config_path):
     model = detectors_map[model_config["detector"]](**model_components)
     model.to(device)
     
-    criterion = YoloV4Loss(anchors=model_config["priors"]["anchors"])
+    criterion = YoloV4Loss(anchors=model_config["priors"]["anchors"], device=device)
 
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}
