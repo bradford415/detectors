@@ -120,12 +120,14 @@ class YoloV4Loss(nn.Module):
         # labels = labels.cpu().data
 
         # Note on how labels is formed (my interpretation from the repo im basing yolov4 off of):
-        #   1. labels in github code is (B, max_gt_bboxes, 5)
+        #   1. labels in github code is (B, max_gt_bboxes, 5), containing the raw ground truth labels (tl_x, tl_y, br_x, br_y, class_id)
         #   2. if max_gt_bboxes is 60, but an image only has 6 bounding boxes, only the first 6 rows will have values,
         #      the rest will be 0s
         #   3. The reason it is hardcoded at 60 is because each image will have a different number of bounding boxes,
         #      but to batch the labels together in a tensor they have to be the same shape
         #   4. Idk if this is the best way to do it but I think it only breaks if there are more than max_gt_bboxes in an image
+
+        ### START HERE, make labels like the github repo code
         nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
 
         truth_x_all = (labels[:, :, 2] + labels[:, :, 0]) / (self.strides[output_id] * 2)
