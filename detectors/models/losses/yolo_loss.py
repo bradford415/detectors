@@ -100,19 +100,32 @@ class YoloV4Loss(nn.Module):
 
 
     # START HERE!!!
-    def build_target(self, pred, labels, batchsize, f_map_size, n_ch, output_id):
-        """TODO
+    def build_target(self, pred: list[torch.Tensor], labels: list[dict], batch_size, f_map_size, num_pred_ch, output_id):
+        """Loops through a batch of predictions at each feature map scale TODO
         
         Args:
-            pred:
+            pred: x, y, w, h predictions after scaling the anchors' w, h and adding the grid offsets to tx, ty (B, n_anchors, H, W, bbox_pred_coords)
+            labels: Labels scaled labels for all images in the batch; includes bbox_coords, class labels, etc...
+            batch_size:
+            f_map_size: Feature map dimensions at specific output; YoloV4 has 3 different outputs each at a different resolution
+            num_pred_ch: Number of predictions per cell; 5 + num_classes
         """
         # Create mask of zeros and ones ##### START HERE
-        tgt_mask = torch.zeros(batchsize, self.n_anchors, f_map_size, f_map_size, 4 + self.n_classes).to(device=self.device)
-        obj_mask = torch.ones(batchsize, self.n_anchors, f_map_size, f_map_size).to(device=self.device)
-        tgt_scale = torch.zeros(batchsize, self.n_anchors, f_map_size, f_map_size, 2).to(self.device)
-        target = torch.zeros(batchsize, self.n_anchors, f_map_size, f_map_size, n_ch).to(self.device)
+        breakpoint()
+        tgt_mask = torch.zeros(batch_size, self.n_anchors, f_map_size, f_map_size, 4 + self.n_classes).to(device=self.device)
+        obj_mask = torch.ones(batch_size, self.n_anchors, f_map_size, f_map_size).to(device=self.device)
+        tgt_scale = torch.zeros(batch_size, self.n_anchors, f_map_size, f_map_size, 2).to(self.device)
+        target = torch.zeros(batch_size, self.n_anchors, f_map_size, f_map_size, num_pred_ch).to(self.device)
 
         # labels = labels.cpu().data
+
+        # Note on how labels is formed (my interpretation from the repo im basing yolov4 off of):
+        #   1. labels in github code is (B, max_gt_bboxes, 5)
+        #   2. if max_gt_bboxes is 60, but an image only has 6 bounding boxes, only the first 6 rows will have values,
+        #      the rest will be 0s
+        #   3. The reason it is hardcoded at 60 is because each image will have a different number of bounding boxes,
+        #      but to batch the labels together in a tensor they have to be the same shape
+        #   4. Idk if this is the best way to do it but I think it only breaks if there are more than max_gt_bboxes in an image
         nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
 
         truth_x_all = (labels[:, :, 2] + labels[:, :, 0]) / (self.strides[output_id] * 2)
@@ -122,7 +135,7 @@ class YoloV4Loss(nn.Module):
         truth_i_all = truth_x_all.to(torch.int16).cpu().numpy()
         truth_j_all = truth_y_all.to(torch.int16).cpu().numpy()
 
-        for b in range(batchsize):
+        for b in range(batch_size):
             n = int(nlabel[b])
             if n == 0:
                 continue
@@ -186,17 +199,17 @@ class YoloV4Loss(nn.Module):
         for bbox_id, bbox_predictions in enumerate(bbox_predictions):
             batchsize = bbox_predictions.shape[0]
             feature_size = bbox_predictions.shape[2]
-            anchor_num_ch = 5 + self.n_classes
+            num_pred_ch = 5 + self.n_classes
 
             # (B, num_anchors, ch_per_anchor, H, W)
-            bbox_predictions = bbox_predictions.view(batchsize, self.n_anchors, anchor_num_ch, feature_size, feature_size)
+            bbox_predictions = bbox_predictions.view(batchsize, self.n_anchors, num_pred_ch, feature_size, feature_size)
 
             # (B, num_Anchors, H, W, ch_per_anchor); allows us to access each grid cell prediction
             bbox_predictions = bbox_predictions.permute(0, 1, 3, 4, 2)  # .contiguous()
 
             # Apply sigmoid function to tx & ty, objectness, and cls predictions; this bounds all predictions between 0-1 except for tw, th (index 2 & 3); 
             # tw, th not bound because they have to be able to predict a width and height that spans more than the grid cell
-            bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]] = torch.sigmoid(bbox_predictions[..., np.r_[:2, 4:anchor_num_ch]])
+            bbox_predictions[..., np.r_[:2, 4:num_pred_ch]] = torch.sigmoid(bbox_predictions[..., np.r_[:2, 4:num_pred_ch]])
 
             # Extract tx, ty, tw, th
             pred = bbox_predictions[..., :4].clone()
@@ -210,17 +223,15 @@ class YoloV4Loss(nn.Module):
             pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[bbox_id]
             pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
             
-            #START HERE
-            breakpoint()
-            obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels, batchsize, feature_size, anchor_num_ch, bbox_id)
+            obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels, batchsize, feature_size, num_pred_ch, bbox_id)
 
             # loss calculation
             bbox_predictions[..., 4] *= obj_mask
-            bbox_predictions[..., np.r_[0:4, 5:anchor_num_ch]] *= tgt_mask
+            bbox_predictions[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
             bbox_predictions[..., 2:4] *= tgt_scale
 
             target[..., 4] *= obj_mask
-            target[..., np.r_[0:4, 5:anchor_num_ch]] *= tgt_mask
+            target[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
             target[..., 2:4] *= tgt_scale
 
             loss_xy += F.binary_cross_entropy(input=bbox_predictions[..., :2], target=target[..., :2],
