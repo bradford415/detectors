@@ -18,6 +18,7 @@ from detectors.utils.utils import interpolate
 
 
 def crop(image, target, region):
+    breakpoint()
     cropped_image = F.crop(image, *region)
 
     target = target.copy()
@@ -174,6 +175,7 @@ class RandomSizeCrop(object):
         self.max_size = max_size
 
     def __call__(self, img: PIL.Image.Image, target: dict):
+        breakpoint()
         w = random.randint(self.min_size, min(img.width, self.max_size))
         h = random.randint(self.min_size, min(img.height, self.max_size))
         region = T.RandomCrop.get_params(img, [h, w])

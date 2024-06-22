@@ -15,7 +15,7 @@ from pycocotools.coco import COCO
 
 def main():
     # Modify this path to use on a different annotation file
-    coco_annotation_file_path = "C:/Users/bsele/Documents/Datasets/coco_minitrain_25k/annotations/instances_minitrain2017.json"
+    coco_annotation_file_path = "/mnt/c/Users/bsele/Documents/Datasets/coco_minitrain_25k/annotations/instances_minitrain2017.json"
 
     coco_annotation = COCO(annotation_file=coco_annotation_file_path)
 

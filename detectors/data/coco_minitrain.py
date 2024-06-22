@@ -20,6 +20,8 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
     The dataset will need to be placed in a directory named "coco_minitrain_25k".
 
+    Official Coco annotation format: https://cocodataset.org/#format-data
+
     Create a file heiarchy as the following:
     coco_minitrain25k/
     ├─ images/
@@ -57,13 +59,17 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         # Annotations is a list of dicts; each dict in the list is an object in the image
         # Each dict contains ground truth information of the object such as bbox, segementation and image_id
         image, annotations = super().__getitem__(index)
+        breakpoint()
+        print(image, annotations)
 
-        # Match the randomly sampled index with the image_id
+
+        # Match the randomly sampled index with the image_id; self.ids contains the image_ids in the train set
         image_id = self.ids[index]
 
         # Preprocess the input data before passing it to the model; see PreprocessCoco() for more info
         target = {"image_id": image_id, "annotations": annotations}
         image, target = self.prepare(image, target)
+        breakpoint()
         if self._transforms is not None:
             image, target = self._transforms(image, target)
 
@@ -92,7 +98,7 @@ def make_coco_transforms(dataset_split):
             [
                 T.RandomHorizontalFlip(),
                 T.RandomResize(scales),
-                T.RandomSizeCrop(512, 512),
+                #T.RandomSizeCrop(512, 512), # Crop is sort of bugged, if it crops a region with no objects then no labels will exist; maybe I can add this back later
                 # T.RandomSelect(
                 #     T.Compose(
                 #         [

@@ -117,6 +117,9 @@ class YoloV4Loss(nn.Module):
         tgt_scale = torch.zeros(batch_size, self.n_anchors, f_map_size, f_map_size, 2).to(self.device)
         target = torch.zeros(batch_size, self.n_anchors, f_map_size, f_map_size, num_pred_ch).to(self.device)
 
+
+        gt_labels = torch.cat(labels["boxes"], labels["labels"], axis=1)
+
         # labels = labels.cpu().data
 
         # Note on how labels is formed (my interpretation from the repo im basing yolov4 off of):
@@ -227,7 +230,7 @@ class YoloV4Loss(nn.Module):
             pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[bbox_id]
             pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
             
-            obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels, batchsize, feature_size, num_pred_ch, bbox_id)
+            obj_mask, tgt_mask, tgt_scale, target = self.build_target(pred, labels[bbox_id], batchsize, feature_size, num_pred_ch, bbox_id)
 
             # loss calculation
             bbox_predictions[..., 4] *= obj_mask
