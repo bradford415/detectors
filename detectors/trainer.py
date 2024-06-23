@@ -86,19 +86,12 @@ class Trainer:
                 {key: value.to(device) for key, value in t.items()} for t in targets
             ]
 
-            #breakpoint()
             bbox_predictions = model(samples)
-
-            print("Here")
-            ## TODO: Get GPUs to work
-            #exit()
 
             ## TODO: understand this and rename variables if needed
             loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
                 bbox_predictions, targets
             )
-
-            exit()
 
     # def train():
 

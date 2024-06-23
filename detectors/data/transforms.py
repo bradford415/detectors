@@ -18,7 +18,6 @@ from detectors.utils.utils import interpolate
 
 
 def crop(image, target, region):
-    breakpoint()
     cropped_image = F.crop(image, *region)
 
     target = target.copy()
@@ -256,7 +255,9 @@ class RandomErasing(object):
 
 
 class Normalize:
-    """ """
+    """Normalize an image by mean and standard deviation. This class also
+    converts the the bounding box coordinates to yolo format [center_x, center_y, w, h].
+    """
 
     def __init__(self, mean, std):
         self.mean = mean

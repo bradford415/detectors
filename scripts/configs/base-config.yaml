@@ -43,7 +43,7 @@ cuda:
   # List of GPU devices to use
   gpus: [0]
 
-  num_workers: 2
+  num_workers: 0 #2
 
 # Logging parameters
 logging:
