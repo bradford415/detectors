@@ -6,12 +6,15 @@
 Transforms and data augmentation for both image + bbox.
 """
 import random
+import sys
 from typing import Optional
 
 import PIL
 import torch
+import numpy as np
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
+from PIL.Image import Image as PILImage
 
 from detectors.utils.box_ops import box_xyxy_to_cxcywh
 from detectors.utils.utils import interpolate
@@ -244,6 +247,31 @@ class RandomSelect(object):
 class ToTensor(object):
     def __call__(self, img, target):
         return F.to_tensor(img), target
+    
+class ToTensorNoNormalization:
+    def __call__(self, pil_image: PILImage, target) -> torch.Tensor:
+        """Convert a PIL Image to a Tensor without normalization
+
+        Most of the code is from here: https://pytorch.org/vision/main/_modules/torchvision/transforms/functional.html#to_tensor
+
+        pil_image: PIL image to be converted to a tensor during training
+        target: Gt detection labels; TODO: these may have to be normalized when I put this back in
+        """
+
+        # handle PIL Image
+        mode_to_nptype = {"I": np.int32, "I;16" if sys.byteorder == "little" else "I;16B": np.int16, "F": np.float32}
+        img = torch.from_numpy(np.array(pil_image, mode_to_nptype.get(pil_image.mode, np.uint8), copy=True))
+
+        if pil_image.mode == "1":
+            img = 255 * img
+        img = img.view(pil_image.size[1], pil_image.size[0], img.shape[-1])
+        # put it from HWC to CHW format
+        img = img.permute((2, 0, 1)).contiguous()
+
+        if isinstance(img, torch.ByteTensor):
+            return img.to(dtype=torch.get_default_dtype()), target
+        else:
+            return img, target
 
 
 class RandomErasing(object):

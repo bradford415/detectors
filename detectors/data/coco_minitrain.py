@@ -83,9 +83,9 @@ def make_coco_transforms(dataset_split):
 
     """
 
-    normalize = T.Compose(
-        [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
-    )
+    # normalize = T.Compose(
+    #     [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
+    # )
 
     scales = [1024]
 
@@ -105,7 +105,8 @@ def make_coco_transforms(dataset_split):
                 #         ]
                 #     ),
                 # ),
-                normalize,
+                T.ToTensorNoNormalization()
+                #normalize,
             ]
         )
 
@@ -113,7 +114,8 @@ def make_coco_transforms(dataset_split):
         return T.Compose(
             [
                 T.RandomResize([800], max_size=1333),
-                normalize,
+                T.ToTensorNoNormalization(),
+                #normalize,
             ]
         )
 
