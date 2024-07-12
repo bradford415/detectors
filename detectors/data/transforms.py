@@ -9,9 +9,9 @@ import random
 import sys
 from typing import Optional
 
+import numpy as np
 import PIL
 import torch
-import numpy as np
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
 from PIL.Image import Image as PILImage
@@ -247,7 +247,8 @@ class RandomSelect(object):
 class ToTensor(object):
     def __call__(self, img, target):
         return F.to_tensor(img), target
-    
+
+
 class ToTensorNoNormalization:
     def __call__(self, pil_image: PILImage, target) -> torch.Tensor:
         """Convert a PIL Image to a Tensor without normalization
@@ -259,14 +260,31 @@ class ToTensorNoNormalization:
         """
 
         # handle PIL Image
-        mode_to_nptype = {"I": np.int32, "I;16" if sys.byteorder == "little" else "I;16B": np.int16, "F": np.float32}
-        img = torch.from_numpy(np.array(pil_image, mode_to_nptype.get(pil_image.mode, np.uint8), copy=True))
+        mode_to_nptype = {
+            "I": np.int32,
+            "I;16" if sys.byteorder == "little" else "I;16B": np.int16,
+            "F": np.float32,
+        }
+        
+        # Convert pil to tensor
+        img = torch.from_numpy(
+            np.array(pil_image, mode_to_nptype.get(pil_image.mode, np.uint8), copy=True)
+        )
 
         if pil_image.mode == "1":
             img = 255 * img
         img = img.view(pil_image.size[1], pil_image.size[0], img.shape[-1])
         # put it from HWC to CHW format
         img = img.permute((2, 0, 1)).contiguous()
+
+        # Convert bounding boxes from Coco format to Yolo format; tl_x, tl_y, br_x, br_y -> cx, cy, w, h
+        target = target.copy()
+        h, w = img.shape[-2:]
+        if "boxes" in target:
+            boxes = target["boxes"]
+            boxes = box_xyxy_to_cxcywh(boxes)
+            #boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            target["boxes"] = boxes
 
         if isinstance(img, torch.ByteTensor):
             return img.to(dtype=torch.get_default_dtype()), target
@@ -301,13 +319,16 @@ class Normalize:
         if target is None:
             return image, None
 
-        # Convert bounding boxes to Yolo format
+        # Convert bounding boxes from Coco format to Yolo format AND normalize between [0, 1]; 
+        # tl_x, tl_y, br_x, br_y -> cx, cy, w, h
+        # Note: This code was taken from DETR but for the Yolov4 implementation 
+        #       it is not normalized so I am leaving it out
         target = target.copy()
         h, w = image.shape[-2:]
         if "boxes" in target:
             boxes = target["boxes"]
             boxes = box_xyxy_to_cxcywh(boxes)
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            #boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return image, target
 

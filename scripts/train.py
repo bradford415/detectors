@@ -10,10 +10,10 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.coco_utils import get_coco_object
 from detectors.models.backbones import backbone_map
+from detectors.models.losses.yolo_loss import YoloV4Loss
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import utils
-from detectors.models.losses.yolo_loss import YoloV4Loss
 
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
@@ -86,7 +86,6 @@ def main(base_config_path: str, model_config_path):
     }
 
     if use_cuda:
-
         print(f"Using {len(base_config['cuda']['gpus'])} GPU(s): ")
         for gpu in range(len(base_config["cuda"]["gpus"])):
             print(f"    -{torch.cuda.get_device_name(gpu)}")
@@ -129,12 +128,16 @@ def main(base_config_path: str, model_config_path):
         remove_top=model_config["backbone"]["remove_top"],
     )
 
-    model_components = {"backbone": backbone, "num_classes": 80, **model_config["priors"]}
+    model_components = {
+        "backbone": backbone,
+        "num_classes": 80,
+        **model_config["priors"],
+    }
 
     # Initialize detection model and transfer to GPU
     model = detectors_map[model_config["detector"]](**model_components)
     model.to(device)
-    
+
     criterion = YoloV4Loss(anchors=model_config["priors"]["anchors"], device=device)
 
     # Extract the train arguments from base config

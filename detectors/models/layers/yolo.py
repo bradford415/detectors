@@ -268,7 +268,7 @@ class YoloLayer(nn.Module):
             head_output: Output logits from the dector head
         """
 
-        # Divide each anchor point by stride; this normalizes the anchor coordinates from 
+        # Divide each anchor point by stride; this normalizes the anchor coordinates from
         # the input size to the head_output size
         scaled_anchors = [anchor / self.stride for anchor in self.anchors]
 
@@ -277,6 +277,6 @@ class YoloLayer(nn.Module):
             self.thresh,
             self.num_classes,
             scaled_anchors,
-            num_anchors=int(len(scaled_anchors)/2),
+            num_anchors=int(len(scaled_anchors) / 2),
             scale_x_y=self.scale_x_y,
         )

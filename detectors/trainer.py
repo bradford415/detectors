@@ -19,7 +19,7 @@ class Trainer:
 
         Args:
             output_path: Path to save the train outputs
-            use_cuda: Whether to use the GPU 
+            use_cuda: Whether to use the GPU
         """
         ## TODO: PROBALBY REMOVE THESE Initialize training objects
         # self.optimizer = optimizer_map[optimizer]

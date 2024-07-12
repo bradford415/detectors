@@ -95,7 +95,7 @@ def make_coco_transforms(dataset_split):
                 T.RandomHorizontalFlip(),
                 T.RandomResize(scales),
                 T.CenterCrop((512, 512)),
-                #T.RandomSizeCrop(512, 512), # Crop is sort of bugged, if it crops a region with no objects then no labels will exist; maybe I can add this back later
+                # T.RandomSizeCrop(512, 512), # Crop is sort of bugged, if it crops a region with no objects then no labels will exist; maybe I can add this back later
                 # T.RandomSelect(
                 #     T.Compose(
                 #         [
@@ -106,7 +106,7 @@ def make_coco_transforms(dataset_split):
                 #     ),
                 # ),
                 T.ToTensorNoNormalization()
-                #normalize,
+                # normalize,
             ]
         )
 
@@ -115,7 +115,7 @@ def make_coco_transforms(dataset_split):
             [
                 T.RandomResize([800], max_size=1333),
                 T.ToTensorNoNormalization(),
-                #normalize,
+                # normalize,
             ]
         )
 

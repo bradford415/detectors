@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from detectors.models.layers.yolo import YoloLayer
 from detectors.utils.box_ops import get_region_boxes
 
+
 class Conv_Bn_Activation(nn.Module):
     def __init__(
         self,
@@ -217,7 +218,7 @@ class Yolov4Head(nn.Module):
         # Medium head_output dimensions
         self.yolo2 = YoloLayer(
             num_classes=n_classes,
-            anchors=anchors[6:6*2],
+            anchors=anchors[6 : 6 * 2],
             stride=16,
         )
 
@@ -238,8 +239,8 @@ class Yolov4Head(nn.Module):
         # Smallest head_output dimensions
         self.yolo3 = YoloLayer(
             num_classes=n_classes,
-            anchors=anchors[6*2:6*3],
-            stride=32, # 512 input_dim / 16 head_output = 32
+            anchors=anchors[6 * 2 : 6 * 3],
+            stride=32,  # 512 input_dim / 16 head_output = 32
         )
 
     def forward(self, input1, input2, input3):
@@ -275,7 +276,7 @@ class Yolov4Head(nn.Module):
             y2 = self.yolo2(predictions_scale2)
             y3 = self.yolo3(predictions_scale3)
 
-            return get_region_boxes([y1, y2, y3]) 
+            return get_region_boxes([y1, y2, y3])
 
         else:
             # scale1 has the largest dimensions, scale2 medium, scale3 smallest dimensions (should verify this by viewing shape)
@@ -289,7 +290,14 @@ class YoloV4(nn.Module):
     """
 
     def __init__(
-        self, num_classes, backbone, anchors, neck=None, head=None, num_bboxes=3, inference=False
+        self,
+        num_classes,
+        backbone,
+        anchors,
+        neck=None,
+        head=None,
+        num_bboxes=3,
+        inference=False,
     ):
         """TODO
 
@@ -306,7 +314,9 @@ class YoloV4(nn.Module):
         self.anchors = anchors
         self.backbone = backbone
         self.neck = Neck()
-        self.head = Yolov4Head(output_channels, num_classes, anchors, inference=inference)
+        self.head = Yolov4Head(
+            output_channels, num_classes, anchors, inference=inference
+        )
 
     def forward(self, x):
         """Forward pass through the model
