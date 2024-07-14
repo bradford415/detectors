@@ -14,7 +14,7 @@ from detectors.data.coco_utils import PreprocessCoco, explore_coco
 
 class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
     """COCO Minitrain dataset. This dataset is a curated set of 25,000 train images
-    from the 2017 Train COOO dataset.
+    from the 2017 Train COOO dataset. This dataset has 80 classes.
 
     Dataset can be found here https://github.com/giddyyupp/coco-minitrain.
 

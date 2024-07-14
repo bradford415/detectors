@@ -303,7 +303,6 @@ class YoloV4Loss(nn.Module):
             # another explanation here: https://www.programmersought.com/article/9049233456/ (I didn't look through this one yet)
             obj_mask[batch] = ~pred_best_iou
 
-            ################### START HERE ##################
             breakpoint()
             # Loop through each object in the image
             for img_object in range(best_n.shape[0]):
@@ -318,7 +317,12 @@ class YoloV4Loss(nn.Module):
                     best_anch = best_n[img_object]
 
                     #### START HERE
+                    # Set the obj_mask of the batch at the best anchor IoU (between gt and ref anchors) prediction of the cell location to 1;
+                    # obj_mask (B, num_cell_preds, out_H, out_W)
                     obj_mask[batch, best_anch, j, i] = 1
+                    
+                    # Set all elements in the last dimension of the same location as obj_mask to 1
+                    # (B, num_cell_preds, out_H, out_W)
                     tgt_mask[batch, best_anch, j, i, :] = 1
                     target[batch, best_anch, j, i, 0] = scaled_truth_cx_all[batch, img_object] - scaled_truth_cx_all[
                         batch, img_object
