@@ -80,6 +80,7 @@ class YoloV4Loss(nn.Module):
         # predictions in the loss  could cause over or underfitting; if the ignore threshold is too high, close to 1,
         # then there will be a lot of predictions used to calcuate the loss and could  overfitting;
         # if the ignore threshold is low, not many predictions will be used to calcuate the loss and the model might be underfit
+        # This is also specified in section 2.1 of the YoloV2 paper
         self.iou_ignore_threshold = 0.5
 
         # masked_anchors:
@@ -218,8 +219,8 @@ class YoloV4Loss(nn.Module):
         scaled_truth_w_all = gt_labels[:, :, 2] / self.strides[output_id]
         scaled_truth_h_all = gt_labels[:, :, 3] / self.strides[output_id]
 
-        scaled_truth_i_all = scaled_truth_cx_all.cpu().numpy()
-        scaled_truth_j_all = scaled_truth_cy_all.cpu().numpy()
+        truth_cell_x_all = scaled_truth_cx_all.to(torch.int16).cpu().numpy()
+        truth_cell_y_all = scaled_truth_cy_all.to(torch.int16).cpu().numpy()
 
         # Loop through each image in the batch
         for batch in range(batch_size):
@@ -234,9 +235,9 @@ class YoloV4Loss(nn.Module):
             truth_box_cxcywh[:num_objs_img, 2] = scaled_truth_w_all[batch, :num_objs_img]
             truth_box_cxcywh[:num_objs_img, 3] = scaled_truth_h_all[batch, :num_objs_img]
 
-            # Extract gt w, h for the current batch; i & j are used to match the subscripts in the Yolo Loss formula from the paper
-            scaled_truth_i = scaled_truth_i_all[batch, :num_objs_img]
-            scaled_truth_j = scaled_truth_j_all[batch, :num_objs_img]
+            # Extract gt w, h for the current batch
+            truth_cell_x = truth_cell_x_all[batch, :num_objs_img]
+            truth_cell_y = truth_cell_y_all[batch, :num_objs_img]
 
             # Calculate IoU between ground truth and reference anchors; reference anchors are the anchors / output_stride;
             # Anchors are used ONLY for the width and height, there is no information about their location in the image i.e. their center coordinate
@@ -303,7 +304,6 @@ class YoloV4Loss(nn.Module):
             # another explanation here: https://www.programmersought.com/article/9049233456/ (I didn't look through this one yet)
             obj_mask[batch] = ~pred_best_iou
 
-            breakpoint()
             # Loop through each object in the image
             for img_object in range(best_n.shape[0]):
 
@@ -311,7 +311,7 @@ class YoloV4Loss(nn.Module):
                 if best_anch_iou_mask[img_object] == True:
 
                     # i is scaled_gt_cx and j is scaled_gt_cy
-                    i, j = scaled_truth_i[img_object], scaled_truth_j[img_object]
+                    cell_x, cell_y = truth_cell_x[img_object], truth_cell_y[img_object]
 
                     # Extract best anchor from the iou between gt box and anchor box
                     best_anch = best_n[img_object]
@@ -319,42 +319,57 @@ class YoloV4Loss(nn.Module):
                     #### START HERE
                     # Set the obj_mask of the batch at the best anchor IoU (between gt and ref anchors) prediction of the cell location to 1;
                     # obj_mask (B, num_cell_preds, out_H, out_W)
-                    obj_mask[batch, best_anch, j, i] = 1
+                    obj_mask[batch, best_anch, cell_y, cell_x] = 1
                     
                     # Set all elements in the last dimension of the same location as obj_mask to 1
                     # (B, num_cell_preds, out_H, out_W, 4 + num_classes)
-                    tgt_mask[batch, best_anch, j, i, :] = 1
-                    target[batch, best_anch, j, i, 0] = scaled_truth_cx_all[batch, img_object] - scaled_truth_cx_all[
+                    breakpoint()
+                    tgt_mask[batch, best_anch, cell_y, cell_x, :] = 1
+
+                    # Store the x, y offsets from the grid cell top_left coordinate; 
+                    # Ex: grid_cell_x = 63 and x_prediction = 63.35 the value stored will be 0.35
+                    target[batch, best_anch, cell_y, cell_x, 0] = scaled_truth_cx_all[batch, img_object] - scaled_truth_cx_all[
                         batch, img_object
                     ].to(torch.int16).to(torch.float)
-                    target[batch, best_anch, j, i, 1] = scaled_truth_cy_all[batch, img_object] - scaled_truth_cy_all[
+                    target[batch, best_anch, cell_y, cell_x, 1] = scaled_truth_cy_all[batch, img_object] - scaled_truth_cy_all[
                         batch, img_object
                     ].to(torch.int16).to(torch.float)
-                    target[batch, best_anch, j, i, 2] = torch.log(
+
+                    # Calculate and store the ground truth t_w, t_h; this comes from the formula in the yolov2 paper b_w = (p_w)e^(t_w)
+                    # where b_w = bbox_width, p_w = anchor box width, t_w = the width prediction from the NN; in this case, we're calculating gt t_w
+                    # so we need to solve for it, or at least that's what I believe they're doing here;
+                    # we can solve for t_w with: log(b_w/p_w) = t_w 
+                    target[batch, best_anch, cell_y, cell_x, 2] = torch.log(
                         scaled_truth_w_all[batch, img_object]
                         / torch.Tensor(self.masked_anchors[output_id])[best_n[img_object], 0]
                         + 1e-16
                     )
-                    target[batch, best_anch, j, i, 3] = torch.log(
+                    target[batch, best_anch, cell_y, cell_x, 3] = torch.log(
                         scaled_truth_h_all[batch, img_object]
                         / torch.Tensor(self.masked_anchors[output_id])[best_n[img_object], 1]
                         + 1e-16
                     )
-                    target[batch, best_anch, j, i, 4] = 1
+
+                    # Set the objectness to 1 since an object does exist there
+                    target[batch, best_anch, cell_y, cell_x, 4] = 1
+                    
+                    # Set the ground truth object label to 1 in it's correct position in the last dimension, every other object label 
+                    # remains 0 because it is not that object; 
+                    # the class predictions are after the first 5 elements in the last dimension, so index 5 would be the first object label
                     target[
                         batch,
                         best_anch,
-                        j,
-                        i,
+                        cell_y,
+                        cell_x,
                         5 + gt_labels[batch, img_object, 4].to(torch.int16).cpu().numpy(),
                     ] = 1
-                    tgt_scale[batch, best_anch, j, i, :] = torch.sqrt(
-                        2
-                        - scaled_truth_w_all[batch, img_object]
-                        * scaled_truth_h_all[batch, img_object]
-                        / f_map_size
-                        / f_map_size
+
+                    breakpoint()
+                    # Not entirely sure what this does
+                    tgt_scale[batch, best_anch, cell_y, cell_x, :] = torch.sqrt(
+                        2 - scaled_truth_w_all[batch, img_object] * scaled_truth_h_all[batch, img_object] / f_map_size / f_map_size
                     )
+                ## TODO, verify loop iteration does the same thing, then comment the empty tensors at the top
         return obj_mask, tgt_mask, tgt_scale, target
 
     def forward(self, bbox_predictions_scales: list[torch.Tensor], labels):
