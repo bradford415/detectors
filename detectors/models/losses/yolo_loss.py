@@ -150,7 +150,7 @@ class YoloV4Loss(nn.Module):
             self.anchor_w.append(anchor_w)
             self.anchor_h.append(anchor_h)
 
-    def build_target(
+    def build_ground_truth_tensor(
         self,
         pred: list[torch.Tensor],
         labels: list[dict],
@@ -159,7 +159,11 @@ class YoloV4Loss(nn.Module):
         num_pred_ch,
         output_id,
     ):
-        """Loops through a batch of predictions at each feature map scale TODO
+        """Builds the ground truth tensor for the loss function. This will be similar to the output predictions of the network
+        but for the ground truth labels.
+        
+        This function loops through a batch of predictions at each feature map scale. That is, the pred tensor
+        height and width corresponds to an output scale and contains a batch of images.
 
         Args:
             pred: x, y, w, h predictions after adding the grid offsets to tx, ty and scaling the anchors' w, h; 
@@ -170,19 +174,36 @@ class YoloV4Loss(nn.Module):
             f_map_size: Feature map dimensions at specific output; YoloV4 has 3 different outputs each at a different resolution
             num_pred_ch: Number of predictions per cell; 5 + num_classes
             output_id: The index of the output feature map scale; since YoloV4 has 3 outputs, the possible indices are [0, 1, 2]
+            
+        Return:
+            TODO
         """
-        # Create mask of zeros and ones
+        # Note: tgt_mask is initalized to zeros and obj_mask is intialized to ones because
+        #       only the objectness score is calculated in the loss for every prediction,
+        #       while the bbox and class label predictions that correspond with the best anchor are used
+        
+        # Binary target mask to 0 out predictions which do not correspond to a best anchor; 
+        # only 1 anchor corresponds to an object;
+        # From the YoloV3 paper section 2.1 it mentions:
+        #   "Unlike faster r-cnn our system only assigns one bounding box prior for each ground truth
+        #    object. If a bounding box prior is not assigned to a ground
+        #    truth object it incurs no loss for coordinate or class predictions, only objectness."
         tgt_mask = torch.zeros(
             batch_size, self.n_anchors, f_map_size, f_map_size, 4 + self.n_classes
         ).to(device=self.device)
 
+        # Binary object mask used to set the predictions objectess score (index 4) to 0 if it surpasses the self.iou_ignore_threshold;
         # (B, num_cell_preds, out_H, out_W); 
         obj_mask = torch.ones(batch_size, self.n_anchors, f_map_size, f_map_size).to(
             device=self.device
         )
+        
+        # TODO: comment this once I know what it does
         tgt_scale = torch.zeros(
             batch_size, self.n_anchors, f_map_size, f_map_size, 2
         ).to(self.device)
+        
+        # Tensor to store the ground truth t_x, t_y, t_w, t_h, t_o and the class label (a 1 in the class position)
         target = torch.zeros(
             batch_size, self.n_anchors, f_map_size, f_map_size, num_pred_ch
         ).to(self.device)
@@ -284,22 +305,22 @@ class YoloV4Loss(nn.Module):
             truth_box_cxcywh[:num_objs_img, 0] = scaled_truth_cx_all[batch, :num_objs_img]
             truth_box_cxcywh[:num_objs_img, 1] = scaled_truth_cy_all[batch, :num_objs_img]
 
-            # Collapse all cell predictions into a 2D (num_cell_preds*out_H*out_W, 4) and calculate the IoUs between all cell predictions and the ground truth boxes
+            # Collapse all cell predictions into 2D (num_cell_preds*out_H*out_W, 4) and calculate the IoUs between all cell predictions and the ground truth boxes
             # num_cell_preds is the number of predictions per cell
             pred_ious = bboxes_iou(pred[batch].reshape(-1, 4), truth_box_cxcywh, xyxy=False) # (num_cell_preds*out_H*out_W, num_objs_img)
             
             # Get the highest IoU for each prediction; this will be the gt object that has the highest IoU; (num_cell_preds*out_H*out_W)
             pred_best_iou, _ = pred_ious.max(dim=1)
 
-            # Check if each predicted IoU is above the ignored threshold; see attribute definition
+            # Check if each predicted IoU is above the ignored threshold; see attribute definition fo rmore information
             pred_best_iou = pred_best_iou > self.iou_ignore_threshold
 
             # pred_best_iou is now a boolean tensor, convert it to (num_cell_preds, out_H, out_W); 
-            # we now have a boolean ~mask~ if the highest IoU between the prediction and the gt objects for 
+            # we now have a boolean mask if the highest IoU between the prediction and the gt objects for 
             # each cell prediction is higher than self.iou_threshold
             pred_best_iou = pred_best_iou.view(pred[batch].shape[:3])
 
-            # Set mask to zero (ignore) if the prediction and ground truth IoU is greater than the threshold self.iou_ignore_threshold;
+            # Set mask elements to zero (ignore) if the prediction and ground truth IoU is greater than the threshold self.iou_ignore_threshold;
             # explanation here: https://stackoverflow.com/questions/56199478/what-is-the-purpose-of-ignore-thresh-and-truth-thresh-in-the-yolo-layers-in-yolo
             # another explanation here: https://www.programmersought.com/article/9049233456/ (I didn't look through this one yet)
             obj_mask[batch] = ~pred_best_iou
@@ -316,14 +337,17 @@ class YoloV4Loss(nn.Module):
                     # Extract best anchor from the iou between gt box and anchor box
                     best_anch = best_n[img_object]
 
-                    #### START HERE
+                    
                     # Set the obj_mask of the batch at the best anchor IoU (between gt and ref anchors) prediction of the cell location to 1;
+                    # this is a special case where the prediction IoU is over the self.iou_ignore_threshold so it is set to 0, however,
+                    # since this is the best anchor, we stil want to include it in the loss so we need to set it to 1... I think this is why...
                     # obj_mask (B, num_cell_preds, out_H, out_W)
                     obj_mask[batch, best_anch, cell_y, cell_x] = 1
                     
-                    # Set all elements in the last dimension of the same location as obj_mask to 1
-                    # (B, num_cell_preds, out_H, out_W, 4 + num_classes)
-                    breakpoint()
+                    # Set all elements in the last dimension of the same location 1 at the best anchor position;
+                    # as described above and in the paper, gt objects are only assigned 1 anchor
+                    # (B, num_cell_preds, out_H, out_W, 4 + num_classes);
+                    # this will be used to 0 out the predictions which do not correspond to a best anchor
                     tgt_mask[batch, best_anch, cell_y, cell_x, :] = 1
 
                     # Store the x, y offsets from the grid cell top_left coordinate; 
@@ -364,12 +388,11 @@ class YoloV4Loss(nn.Module):
                         5 + gt_labels[batch, img_object, 4].to(torch.int16).cpu().numpy(),
                     ] = 1
 
-                    breakpoint()
                     # Not entirely sure what this does
                     tgt_scale[batch, best_anch, cell_y, cell_x, :] = torch.sqrt(
                         2 - scaled_truth_w_all[batch, img_object] * scaled_truth_h_all[batch, img_object] / f_map_size / f_map_size
                     )
-                ## TODO, verify loop iteration does the same thing, then comment the empty tensors at the top
+
         return obj_mask, tgt_mask, tgt_scale, target
 
     def forward(self, bbox_predictions_scales: list[torch.Tensor], labels):
@@ -413,13 +436,24 @@ class YoloV4Loss(nn.Module):
             pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[bbox_id]
             pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
 
-            obj_mask, tgt_mask, tgt_scale, target = self.build_target(
+            obj_mask, tgt_mask, tgt_scale, target = self.build_ground_truth_tensor(
                 pred, labels, batchsize, feature_size, num_pred_ch, bbox_id
             )
 
-            # loss calculation
+            breakpoint()
+
+            # Loss calculation
+            # Set the objectness score to 0 if IoU is greater than the self.iou_ignore_threshold
             bbox_predictions[..., 4] *= obj_mask
+            
+            # Multiply the binary tgt_mask to every prediction (except for objectness) to 0 out the predictions which DO NOT
+            # correspond to the best anchor;
+            # np.r_ is used to temporarily concatenate the [0:4] and [5:num_pred_ch] so it can multiply tgt_mask by every element in the 
+            # last dimension except for index 4 since bbox_predictions last dimension has  85 elements and tgt_mask only has 84;
+            # this leaves the 4th index unchanged in bbox_predictions
             bbox_predictions[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
+            
+            ##### START HERE, figure out what this does then comment above
             bbox_predictions[..., 2:4] *= tgt_scale
 
             target[..., 4] *= obj_mask
