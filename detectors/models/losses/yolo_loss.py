@@ -322,7 +322,7 @@ class YoloV4Loss(nn.Module):
                     obj_mask[batch, best_anch, j, i] = 1
                     
                     # Set all elements in the last dimension of the same location as obj_mask to 1
-                    # (B, num_cell_preds, out_H, out_W)
+                    # (B, num_cell_preds, out_H, out_W, 4 + num_classes)
                     tgt_mask[batch, best_anch, j, i, :] = 1
                     target[batch, best_anch, j, i, 0] = scaled_truth_cx_all[batch, img_object] - scaled_truth_cx_all[
                         batch, img_object
