@@ -233,10 +233,10 @@ class YoloV4Loss(nn.Module):
             truth_box_cxcywh = torch.zeros(num_objs_img, 4).to(self.device)  # (num_gt_objects, 4)
             truth_box_cxcywh[:num_objs_img, 2] = scaled_truth_w_all[batch, :num_objs_img]
             truth_box_cxcywh[:num_objs_img, 3] = scaled_truth_h_all[batch, :num_objs_img]
-            breakpoint()
-            # Extract gt w, h for the current batch
-            truth_i = scaled_truth_i_all[batch, :num_objs_img]
-            truth_j = scaled_truth_j_all[batch, :num_objs_img]
+
+            # Extract gt w, h for the current batch; i & j are used to match the subscripts in the Yolo Loss formula from the paper
+            scaled_truth_i = scaled_truth_i_all[batch, :num_objs_img]
+            scaled_truth_j = scaled_truth_j_all[batch, :num_objs_img]
 
             # Calculate IoU between ground truth and reference anchors; reference anchors are the anchors / output_stride;
             # Anchors are used ONLY for the width and height, there is no information about their location in the image i.e. their center coordinate
@@ -255,26 +255,26 @@ class YoloV4Loss(nn.Module):
             # the best fit anchor box for each object
             # shape: (num_gt_boxes)
             #
-            best_n_all = anchor_ious_all.argmax(dim=1)
+            best_anch_iou_all = anchor_ious_all.argmax(dim=1)
 
             # I don't know why this is here
-            best_n = best_n_all % 3
+            best_n = best_anch_iou_all % 3
 
             # Check if the best anchor IoUs are within the anchor boxes designated for that output scale; also I'm not sure why this is done
             # Example:
             #   self.anch_masks holds the index of the anchors for each output feature map
             #   so if there's 9 anchors, it wants to use 3 anchors for each outpu prediction scale
             #   self.anch_masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]; again, this seems like a bad way to do this
-            best_n_mask = (
-                (best_n_all == self.anch_masks[output_id][0])
-                | (best_n_all == self.anch_masks[output_id][1])
-                | (best_n_all == self.anch_masks[output_id][2])
+            best_anch_iou_mask = (
+                (best_anch_iou_all == self.anch_masks[output_id][0])
+                | (best_anch_iou_all == self.anch_masks[output_id][1])
+                | (best_anch_iou_all == self.anch_masks[output_id][2])
             )
 
             # If the none of the highest IoUs is not within the group of anchors corresponding to the anchor masks,
             # skip to the next image in the batch;
             # I think this check is to make sure you're on the proper output scale but I don't really understand it
-            if sum(best_n_mask) == 0:
+            if sum(best_anch_iou_mask) == 0:
                 continue
 
             # If the condition above is passed, we can now get the IoUs of the predictions and the ground truths bboxes
@@ -305,41 +305,49 @@ class YoloV4Loss(nn.Module):
 
             ################### START HERE ##################
             breakpoint()
-            # Loop through each object in the image?
-            for ti in range(best_n.shape[0]):
-                if best_n_mask[ti] == 1:
-                    i, j = truth_i[ti], truth_j[ti]
-                    a = best_n[ti]
-                    obj_mask[batch, a, j, i] = 1
-                    tgt_mask[batch, a, j, i, :] = 1
-                    target[batch, a, j, i, 0] = scaled_truth_cx_all[batch, ti] - scaled_truth_cx_all[
-                        batch, ti
+            # Loop through each object in the image
+            for img_object in range(best_n.shape[0]):
+
+                # If best object & anchor IoU is within the proper output scale 
+                if best_anch_iou_mask[img_object] == True:
+
+                    # i is scaled_gt_cx and j is scaled_gt_cy
+                    i, j = scaled_truth_i[img_object], scaled_truth_j[img_object]
+
+                    # Extract best anchor from the iou between gt box and anchor box
+                    best_anch = best_n[img_object]
+
+                    #### START HERE
+                    obj_mask[batch, best_anch, j, i] = 1
+                    tgt_mask[batch, best_anch, j, i, :] = 1
+                    target[batch, best_anch, j, i, 0] = scaled_truth_cx_all[batch, img_object] - scaled_truth_cx_all[
+                        batch, img_object
                     ].to(torch.int16).to(torch.float)
-                    target[batch, a, j, i, 1] = scaled_truth_cy_all[batch, ti] - scaled_truth_cy_all[
-                        batch, ti
+                    target[batch, best_anch, j, i, 1] = scaled_truth_cy_all[batch, img_object] - scaled_truth_cy_all[
+                        batch, img_object
                     ].to(torch.int16).to(torch.float)
-                    target[batch, a, j, i, 2] = torch.log(
-                        scaled_truth_w_all[batch, ti]
-                        / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 0]
+                    target[batch, best_anch, j, i, 2] = torch.log(
+                        scaled_truth_w_all[batch, img_object]
+                        / torch.Tensor(self.masked_anchors[output_id])[best_n[img_object], 0]
                         + 1e-16
                     )
-                    target[batch, a, j, i, 3] = torch.log(
-                        scaled_truth_h_all[batch, ti]
-                        / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 1]
+                    target[batch, best_anch, j, i, 3] = torch.log(
+                        scaled_truth_h_all[batch, img_object]
+                        / torch.Tensor(self.masked_anchors[output_id])[best_n[img_object], 1]
                         + 1e-16
                     )
-                    target[batch, a, j, i, 4] = 1
+                    target[batch, best_anch, j, i, 4] = 1
                     target[
                         batch,
-                        a,
+                        best_anch,
                         j,
                         i,
-                        5 + gt_labels[b, ti, 4].to(torch.int16).cpu().numpy(),
+                        5 + gt_labels[batch, img_object, 4].to(torch.int16).cpu().numpy(),
                     ] = 1
-                    tgt_scale[batch, a, j, i, :] = torch.sqrt(
+                    tgt_scale[batch, best_anch, j, i, :] = torch.sqrt(
                         2
-                        - scaled_truth_w_all[batch, ti]
-                        * scaled_truth_h_all[batch, ti]
+                        - scaled_truth_w_all[batch, img_object]
+                        * scaled_truth_h_all[batch, img_object]
                         / f_map_size
                         / f_map_size
                     )
@@ -389,8 +397,6 @@ class YoloV4Loss(nn.Module):
             obj_mask, tgt_mask, tgt_scale, target = self.build_target(
                 pred, labels, batchsize, feature_size, num_pred_ch, bbox_id
             )
-
-            ## START HERE!!!!!!!!!!!!!!!!
 
             # loss calculation
             bbox_predictions[..., 4] *= obj_mask
