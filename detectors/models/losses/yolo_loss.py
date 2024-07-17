@@ -198,7 +198,7 @@ class YoloV4Loss(nn.Module):
             device=self.device
         )
         
-        # TODO: comment this once I know what it does
+        # TODO: comment this once I know what it does (B, num_anchors,  out_h, out_w)
         tgt_scale = torch.zeros(
             batch_size, self.n_anchors, f_map_size, f_map_size, 2
         ).to(self.device)
@@ -388,6 +388,7 @@ class YoloV4Loss(nn.Module):
                         5 + gt_labels[batch, img_object, 4].to(torch.int16).cpu().numpy(),
                     ] = 1
 
+                    breakpoint()
                     # Not entirely sure what this does
                     tgt_scale[batch, best_anch, cell_y, cell_x, :] = torch.sqrt(
                         2 - scaled_truth_w_all[batch, img_object] * scaled_truth_h_all[batch, img_object] / f_map_size / f_map_size
@@ -453,13 +454,16 @@ class YoloV4Loss(nn.Module):
             # this leaves the 4th index unchanged in bbox_predictions
             bbox_predictions[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
             
-            ##### START HERE, figure out what this does then comment above
+            # Multiply the prediction w/h by the tgt_scale calculated above; I have no idea what the tgt_scale is used for 
             bbox_predictions[..., 2:4] *= tgt_scale
 
+            # Repeat the above 3 statements but for the target (labels)
             target[..., 4] *= obj_mask
             target[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
             target[..., 2:4] *= tgt_scale
 
+            
+            # Calculate the loss of the width
             loss_xy += F.binary_cross_entropy(
                 input=bbox_predictions[..., :2],
                 target=target[..., :2],
@@ -474,12 +478,26 @@ class YoloV4Loss(nn.Module):
                 )
                 / 2
             )
+            
+            # Calculate the objectness BCE loss
             loss_obj += F.binary_cross_entropy(
                 input=bbox_predictions[..., 4], target=target[..., 4], reduction="sum"
             )
+            
+            # Calculate the class BCE loss; the reason we use BCE and not CE is because we're doing multilabel classifciation (not multiclass classification);
+            # this link explains it well: https://towardsdatascience.com/dive-really-deep-into-yolo-v3-a-beginners-guide-9e3d2666280e#:~:text=Why%3F,they%20are%20not%20mutually%20exclusive.
+            # the notable message is the following:
+            #   "In YOLO v3, it’s changed to do multi-label classification instead of multi-class classification. 
+            #    Why? Because some dataset may contains labels that are hierarchical or related, eg woman and person. 
+            #    So each output cell could have more than 1 class to be true. Correspondingly, we also apply binary cross-entropy 
+            #    for each class one by one and sum them up because they are not mutually exclusive."
+            # This link also explains the use of BCE for multi-label classification: https://discuss.pytorch.org/t/is-there-an-example-for-multi-class-multilabel-classification-in-pytorch/53579/7
+            # Example of BCE loss for multi-label classification: https://discuss.pytorch.org/t/multi-label-classification-in-pytorch/905/45?u=bradford415
             loss_cls += F.binary_cross_entropy(
                 input=bbox_predictions[..., 5:], target=target[..., 5:], reduction="sum"
             )
+            
+            ## START HERE
             loss_l2 += F.mse_loss(
                 input=bbox_predictions, target=target, reduction="sum"
             )
@@ -515,7 +533,6 @@ def bboxes_iou(bboxes_a, bboxes_b, xyxy=True, GIoU=False, DIoU=False, CIoU=False
     if bboxes_a.shape[1] != 4 or bboxes_b.shape[1] != 4:
         raise IndexError
 
-    ############ START HERE, need to go on laptop and run repo to see what these values are
     if xyxy:
         # Compare every (1, 4) row in bboxes_a with every element in bboxes_b
         # intersection top left

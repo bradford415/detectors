@@ -15,6 +15,6 @@ head:
 # Piror information to help the object detection model
 priors:
   # List of anchor points (w,h); alternates between w,h -> num_anchors is len(anchors)/2; anchors are ONLY for w,h;
-  # In Yolo if there are n bbox predictions per cell, there should be n*3 anchor boxes
+  # In YoloV3 (section 2.3 of paper) they choose 9 clusters (w/h pairs) and divide them evenly across each scale, therefore, 3 anchors per scale
   anchors: [12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 
             146, 142, 110, 192, 243, 459, 401,]
