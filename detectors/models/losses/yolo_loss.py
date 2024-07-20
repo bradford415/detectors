@@ -7,6 +7,8 @@ from torch import nn
 
 
 class YoloV4Loss(nn.Module):
+    # TODO go back through and comment and change functions similar to https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/loss.py
+    #      because it's commented very well
     """Loss function for YoloV4
 
     The loss function loops through all predictions for each grid cell.
@@ -150,7 +152,7 @@ class YoloV4Loss(nn.Module):
             self.anchor_w.append(anchor_w)
             self.anchor_h.append(anchor_h)
 
-    def build_ground_truth_tensor(
+    def build_ground_truth_tensors(
         self,
         pred: list[torch.Tensor],
         labels: list[dict],
@@ -159,30 +161,33 @@ class YoloV4Loss(nn.Module):
         num_pred_ch,
         output_id,
     ):
-        """Builds the ground truth tensor for the loss function. This will be similar to the output predictions of the network
-        but for the ground truth labels.
-        
+        """The main goal of the function is to build the intermediate ground truth tensor (target) for the loss function.
+
+        The reason this is the intermediate gt tensor is because we will still need to multiply by binary masks to only compute the
+        loss on the desired cells. This function also builds these aforementioned masks.
+        This gt tensor will be similar shape to the output predictions of the network but for the ground truth labels.
+
         This function loops through a batch of predictions at each feature map scale. That is, the pred tensor
         height and width corresponds to an output scale and contains a batch of images.
 
         Args:
-            pred: x, y, w, h predictions after adding the grid offsets to tx, ty and scaling the anchors' w, h; 
+            pred: x, y, w, h predictions after adding the grid offsets to tx, ty and scaling the anchors' w, h;
                   (B, n_anchors, H, W, bbox_pred_coords)
-            labels: Labels scaled labels for all images in the batch; 
+            labels: Labels scaled labels for all images in the batch;
                     includes a lot of information but moset notably: bbox_coords, class labels, etc...
             batch_size: TODO; remove this parameter and extract batch from pred.shape;
             f_map_size: Feature map dimensions at specific output; YoloV4 has 3 different outputs each at a different resolution
             num_pred_ch: Number of predictions per cell; 5 + num_classes
             output_id: The index of the output feature map scale; since YoloV4 has 3 outputs, the possible indices are [0, 1, 2]
-            
+
         Return:
             TODO
         """
         # Note: tgt_mask is initalized to zeros and obj_mask is intialized to ones because
         #       only the objectness score is calculated in the loss for every prediction,
         #       while the bbox and class label predictions that correspond with the best anchor are used
-        
-        # Binary target mask to 0 out predictions which do not correspond to a best anchor; 
+
+        # Binary target mask to 0 out predictions which do not correspond to a best anchor;
         # only 1 anchor corresponds to an object;
         # From the YoloV3 paper section 2.1 it mentions:
         #   "Unlike faster r-cnn our system only assigns one bounding box prior for each ground truth
@@ -193,25 +198,27 @@ class YoloV4Loss(nn.Module):
         ).to(device=self.device)
 
         # Binary object mask used to set the predictions objectess score (index 4) to 0 if it surpasses the self.iou_ignore_threshold;
-        # (B, num_cell_preds, out_H, out_W); 
+        # (B, num_cell_preds, out_H, out_W);
         obj_mask = torch.ones(batch_size, self.n_anchors, f_map_size, f_map_size).to(
             device=self.device
         )
-        
+
         # TODO: comment this once I know what it does (B, num_anchors,  out_h, out_w)
         tgt_scale = torch.zeros(
             batch_size, self.n_anchors, f_map_size, f_map_size, 2
         ).to(self.device)
-        
+
         # Tensor to store the ground truth t_x, t_y, t_w, t_h, t_o and the class label (a 1 in the class position)
         target = torch.zeros(
             batch_size, self.n_anchors, f_map_size, f_map_size, num_pred_ch
         ).to(self.device)
 
-        # Get the maximum number of objects in an image for the entire batch; 
+        # Get the maximum number of objects in an image for the entire batch;
         # allows us to create a tensor for the ground truth bboxes and object ids for the batch
         batch_max_objects = max([len(label["boxes"]) for label in labels])
-        gt_labels = torch.zeros((pred.shape[0], batch_max_objects, 5)) # (B, batch_max_objs, 5); 5 = (cx, cy, w, h, obj_id)
+        gt_labels = torch.zeros(
+            (pred.shape[0], batch_max_objects, 5)
+        )  # (B, batch_max_objs, 5); 5 = (cx, cy, w, h, obj_id)
 
         # Extract the ground truth bbox and obj_id and store in gt_labels tensor
         for index, label in enumerate(labels):
@@ -222,7 +229,7 @@ class YoloV4Loss(nn.Module):
         # labels = labels.cpu().data
 
         # Note on how labels is formed (my interpretation from the repo im basing yolov4 off of):
-        #   1. labels in github code is (B, max_gt_bboxes, 5), containing the augmented ground truth labels (data augmentation) 
+        #   1. labels in github code is (B, max_gt_bboxes, 5), containing the augmented ground truth labels (data augmentation)
         #      (tl_x, tl_y, br_x, br_y, class_id)
         #   2. if max_gt_bboxes is 60, but an image only has 6 bounding boxes, only the first 6 rows will have values,
         #      the rest will be 0s
@@ -252,9 +259,15 @@ class YoloV4Loss(nn.Module):
                 continue
 
             # Extract ground truth w, h for the current batch; this is intialized with size 4 because the x, y will be filled in later
-            truth_box_cxcywh = torch.zeros(num_objs_img, 4).to(self.device)  # (num_gt_objects, 4)
-            truth_box_cxcywh[:num_objs_img, 2] = scaled_truth_w_all[batch, :num_objs_img]
-            truth_box_cxcywh[:num_objs_img, 3] = scaled_truth_h_all[batch, :num_objs_img]
+            truth_box_cxcywh = torch.zeros(num_objs_img, 4).to(
+                self.device
+            )  # (num_gt_objects, 4)
+            truth_box_cxcywh[:num_objs_img, 2] = scaled_truth_w_all[
+                batch, :num_objs_img
+            ]
+            truth_box_cxcywh[:num_objs_img, 3] = scaled_truth_h_all[
+                batch, :num_objs_img
+            ]
 
             # Extract gt w, h for the current batch
             truth_cell_x = truth_cell_x_all[batch, :num_objs_img]
@@ -270,10 +283,10 @@ class YoloV4Loss(nn.Module):
             #   Note: The 0s will be filled in later with x, y
             anchor_ious_all = bboxes_iou(
                 truth_box_cxcywh.cpu(), self.ref_anchors[output_id], CIoU=True
-            ) # (num_gt_boxes, num_anchor_boxes)
+            )  # (num_gt_boxes, num_anchor_boxes)
             # temp = bbox_iou(truth_box.cpu(), self.ref_anchors[output_id])
 
-            # Get index of the highest IoUs per ground truth box; 
+            # Get index of the highest IoUs per ground truth box;
             # the best fit anchor box for each object
             # shape: (num_gt_boxes)
             #
@@ -302,21 +315,27 @@ class YoloV4Loss(nn.Module):
             # If the condition above is passed, we can now get the IoUs of the predictions and the ground truths bboxes
 
             # Grab the cx and cy coords of each object
-            truth_box_cxcywh[:num_objs_img, 0] = scaled_truth_cx_all[batch, :num_objs_img]
-            truth_box_cxcywh[:num_objs_img, 1] = scaled_truth_cy_all[batch, :num_objs_img]
+            truth_box_cxcywh[:num_objs_img, 0] = scaled_truth_cx_all[
+                batch, :num_objs_img
+            ]
+            truth_box_cxcywh[:num_objs_img, 1] = scaled_truth_cy_all[
+                batch, :num_objs_img
+            ]
 
             # Collapse all cell predictions into 2D (num_cell_preds*out_H*out_W, 4) and calculate the IoUs between all cell predictions and the ground truth boxes
             # num_cell_preds is the number of predictions per cell
-            pred_ious = bboxes_iou(pred[batch].reshape(-1, 4), truth_box_cxcywh, xyxy=False) # (num_cell_preds*out_H*out_W, num_objs_img)
-            
+            pred_ious = bboxes_iou(
+                pred[batch].reshape(-1, 4), truth_box_cxcywh, xyxy=False
+            )  # (num_cell_preds*out_H*out_W, num_objs_img)
+
             # Get the highest IoU for each prediction; this will be the gt object that has the highest IoU; (num_cell_preds*out_H*out_W)
             pred_best_iou, _ = pred_ious.max(dim=1)
 
             # Check if each predicted IoU is above the ignored threshold; see attribute definition fo rmore information
             pred_best_iou = pred_best_iou > self.iou_ignore_threshold
 
-            # pred_best_iou is now a boolean tensor, convert it to (num_cell_preds, out_H, out_W); 
-            # we now have a boolean mask if the highest IoU between the prediction and the gt objects for 
+            # pred_best_iou is now a boolean tensor, convert it to (num_cell_preds, out_H, out_W);
+            # we now have a boolean mask if the highest IoU between the prediction and the gt objects for
             # each cell prediction is higher than self.iou_threshold
             pred_best_iou = pred_best_iou.view(pred[batch].shape[:3])
 
@@ -327,71 +346,82 @@ class YoloV4Loss(nn.Module):
 
             # Loop through each object in the image
             for img_object in range(best_n.shape[0]):
-
-                # If best object & anchor IoU is within the proper output scale 
+                # If best object & anchor IoU is within the proper output scale
                 if best_anch_iou_mask[img_object] == True:
-
                     # i is scaled_gt_cx and j is scaled_gt_cy
                     cell_x, cell_y = truth_cell_x[img_object], truth_cell_y[img_object]
 
                     # Extract best anchor from the iou between gt box and anchor box
                     best_anch = best_n[img_object]
 
-                    
                     # Set the obj_mask of the batch at the best anchor IoU (between gt and ref anchors) prediction of the cell location to 1;
                     # this is a special case where the prediction IoU is over the self.iou_ignore_threshold so it is set to 0, however,
                     # since this is the best anchor, we stil want to include it in the loss so we need to set it to 1... I think this is why...
                     # obj_mask (B, num_cell_preds, out_H, out_W)
                     obj_mask[batch, best_anch, cell_y, cell_x] = 1
-                    
+
                     # Set all elements in the last dimension of the same location 1 at the best anchor position;
                     # as described above and in the paper, gt objects are only assigned 1 anchor
                     # (B, num_cell_preds, out_H, out_W, 4 + num_classes);
                     # this will be used to 0 out the predictions which do not correspond to a best anchor
                     tgt_mask[batch, best_anch, cell_y, cell_x, :] = 1
 
-                    # Store the x, y offsets from the grid cell top_left coordinate; 
+                    # Store the x, y offsets from the grid cell top_left coordinate;
                     # Ex: grid_cell_x = 63 and x_prediction = 63.35 the value stored will be 0.35
-                    target[batch, best_anch, cell_y, cell_x, 0] = scaled_truth_cx_all[batch, img_object] - scaled_truth_cx_all[
+                    target[batch, best_anch, cell_y, cell_x, 0] = scaled_truth_cx_all[
                         batch, img_object
-                    ].to(torch.int16).to(torch.float)
-                    target[batch, best_anch, cell_y, cell_x, 1] = scaled_truth_cy_all[batch, img_object] - scaled_truth_cy_all[
+                    ] - scaled_truth_cx_all[batch, img_object].to(torch.int16).to(
+                        torch.float
+                    )
+                    target[batch, best_anch, cell_y, cell_x, 1] = scaled_truth_cy_all[
                         batch, img_object
-                    ].to(torch.int16).to(torch.float)
+                    ] - scaled_truth_cy_all[batch, img_object].to(torch.int16).to(
+                        torch.float
+                    )
 
                     # Calculate and store the ground truth t_w, t_h; this comes from the formula in the yolov2 paper b_w = (p_w)e^(t_w)
                     # where b_w = bbox_width, p_w = anchor box width, t_w = the width prediction from the NN; in this case, we're calculating gt t_w
                     # so we need to solve for it, or at least that's what I believe they're doing here;
-                    # we can solve for t_w with: log(b_w/p_w) = t_w 
+                    # we can solve for t_w with: log(b_w/p_w) = t_w
+                    # This is also expressed in the YoloV3 paper section 2.1: "This ground truth value can be easily computed by inverting the equations above."
+
                     target[batch, best_anch, cell_y, cell_x, 2] = torch.log(
                         scaled_truth_w_all[batch, img_object]
-                        / torch.Tensor(self.masked_anchors[output_id])[best_n[img_object], 0]
+                        / torch.Tensor(self.masked_anchors[output_id])[
+                            best_n[img_object], 0
+                        ]
                         + 1e-16
                     )
                     target[batch, best_anch, cell_y, cell_x, 3] = torch.log(
                         scaled_truth_h_all[batch, img_object]
-                        / torch.Tensor(self.masked_anchors[output_id])[best_n[img_object], 1]
+                        / torch.Tensor(self.masked_anchors[output_id])[
+                            best_n[img_object], 1
+                        ]
                         + 1e-16
                     )
 
                     # Set the objectness to 1 since an object does exist there
                     target[batch, best_anch, cell_y, cell_x, 4] = 1
-                    
-                    # Set the ground truth object label to 1 in it's correct position in the last dimension, every other object label 
-                    # remains 0 because it is not that object; 
+
+                    # Set the ground truth object label to 1 in it's correct position in the last dimension, every other object label
+                    # remains 0 because it is not that object;
                     # the class predictions are after the first 5 elements in the last dimension, so index 5 would be the first object label
                     target[
                         batch,
                         best_anch,
                         cell_y,
                         cell_x,
-                        5 + gt_labels[batch, img_object, 4].to(torch.int16).cpu().numpy(),
+                        5
+                        + gt_labels[batch, img_object, 4].to(torch.int16).cpu().numpy(),
                     ] = 1
 
-                    breakpoint()
                     # Not entirely sure what this does
                     tgt_scale[batch, best_anch, cell_y, cell_x, :] = torch.sqrt(
-                        2 - scaled_truth_w_all[batch, img_object] * scaled_truth_h_all[batch, img_object] / f_map_size / f_map_size
+                        2
+                        - scaled_truth_w_all[batch, img_object]
+                        * scaled_truth_h_all[batch, img_object]
+                        / f_map_size
+                        / f_map_size
                     )
 
         return obj_mask, tgt_mask, tgt_scale, target
@@ -437,24 +467,22 @@ class YoloV4Loss(nn.Module):
             pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[bbox_id]
             pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
 
-            obj_mask, tgt_mask, tgt_scale, target = self.build_ground_truth_tensor(
+            obj_mask, tgt_mask, tgt_scale, target = self.build_ground_truth_tensors(
                 pred, labels, batchsize, feature_size, num_pred_ch, bbox_id
             )
-
-            breakpoint()
 
             # Loss calculation
             # Set the objectness score to 0 if IoU is greater than the self.iou_ignore_threshold
             bbox_predictions[..., 4] *= obj_mask
-            
+
             # Multiply the binary tgt_mask to every prediction (except for objectness) to 0 out the predictions which DO NOT
             # correspond to the best anchor;
-            # np.r_ is used to temporarily concatenate the [0:4] and [5:num_pred_ch] so it can multiply tgt_mask by every element in the 
+            # np.r_ is used to temporarily concatenate the [0:4] and [5:num_pred_ch] so it can multiply tgt_mask by every element in the
             # last dimension except for index 4 since bbox_predictions last dimension has  85 elements and tgt_mask only has 84;
             # this leaves the 4th index unchanged in bbox_predictions
             bbox_predictions[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
-            
-            # Multiply the prediction w/h by the tgt_scale calculated above; I have no idea what the tgt_scale is used for 
+
+            # Multiply the prediction w/h by the tgt_scale calculated above; I have no idea what the tgt_scale is used for
             bbox_predictions[..., 2:4] *= tgt_scale
 
             # Repeat the above 3 statements but for the target (labels)
@@ -462,14 +490,21 @@ class YoloV4Loss(nn.Module):
             target[..., np.r_[0:4, 5:num_pred_ch]] *= tgt_mask
             target[..., 2:4] *= tgt_scale
 
-            
-            # Calculate the loss of the width
+            # Calculate the loss of the cell offset predictions and ground truth offsets;
+            # I'm not sure why they're using BCE loss instead of the MSE loss like the w/h use below
+            # YoloV3 paper section 2.1 mentions: "During training we use sum of squared error loss"
+            # whcih would be the mse_loss with reduction="sum";
+            # breakpoint() # for testing use index [0,2,63,4]
             loss_xy += F.binary_cross_entropy(
                 input=bbox_predictions[..., :2],
                 target=target[..., :2],
                 weight=tgt_scale * tgt_scale,
                 reduction="sum",
             )
+
+            # Calculate the loss of the bbox w/h scale predictions (tw, th);
+            # the target tw, th has already been calculated by taking the inverse of the equation
+            # in YoloV3 paper section 2.1
             loss_wh += (
                 F.mse_loss(
                     input=bbox_predictions[..., 2:4],
@@ -478,30 +513,32 @@ class YoloV4Loss(nn.Module):
                 )
                 / 2
             )
-            
+
             # Calculate the objectness BCE loss
             loss_obj += F.binary_cross_entropy(
                 input=bbox_predictions[..., 4], target=target[..., 4], reduction="sum"
             )
-            
+
             # Calculate the class BCE loss; the reason we use BCE and not CE is because we're doing multilabel classifciation (not multiclass classification);
+            # YoloV3 Paper section 2.2 mentions this;
             # this link explains it well: https://towardsdatascience.com/dive-really-deep-into-yolo-v3-a-beginners-guide-9e3d2666280e#:~:text=Why%3F,they%20are%20not%20mutually%20exclusive.
             # the notable message is the following:
-            #   "In YOLO v3, it’s changed to do multi-label classification instead of multi-class classification. 
-            #    Why? Because some dataset may contains labels that are hierarchical or related, eg woman and person. 
-            #    So each output cell could have more than 1 class to be true. Correspondingly, we also apply binary cross-entropy 
+            #   "In YOLO v3, it’s changed to do multi-label classification instead of multi-class classification.
+            #    Why? Because some dataset may contains labels that are hierarchical or related, eg woman and person.
+            #    So each output cell could have more than 1 class to be true. Correspondingly, we also apply binary cross-entropy
             #    for each class one by one and sum them up because they are not mutually exclusive."
             # This link also explains the use of BCE for multi-label classification: https://discuss.pytorch.org/t/is-there-an-example-for-multi-class-multilabel-classification-in-pytorch/53579/7
             # Example of BCE loss for multi-label classification: https://discuss.pytorch.org/t/multi-label-classification-in-pytorch/905/45?u=bradford415
             loss_cls += F.binary_cross_entropy(
                 input=bbox_predictions[..., 5:], target=target[..., 5:], reduction="sum"
             )
-            
-            ## START HERE
+
+            # This is calculated but not actually used in the loss functions
             loss_l2 += F.mse_loss(
                 input=bbox_predictions, target=target, reduction="sum"
             )
 
+        # Sum all the loss terms for the final loss value
         loss = loss_xy + loss_wh + loss_obj + loss_cls
 
         return loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2

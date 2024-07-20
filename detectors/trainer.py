@@ -25,6 +25,8 @@ class Trainer:
         # self.optimizer = optimizer_map[optimizer]
         # self.lr_scheduler = "test"
 
+        # TODO: might make device an attribute
+
         # Paths
         self.output_paths = {
             "output_dir": Path(
@@ -60,6 +62,8 @@ class Trainer:
             )
             scheduler.step()
 
+            self._evaluate(model, dataloader_val, device)
+
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
                 ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
@@ -80,20 +84,48 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         device: torch.device,
     ):
+        """Train one epoch
+
+        Args:
+            model: Model to train
+            criterion: Loss function
+            dataloader_train: Dataloader for the training set
+            optimizer: Optimizer to update the models weights
+            device: Device to train the model on
+        """
         for steps, (samples, targets) in enumerate(tqdm(dataloader_train, ascii=" >=")):
             samples = samples.to(device)
             targets = [
                 {key: value.to(device) for key, value in t.items()} for t in targets
             ]
 
+            optimizer.zero_grad()
+
             bbox_predictions = model(samples)
 
-            ## TODO: understand this and rename variables if needed
-            loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+            final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
                 bbox_predictions, targets
             )
 
-    # def train():
+            # Calculate gradients and updates weights
+            final_loss.backward()
+            optimizer.step()
+
+    @torch.no_grad()
+    def _evaluate(
+        self,
+        model: nn.Module,
+        dataloader_val: Iterable,
+        device: torch.device,
+    ):
+        """A single forward pass to evluate the val set after training an epoch
+
+        Args:
+            model: Model to train
+            dataloader_val: Dataloader for the validation set
+            device: Device to run the model on
+        """
+        model.eval()
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
@@ -107,27 +139,3 @@ class Trainer:
             },
             save_path,
         )
-
-    @torch.no_grad()
-    def estimate_loss(
-        self, train_data, val_data, model, eval_iters, batch_size, block_size
-    ) -> Dict[str, float]:
-        """Estimate the loss of the train and val split
-
-        Args:
-
-        """
-        out = {}
-        model.eval()
-        all_data = {"train": train_data, "val": val_data}
-        for split in ["train", "val"]:
-            losses = torch.zeros(eval_iters)
-            for k in range(eval_iters):
-                X, Y = Vocab.get_batch(
-                    all_data[split], batch_size, block_size, self.device
-                )
-                logits, loss = model(X, Y)
-                losses[k] = loss.item()
-            out[split] = losses.mean()
-        model.train()
-        return out

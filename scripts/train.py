@@ -34,6 +34,7 @@ loss_map = {
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
 
+## TODO: Move this to a more appropriate spot
 def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:
     """Collect samples appropriately to be used at each iteration in the train loop
 
@@ -153,7 +154,7 @@ def main(base_config_path: str, model_config_path):
         lr_drop=train_args["lr_drop"],
     )
 
-    runner = Trainer(output_path=base_config["output_path"])
+    trainer = Trainer(output_path=base_config["output_path"])
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 
@@ -168,7 +169,7 @@ def main(base_config_path: str, model_config_path):
         "device": device,
         **train_args["epochs"],
     }
-    runner.train(**trainer_args)
+    trainer.train(**trainer_args)
 
 
 def _init_training_objects(

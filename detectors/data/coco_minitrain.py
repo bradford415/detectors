@@ -121,7 +121,7 @@ def make_coco_transforms(dataset_split):
 
     raise ValueError(f"unknown {dataset_split}")
 
-
+## TODO: This would probably make the most since as a cls method and call it from_data_split()
 def build_coco_mini(
     root: str,
     dataset_split: str,

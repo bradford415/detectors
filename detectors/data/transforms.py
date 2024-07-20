@@ -265,7 +265,7 @@ class ToTensorNoNormalization:
             "I;16" if sys.byteorder == "little" else "I;16B": np.int16,
             "F": np.float32,
         }
-        
+
         # Convert pil to tensor
         img = torch.from_numpy(
             np.array(pil_image, mode_to_nptype.get(pil_image.mode, np.uint8), copy=True)
@@ -283,7 +283,7 @@ class ToTensorNoNormalization:
         if "boxes" in target:
             boxes = target["boxes"]
             boxes = box_xyxy_to_cxcywh(boxes)
-            #boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            # boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
 
         if isinstance(img, torch.ByteTensor):
@@ -319,16 +319,16 @@ class Normalize:
         if target is None:
             return image, None
 
-        # Convert bounding boxes from Coco format to Yolo format AND normalize between [0, 1]; 
+        # Convert bounding boxes from Coco format to Yolo format AND normalize between [0, 1];
         # tl_x, tl_y, br_x, br_y -> cx, cy, w, h
-        # Note: This code was taken from DETR but for the Yolov4 implementation 
+        # Note: This code was taken from DETR but for the Yolov4 implementation
         #       it is not normalized so I am leaving it out
         target = target.copy()
         h, w = image.shape[-2:]
         if "boxes" in target:
             boxes = target["boxes"]
             boxes = box_xyxy_to_cxcywh(boxes)
-            #boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            # boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return image, target
 
