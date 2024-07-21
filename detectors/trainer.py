@@ -64,7 +64,7 @@ class Trainer:
             )
             scheduler.step()
 
-            self._evaluate(model, dataloader_val)
+            self._evaluate(model, dataloader_val, val_coco_api)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
@@ -95,6 +95,7 @@ class Trainer:
             device: Device to train the model on
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
+            print(f"{steps= }")
             samples = samples.to(self.device)
             targets = [
                 {key: value.to(self.device) for key, value in t.items()}
@@ -103,6 +104,7 @@ class Trainer:
 
             optimizer.zero_grad()
 
+            # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
             bbox_predictions = model(samples)
 
             final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
@@ -131,8 +133,8 @@ class Trainer:
         ## START HERE!!!!!!!!!!!!!! added val_coco_api hopefully it's the right one
 
         coco_evaluator = CocoEvaluator(
-            val_coco_api, iou_types=["bbox"], bbox_fmt="coco"
-        )
+            val_coco_api, iou_types=["bbox"])#, bbox_fmt="coco")
+
         for steps, (samples, targets) in enumerate(dataloader_val):
             samples = samples.to(self.device)
             targets = [
@@ -140,10 +142,11 @@ class Trainer:
                 for t in targets
             ]
 
-            bbox_predictions = model(samples)
+            bbox_predictions = model(samples, inference=True)
+
+            #for image, target, boxes, confs in zip(images, targets,)
             ### START HERE
-            # Calculate gradients and updates weights
-            final_loss.backward()
+            #final_loss.backward()
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

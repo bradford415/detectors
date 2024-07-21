@@ -81,9 +81,8 @@ class Neck(nn.Module):
     Derived from YoloV4 paper section 3.4 and https://github.com/Tianxiaomo/pytorch-YOLOv4/blob/master/models.py#L239
     """
 
-    def __init__(self, inference=False):
+    def __init__(self):
         super().__init__()
-        self.inference = inference
 
         self.conv1 = Conv_Bn_Activation(512, 512, 1, 1, "leaky")
         self.conv2 = Conv_Bn_Activation(512, 1024, 3, 1, "leaky")
@@ -127,6 +126,7 @@ class Neck(nn.Module):
         Args:
             input: Input to the neck module; final output from the backbone
         """
+        #breakpoint()
         x1 = self.conv1(input)
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
@@ -141,7 +141,7 @@ class Neck(nn.Module):
         x6 = self.conv6(x5)
         x7 = self.conv7(x6)
         # UP
-        x7_up = self.upsample1(x7, downsample3.shape, self.inference)
+        x7_up = self.upsample1(x7, downsample3.shape, inference)
         # R 85
         x8 = self.conv8(downsample3)
         # R -1 -3
@@ -155,7 +155,7 @@ class Neck(nn.Module):
         x14 = self.conv14(x13)
 
         # UP
-        x14_up = self.upsample2(x14, downsample2.shape, self.inference)
+        x14_up = self.upsample2(x14, downsample2.shape, inference)
         # R 54
         x15 = self.conv15(downsample2)
         # R -1 -3
@@ -177,7 +177,7 @@ class Yolov4Head(nn.Module):
     Architecture described here: https://github.com/Tianxiaomo/pytorch-YOLOv4/blob/a65d219f9066bae4e12003bd7cdc04531860c672/models.py#L323
     """
 
-    def __init__(self, output_ch, n_classes, anchors, inference=False):
+    def __init__(self, output_ch, n_classes, anchors):
         """
 
 
@@ -187,7 +187,6 @@ class Yolov4Head(nn.Module):
             inference: Whether the model is inferencing
         """
         super().__init__()
-        self.inference = inference
 
         self.conv1 = Conv_Bn_Activation(128, 256, 3, 1, "leaky")
         self.conv2 = Conv_Bn_Activation(
@@ -243,7 +242,7 @@ class Yolov4Head(nn.Module):
             stride=32,  # 512 input_dim / 16 head_output = 32
         )
 
-    def forward(self, input1, input2, input3):
+    def forward(self, input1, input2, input3, inference=False):
         x1 = self.conv1(input1)
         predictions_scale1 = self.conv2(x1)
 
@@ -271,7 +270,7 @@ class Yolov4Head(nn.Module):
         x17 = self.conv17(x16)
         predictions_scale3 = self.conv18(x17)
 
-        if self.inference:
+        if inference:
             y1 = self.yolo1(predictions_scale1)
             y2 = self.yolo2(predictions_scale2)
             y3 = self.yolo3(predictions_scale3)
@@ -297,7 +296,6 @@ class YoloV4(nn.Module):
         neck=None,
         head=None,
         num_bboxes=3,
-        inference=False,
     ):
         """TODO
 
@@ -315,10 +313,10 @@ class YoloV4(nn.Module):
         self.backbone = backbone
         self.neck = Neck()
         self.head = Yolov4Head(
-            output_channels, num_classes, anchors, inference=inference
+            output_channels, num_classes, anchors
         )
 
-    def forward(self, x):
+    def forward(self, x, inference=False):
         """Forward pass through the model
 
         Args:
@@ -333,8 +331,8 @@ class YoloV4(nn.Module):
         """
         downsample1, downsample2, downsample3, backbone_out = self.backbone(x)
         neck_out, x13, x6 = self.neck(
-            backbone_out, downsample3, downsample2, downsample1
+            backbone_out, downsample3, downsample2, inference=inference
         )
-        head_out = self.head(neck_out, x13, x6)
+        head_out = self.head(neck_out, x13, x6, inference=inference)
 
         return head_out
