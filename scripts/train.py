@@ -154,7 +154,7 @@ def main(base_config_path: str, model_config_path):
         lr_drop=train_args["lr_drop"],
     )
 
-    trainer = Trainer(output_path=base_config["output_path"])
+    trainer = Trainer(output_path=base_config["output_path"], device=device)
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 
@@ -167,7 +167,6 @@ def main(base_config_path: str, model_config_path):
         "val_coco_api": val_coco_api,
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
-        "device": device,
         **train_args["epochs"],
     }
     trainer.train(**trainer_args)

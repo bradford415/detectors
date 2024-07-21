@@ -9,13 +9,14 @@ from pycocotools.coco import COCO
 from torch import nn
 from tqdm import tqdm
 
-from detectors.utils import misc
 from detectors.data.coco_eval import CocoEvaluator
+from detectors.utils import misc
+
 
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, output_path):
+    def __init__(self, output_path, device: torch.device = torch.device("cpu")):
         """Constructor for the Trainer class
 
         Args:
@@ -26,7 +27,7 @@ class Trainer:
         # self.optimizer = optimizer_map[optimizer]
         # self.lr_scheduler = "test"
 
-        # TODO: might make device an attribute
+        self.device = device
 
         # Paths
         self.output_paths = {
@@ -47,7 +48,6 @@ class Trainer:
         start_epoch=0,
         epochs=100,
         ckpt_every=None,
-        device="cpu",
     ):
         """Train a model
 
@@ -60,11 +60,11 @@ class Trainer:
         start_time = time.time()
         for epoch in range(start_epoch, epochs):
             train_stats = self._train_one_epoch(
-                model, criterion, dataloader_train, optimizer, device
+                model, criterion, dataloader_train, optimizer
             )
             scheduler.step()
 
-            self._evaluate(model, dataloader_val, device)
+            self._evaluate(model, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
@@ -84,7 +84,6 @@ class Trainer:
         criterion: nn.Module,
         dataloader_train: Iterable,
         optimizer: torch.optim.Optimizer,
-        device: torch.device,
     ):
         """Train one epoch
 
@@ -95,10 +94,11 @@ class Trainer:
             optimizer: Optimizer to update the models weights
             device: Device to train the model on
         """
-        for steps, (samples, targets) in enumerate(tqdm(dataloader_train, ascii=" >=")):
-            samples = samples.to(device)
+        for steps, (samples, targets) in enumerate(dataloader_train):
+            samples = samples.to(self.device)
             targets = [
-                {key: value.to(device) for key, value in t.items()} for t in targets
+                {key: value.to(self.device) for key, value in t.items()}
+                for t in targets
             ]
 
             optimizer.zero_grad()
@@ -118,8 +118,7 @@ class Trainer:
         self,
         model: nn.Module,
         dataloader_val: Iterable,
-        val_coco_api: COCO, 
-        device: torch.device,
+        val_coco_api: COCO,
     ):
         """A single forward pass to evluate the val set after training an epoch
 
@@ -130,8 +129,21 @@ class Trainer:
         """
         model.eval()
         ## START HERE!!!!!!!!!!!!!! added val_coco_api hopefully it's the right one
-        
-        coco_evaluator = CocoEvaluator(val_coco_api, iou_types = ["bbox"], bbox_fmt='coco')
+
+        coco_evaluator = CocoEvaluator(
+            val_coco_api, iou_types=["bbox"], bbox_fmt="coco"
+        )
+        for steps, (samples, targets) in enumerate(dataloader_val):
+            samples = samples.to(self.device)
+            targets = [
+                {key: value.to(self.device) for key, value in t.items()}
+                for t in targets
+            ]
+
+            bbox_predictions = model(samples)
+            ### START HERE
+            # Calculate gradients and updates weights
+            final_loss.backward()
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
