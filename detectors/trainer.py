@@ -5,11 +5,12 @@ from typing import Any, Dict, Iterable
 
 import numpy as np
 import torch
+from pycocotools.coco import COCO
 from torch import nn
 from tqdm import tqdm
 
-from detectors.utils import utils
-
+from detectors.utils import misc
+from detectors.data.coco_eval import CocoEvaluator
 
 class Trainer:
     """Trainer TODO: comment"""
@@ -40,6 +41,7 @@ class Trainer:
         criterion,
         dataloader_train,
         dataloader_val,
+        val_coco_api: COCO,
         optimizer,
         scheduler,
         start_epoch=0,
@@ -116,6 +118,7 @@ class Trainer:
         self,
         model: nn.Module,
         dataloader_val: Iterable,
+        val_coco_api: COCO, 
         device: torch.device,
     ):
         """A single forward pass to evluate the val set after training an epoch
@@ -126,7 +129,9 @@ class Trainer:
             device: Device to run the model on
         """
         model.eval()
-        ## START HERE!!!!!!!!!!!!!!s
+        ## START HERE!!!!!!!!!!!!!! added val_coco_api hopefully it's the right one
+        
+        coco_evaluator = CocoEvaluator(val_coco_api, iou_types = ["bbox"], bbox_fmt='coco')
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

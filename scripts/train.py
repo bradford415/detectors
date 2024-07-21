@@ -13,7 +13,7 @@ from detectors.models.backbones import backbone_map
 from detectors.models.losses.yolo_loss import YoloV4Loss
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
-from detectors.utils import utils
+from detectors.utils import misc
 
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
@@ -75,7 +75,7 @@ def main(base_config_path: str, model_config_path):
         model_config = yaml.safe_load(f)
 
     # Apply reproducibility seeds
-    utils.reproducibility(**base_config["reproducibility"])
+    misc.reproducibility(**base_config["reproducibility"])
 
     # Set cuda parameters
     use_cuda = torch.cuda.is_available()
@@ -120,8 +120,8 @@ def main(base_config_path: str, model_config_path):
         **val_kwargs,
     )
 
-    # Return the Coco object from PyCocoTools
-    coco_api = get_coco_object(dataset_train)
+    # Return the Coco object (api) from PyCocoTools; used for coco evaluation
+    val_coco_api = get_coco_object(dataset_train)
 
     # Initalize model components
     backbone = backbone_map[model_config["backbone"]["name"]](
@@ -164,6 +164,7 @@ def main(base_config_path: str, model_config_path):
         "criterion": criterion,
         "dataloader_train": dataloader_train,
         "dataloader_val": dataloader_val,
+        "val_coco_api": val_coco_api,
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         "device": device,

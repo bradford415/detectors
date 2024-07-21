@@ -1,60 +1,20 @@
+import pickle
 import random
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torchvision
 
 
-def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
-    if x1y1x2y2:
-        mx = torch.min(boxes1[0], boxes2[0])
-        Mx = torch.max(boxes1[2], boxes2[2])
-        my = torch.min(boxes1[1], boxes2[1])
-        My = torch.max(boxes1[3], boxes2[3])
-        w1 = boxes1[2] - boxes1[0]
-        h1 = boxes1[3] - boxes1[1]
-        w2 = boxes2[2] - boxes2[0]
-        h2 = boxes2[3] - boxes2[1]
-    else:
-        mx = torch.min(boxes1[0] - boxes1[2] / 2.0, boxes2[0] - boxes2[2] / 2.0)
-        Mx = torch.max(boxes1[0] + boxes1[2] / 2.0, boxes2[0] + boxes2[2] / 2.0)
-        my = torch.min(boxes1[1] - boxes1[3] / 2.0, boxes2[1] - boxes2[3] / 2.0)
-        My = torch.max(boxes1[1] + boxes1[3] / 2.0, boxes2[1] + boxes2[3] / 2.0)
-        w1 = boxes1[2]
-        h1 = boxes1[3]
-        w2 = boxes2[2]
-        h2 = boxes2[3]
-    uw = Mx - mx
-    uh = My - my
-    cw = w1 + w2 - uw
-    ch = h1 + h2 - uh
-    mask = (cw <= 0) + (ch <= 0) > 0
-    area1 = w1 * h1
-    area2 = w2 * h2
-    carea = cw * ch
-    carea[mask] = 0
-    uarea = area1 + area2 - carea
-    return carea / uarea
+def reproducibility(seed: int) -> None:
+    """Set the seed for the sources of randomization. This allows for more reproducible results"""
 
-
-def get_region_boxes(boxes_and_confs):
-    # print('Getting boxes from boxes and confs ...')
-
-    boxes_list = []
-    confs_list = []
-
-    for item in boxes_and_confs:
-        boxes_list.append(item[0])
-        confs_list.append(item[1])
-
-    # boxes: [batch, num1 + num2 + num3, 1, 4]
-    # confs: [batch, num1 + num2 + num3, num_classes]
-    boxes = torch.cat(boxes_list, dim=1)
-    confs = torch.cat(confs_list, dim=1)
-
-    return [boxes, confs]
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def convert2cpu(gpu_matrix):
@@ -122,9 +82,60 @@ def interpolate(
     )
 
 
-def reproducibility(seed: int) -> None:
-    """Set the seed for the sources of randomization. This allows for more reproducible results"""
+def all_gather(data):
+    """
+    Run all_gather on arbitrary picklable data (not necessarily tensors)
+    Args:
+        data: any picklable object
+    Returns:
+        list[data]: list of data gathered from each rank
+    """
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
 
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+    # serialized to a Tensor
+    buffer = pickle.dumps(data)
+    storage = torch.ByteStorage.from_buffer(buffer)
+    tensor = torch.ByteTensor(storage).to("cuda")
+
+    # obtain Tensor size of each rank
+    local_size = torch.tensor([tensor.numel()], device="cuda")
+    size_list = [torch.tensor([0], device="cuda") for _ in range(world_size)]
+    dist.all_gather(size_list, local_size)
+    size_list = [int(size.item()) for size in size_list]
+    max_size = max(size_list)
+
+    # receiving Tensor from all ranks
+    # we pad the tensor because torch all_gather does not support
+    # gathering tensors of different shapes
+    tensor_list = []
+    for _ in size_list:
+        tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
+    if local_size != max_size:
+        padding = torch.empty(
+            size=(max_size - local_size,), dtype=torch.uint8, device="cuda"
+        )
+        tensor = torch.cat((tensor, padding), dim=0)
+    dist.all_gather(tensor_list, tensor)
+
+    data_list = []
+    for size, tensor in zip(size_list, tensor_list):
+        buffer = tensor.cpu().numpy().tobytes()[:size]
+        data_list.append(pickle.loads(buffer))
+
+    return data_list
+
+
+def is_dist_avail_and_initialized():
+    if not dist.is_available():
+        return False
+    if not dist.is_initialized():
+        return False
+    return True
+
+
+def get_world_size():
+    if not is_dist_avail_and_initialized():
+        return 1
+    return dist.get_world_size()

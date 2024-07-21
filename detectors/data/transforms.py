@@ -17,7 +17,7 @@ import torchvision.transforms.functional as F
 from PIL.Image import Image as PILImage
 
 from detectors.utils.box_ops import box_xyxy_to_cxcywh
-from detectors.utils.utils import interpolate
+from detectors.utils.misc import interpolate
 
 
 def crop(image, target, region):
