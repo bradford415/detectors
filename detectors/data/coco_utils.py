@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 class PreprocessCoco(object):
     def __init__(self, return_masks=False):
         self.return_masks = return_masks
+        self.coco_class_91_to_80 = coco91_to_coco80_class()
 
     def __call__(
         self, image: Image.Image, target: Dict[str, Any]
@@ -56,8 +57,11 @@ class PreprocessCoco(object):
         boxes[:, 1::2].clamp_(min=0, max=h)
 
         # Create list of object labels and convert to tensor
-        classes = [obj["category_id"] for obj in annotations]
+        ## TODO: This may not be the correct way to convert the classes
+        classes = [self.coco_class_91_to_80[obj["category_id"]] for obj in annotations]
         classes = torch.tensor(classes, dtype=torch.int64)
+        
+
 
         # Validate the br coordinate is greater than the tl; this should rarely be untrue
         keep = (boxes[:, 3] > boxes[:, 1]) & (boxes[:, 2] > boxes[:, 0])
@@ -84,6 +88,111 @@ class PreprocessCoco(object):
         target["size"] = torch.as_tensor([int(h), int(w)])
 
         return image, target
+    
+    
+def coco91_to_coco80_class():
+    """
+    Converts 91-index COCO class IDs to 80-index COCO class IDs.
+
+    Returns:
+        (list): A list of 91 class IDs where the index represents the 80-index class ID and the value is the
+            corresponding 91-index class ID.
+    """
+    return [
+        None,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        None,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        None,
+        24,
+        25,
+        None,
+        None,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        None,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        None,
+        60,
+        None,
+        None,
+        61,
+        None,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        None,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        None,
+    ]
+
 
 
 def get_coco_object(dataset: Dataset):

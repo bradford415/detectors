@@ -406,7 +406,7 @@ class YoloV4Loss(nn.Module):
                     # Set the ground truth object label to 1 in it's correct position in the last dimension, every other object label
                     # remains 0 because it is not that object;
                     # the class predictions are after the first 5 elements in the last dimension, so index 5 would be the first object label
-                    if gt_labels[batch, img_object, 4] == 87:
+                    if gt_labels[batch, img_object, 4] >= 80:
                         breakpoint()
                     target[
                         batch,

@@ -95,7 +95,6 @@ class Trainer:
             device: Device to train the model on
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
-            print(f"{steps= }")
             samples = samples.to(self.device)
             targets = [
                 {key: value.to(self.device) for key, value in t.items()}
@@ -129,6 +128,7 @@ class Trainer:
             dataloader_val: Dataloader for the validation set
             device: Device to run the model on
         """
+        exit()
         model.eval()
         ## START HERE!!!!!!!!!!!!!! added val_coco_api hopefully it's the right one
 
