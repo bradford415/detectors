@@ -56,7 +56,7 @@ class PreprocessCoco(object):
         boxes[:, 0::2].clamp_(min=0, max=w)
         boxes[:, 1::2].clamp_(min=0, max=h)
 
-        # Create list of object labels and convert to tensor
+        # Create list of object labels, shift the coco ids so they are between 0-79, and convert to tensor
         ## TODO: This may not be the correct way to convert the classes
         classes = [self.coco_class_91_to_80[obj["category_id"]] for obj in annotations]
         classes = torch.tensor(classes, dtype=torch.int64)
@@ -93,6 +93,14 @@ class PreprocessCoco(object):
 def coco91_to_coco80_class():
     """
     Converts 91-index COCO class IDs to 80-index COCO class IDs.
+    
+    The Coco 2017 object detection annotations use a total of 80 classes, however, the paper specifies 
+    91 classes. When the official dataset was released, only 80 classes were used and many of the 
+    classes omitted were inbetween the 80 class ids used. Therefore, the Coco dataset class ids are not
+    contiguous so they need to be squished together so that they are continuous For example, the class
+    id 90 is used in the dataset but it should actually be 79 since there are only 80 classes.
+    I believe that some object detection models can handle these non-contiguous ideas 
+    because of how they index, but I think most Yolo models require them continuous.
 
     Returns:
         (list): A list of 91 class IDs where the index represents the 80-index class ID and the value is the
