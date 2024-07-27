@@ -49,16 +49,20 @@ class Conv_Bn_Activation(nn.Module):
 
 
 class Upsample(nn.Module):
-    """TODO"""
+    """Module to upsample tensors to the target size"""
+
     def __init__(self):
         super(Upsample, self).__init__()
 
-    def forward(self, x, target_size, inference=False):
-        """TODO
+    def forward(self, x, target_size: torch.Size, inference=False):
+        """Upsamples the H/W of the input tensor x to the target_size
 
-        START HERE
+        x: Input tensor to be upsampled
+        target_size: shape of the input tensor; shape should be (B, C, H, W)
         """
+
         assert x.data.dim() == 4
+        assert len(target_size) == 4
 
         if inference:
             breakpoint()
@@ -67,6 +71,7 @@ class Upsample(nn.Module):
             # x: (B, C, out_h, out_w)
             # x.view: (B, C, out_h, 1, out_w, 1)
             # x.view.expand: ()
+            # START HERE recieving runtime error during validation
             return (
                 x.view(x.size(0), x.size(1), x.size(2), 1, x.size(3), 1)
                 .expand(
