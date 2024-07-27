@@ -138,6 +138,7 @@ class Trainer:
         )  # , bbox_fmt="coco")
 
         for steps, (samples, targets) in enumerate(dataloader_val):
+            print(steps)
             samples = samples.to(self.device)
             targets = [
                 {key: value.to(self.device) for key, value in t.items()}

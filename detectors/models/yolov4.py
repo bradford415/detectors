@@ -49,13 +49,24 @@ class Conv_Bn_Activation(nn.Module):
 
 
 class Upsample(nn.Module):
+    """TODO"""
     def __init__(self):
         super(Upsample, self).__init__()
 
     def forward(self, x, target_size, inference=False):
+        """TODO
+
+        START HERE
+        """
         assert x.data.dim() == 4
 
         if inference:
+            breakpoint()
+
+            # This code works in the following manner:
+            # x: (B, C, out_h, out_w)
+            # x.view: (B, C, out_h, 1, out_w, 1)
+            # x.view.expand: ()
             return (
                 x.view(x.size(0), x.size(1), x.size(2), 1, x.size(3), 1)
                 .expand(
@@ -120,11 +131,14 @@ class Neck(nn.Module):
         self.conv19 = Conv_Bn_Activation(128, 256, 3, 1, "leaky")
         self.conv20 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
 
-    def forward(self, input, downsample3, downsample2, inference=False):
+    def forward(self, input: torch.Tensor, downsample3: torch.Tensor, downsample2: torch.Tensor, inference: bool = False):
         """
 
         Args:
-            input: Input to the neck module; final output from the backbone
+            input: Input to the neck module; final output from the backbone; smallest feature map passed to Neck
+            downsample3: Feature map output from 3rd downsample block in backbone; 2nd largest feature map passed to Neck
+            downsample2: Feature map output from 2nd downsample block in backbone; largest feature map passed to Neck
+            inference: If inferencing or not
         """
         # breakpoint()
         x1 = self.conv1(input)
@@ -140,7 +154,8 @@ class Neck(nn.Module):
         x5 = self.conv5(x4)
         x6 = self.conv6(x5)
         x7 = self.conv7(x6)
-        # UP
+        
+        # Upsample to size of downsample3.shape; if inferencing, TODO
         x7_up = self.upsample1(x7, downsample3.shape, inference)
         # R 85
         x8 = self.conv8(downsample3)

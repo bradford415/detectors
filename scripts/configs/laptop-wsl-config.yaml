@@ -35,7 +35,7 @@ train:
     ckpt_every: 10
 
 validation:
-  batch_size: 2
+  batch_size: 1
 
 # GPU parameters
 cuda:
