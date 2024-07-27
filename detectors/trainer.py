@@ -113,7 +113,8 @@ class Trainer:
             # Calculate gradients and updates weights
             final_loss.backward()
             optimizer.step()
-
+            break
+        
     @torch.no_grad()
     def _evaluate(
         self,
@@ -128,12 +129,13 @@ class Trainer:
             dataloader_val: Dataloader for the validation set
             device: Device to run the model on
         """
-        exit()
+
         model.eval()
         ## START HERE!!!!!!!!!!!!!! added val_coco_api hopefully it's the right one
 
         coco_evaluator = CocoEvaluator(
-            val_coco_api, iou_types=["bbox"])#, bbox_fmt="coco")
+            val_coco_api, iou_types=["bbox"]
+        )  # , bbox_fmt="coco")
 
         for steps, (samples, targets) in enumerate(dataloader_val):
             samples = samples.to(self.device)
@@ -144,9 +146,9 @@ class Trainer:
 
             bbox_predictions = model(samples, inference=True)
 
-            #for image, target, boxes, confs in zip(images, targets,)
+            # for image, target, boxes, confs in zip(images, targets,)
             ### START HERE
-            #final_loss.backward()
+            # final_loss.backward()
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

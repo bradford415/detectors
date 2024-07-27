@@ -126,7 +126,7 @@ class Neck(nn.Module):
         Args:
             input: Input to the neck module; final output from the backbone
         """
-        #breakpoint()
+        # breakpoint()
         x1 = self.conv1(input)
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
@@ -312,9 +312,7 @@ class YoloV4(nn.Module):
         self.anchors = anchors
         self.backbone = backbone
         self.neck = Neck()
-        self.head = Yolov4Head(
-            output_channels, num_classes, anchors
-        )
+        self.head = Yolov4Head(output_channels, num_classes, anchors)
 
     def forward(self, x, inference=False):
         """Forward pass through the model
