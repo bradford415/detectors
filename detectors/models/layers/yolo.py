@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -218,6 +220,7 @@ def yolo_forward_dynamic(
     object_confs = object_confs.view(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1
     )
+
     confs = cls_confs * object_confs
 
     # Final prediction shapes
@@ -228,11 +231,7 @@ def yolo_forward_dynamic(
 
 
 class YoloLayer(nn.Module):
-    """Yolo layer only used at inference time.
-
-    model_out: while inference,is post-processing inside or outside the model
-    true:outside
-    """
+    """Yolo layer only used at inference time"""
 
     def __init__(
         self,
@@ -261,11 +260,15 @@ class YoloLayer(nn.Module):
         self.seen = 0
         self.scale_x_y = 1
 
-    def forward(self, head_output):
+    def forward(self, head_output) -> Tuple[torch.tensor, torch.tensor]:
         """TODO
 
         Args:
-            head_output: Output logits from the dector head
+            head_output: Output predictions of a certain scale from the dector head;
+
+        Returns:
+            1. bounding box predictions
+            2. bounding box confidences; object_confidence * class_confidence
         """
 
         # Divide each anchor point by stride; this normalizes the anchor coordinates from

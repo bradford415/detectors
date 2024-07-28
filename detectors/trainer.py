@@ -64,7 +64,7 @@ class Trainer:
             )
             scheduler.step()
 
-            self._evaluate(model, dataloader_val, val_coco_api)
+            self._evaluate(model, criterion, dataloader_val, val_coco_api)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
@@ -119,6 +119,7 @@ class Trainer:
     def _evaluate(
         self,
         model: nn.Module,
+        criterion: nn.Module,
         dataloader_val: Iterable,
         val_coco_api: COCO,
     ):
@@ -126,6 +127,8 @@ class Trainer:
 
         Args:
             model: Model to train
+            criterion: Loss function; only used to inspect the loss on the val set,
+                       not used for backpropagation
             dataloader_val: Dataloader for the validation set
             device: Device to run the model on
         """
@@ -138,7 +141,6 @@ class Trainer:
         )  # , bbox_fmt="coco")
 
         for steps, (samples, targets) in enumerate(dataloader_val):
-            print(steps)
             samples = samples.to(self.device)
             targets = [
                 {key: value.to(self.device) for key, value in t.items()}
@@ -147,9 +149,14 @@ class Trainer:
 
             bbox_predictions = model(samples, inference=True)
 
-            # for image, target, boxes, confs in zip(images, targets,)
-            ### START HERE
-            # final_loss.backward()
+            final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+                bbox_predictions, targets
+            )
+
+            # TODO: placeholder; change later
+            test_stats = 5
+
+            return test_stats, coco_evaluator
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

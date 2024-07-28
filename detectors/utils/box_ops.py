@@ -2,6 +2,8 @@
 """
 Utilities for bounding box manipulation and GIoU.
 """
+from typing import List, Tuple
+
 import torch
 from torchvision.ops.boxes import box_area
 
@@ -145,7 +147,17 @@ def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
     return carea / uarea
 
 
-def get_region_boxes(boxes_and_confs):
+def get_region_boxes(boxes_and_confs: List[Tuple]):
+    """Extracts the boxes and confidences from different scales and concatenates 
+    along the flattened cell dimension; since the out_h and out_w are flattened, we're
+    able to concat them even though their predictions are at different dimensions.
+
+    Args:
+        boxes_and_confidences: list of bbox coordinate predictions and confidences for each output scale;
+                               the bbox preds have been flattened so boxes shape (B, out_h*out_w, 1, 4);
+                               this comes from the YoloLayer during inference; 
+                               YoloV4 has 3 output scales so len(boxes_and_confs) = 3
+    """
     # print('Getting boxes from boxes and confs ...')
 
     boxes_list = []
@@ -155,7 +167,7 @@ def get_region_boxes(boxes_and_confs):
         boxes_list.append(item[0])
         confs_list.append(item[1])
 
-    # boxes: [batch, num1 + num2 + num3, 1, 4]
+    # boxes: [batch, n_preds_scale1 + n_preds_scale2 + n_preds_scale3, 1, 4]
     # confs: [batch, num1 + num2 + num3, num_classes]
     boxes = torch.cat(boxes_list, dim=1)
     confs = torch.cat(confs_list, dim=1)

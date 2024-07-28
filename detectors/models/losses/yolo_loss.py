@@ -7,7 +7,7 @@ from torch import nn
 
 
 class YoloV4Loss(nn.Module):
-    # TODO go back through and comment and change functions similar to https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/loss.py
+    # Maybe TODO go back through and comment and change functions similar to https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/loss.py
     #      because it's commented very well
     """Loss function for YoloV4
 
@@ -442,7 +442,7 @@ class YoloV4Loss(nn.Module):
             batchsize = bbox_predictions.shape[0]
             feature_size = bbox_predictions.shape[2]
             num_pred_ch = 5 + self.n_classes
-
+            breakpoint()
             # (B, num_anchors, ch_per_anchor, H, W); num_anchors is basically the number of bounding box predictions per cell
             bbox_predictions = bbox_predictions.view(
                 batchsize, self.n_anchors, num_pred_ch, feature_size, feature_size

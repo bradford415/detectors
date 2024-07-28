@@ -103,10 +103,10 @@ def main(base_config_path: str, model_config_path):
 
     dataset_kwargs = base_config["dataset"]
     dataset_train = dataset_map[base_config["dataset_name"]](
-        dataset_split="train", **dataset_kwargs
+        dataset_split="train", debug_mode = base_config["debug_mode"], **dataset_kwargs
     )
     dataset_val = dataset_map[base_config["dataset_name"]](
-        dataset_split="val", **dataset_kwargs
+        dataset_split="val", debug_mode = base_config["debug_mode"], **dataset_kwargs
     )
 
     dataloader_train = DataLoader(

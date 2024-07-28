@@ -94,26 +94,29 @@ class Upsample(nn.Module):
             #                              [6, 7, 8]]]])
             #
             # x.view.expand.contiguous.view: (B, C, target_size_h, target_size_w); this merges the last 4 axes into a rectangle
-            upsampled_x = (
-                x.view(x.size(0), x.size(1), x.size(2), 1, x.size(3), 1)
-                .expand(
-                x.size(0),
-                    x.size(1),
-                    x.size(2),
-                    target_size[2] // x.size(2),
-                    x.size(3),
-                    target_size[3] // x.size(3),
-                )
-                .contiguous()
-                .view(x.size(0), x.size(1), target_size[2], target_size[3])
+
+            # upsampled_x = (
+            #     x.view(x.size(0), x.size(1), x.size(2), 1, x.size(3), 1)
+            #     .expand(
+            #     x.size(0),
+            #         x.size(1),
+            #         x.size(2),
+            #         target_size[2] // x.size(2),
+            #         x.size(3),
+            #         target_size[3] // x.size(3),
+            #     )
+            #     .contiguous()
+            #     .view(x.size(0), x.size(1), target_size[2], target_size[3])
+            # )
+            # TODO: Changed this to interpolate because of incorrect dimension sizes during evaluation
+            interp_x = F.interpolate(
+                x, size=(target_size[2], target_size[3]), mode="nearest"
             )
-            #interp_x = F.interpolate(
-            #    x, size=(target_size[2], target_size[3]), mode="nearest"
-            #)
             
             # torch.allclose(upsampled_x, interp_x) # THIS RETURNS TRUE, I HAVE NO IDEA WHY YOU NEED ALL THIS VIEW AND EXPAND LOGIC
             
-            return upsampled_x
+            #return upsampled_x
+            return interp_x
         else:
             return F.interpolate(
                 x, size=(target_size[2], target_size[3]), mode="nearest"

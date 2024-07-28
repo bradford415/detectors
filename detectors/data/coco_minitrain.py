@@ -38,7 +38,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
     The "instances_val2017.json" is from the original coco2017 dataset and can be found there.
     """
 
-    def __init__(self, image_folder: str, annotation_file: str, transforms: T = None):
+    def __init__(self, image_folder: str, annotation_file: str, transforms: T = None, debug_mode: bool = False):
         """Initialize the COCO dataset class
 
         Args:
@@ -48,9 +48,14 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         super().__init__(root=image_folder, annFile=annotation_file)
         self._transforms = transforms
 
-        explore_coco(self.coco)
-
         self.prepare = PreprocessCoco()
+        
+        if debug_mode:
+            self.ids = self.ids[:5]
+
+        # Display coco information of the current dataset; this should be placed at the end of the __init__()
+        explore_coco(self)
+
 
     def __getitem__(self, index):
         """Retrieve and preprocess samples from the dataset"""
@@ -127,12 +132,15 @@ def make_coco_transforms(dataset_split):
 def build_coco_mini(
     root: str,
     dataset_split: str,
+    debug_mode: bool = False,
 ):
     """Initialize the COCO dataset class
 
     Args:
         root: full path to the dataset root
         split: which dataset split to use; `train` or `val`
+        debug_mode: Whether to build the dataset in debug mode; if true, this only uses a few samples
+                    to quickly run the code
     """
     coco_root = Path(root)
 
@@ -151,6 +159,7 @@ def build_coco_mini(
         image_folder=images_dir,
         annotation_file=annotation_file,
         transforms=data_transforms,
+        debug_mode=debug_mode
     )
 
     return dataset
