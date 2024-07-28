@@ -114,7 +114,7 @@ class Trainer:
             final_loss.backward()
             optimizer.step()
             break
-        
+
     @torch.no_grad()
     def _evaluate(
         self,

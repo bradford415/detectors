@@ -65,17 +65,39 @@ class Upsample(nn.Module):
         assert len(target_size) == 4
 
         if inference:
-            breakpoint()
+            # ATTENTION: This inference case seems to be the EXACT SAME as interpolation with nearest neighbors 
+            #            i.e., the `else` case in this if statement; 
+            #            I HAVE NO IDEA WHY THEY WROTE IT LIKE THIS IF INTERPOLATION RETURNS THE SAME THING
 
             # This code works in the following manner:
             # x: (B, C, out_h, out_w)
             # x.view: (B, C, out_h, 1, out_w, 1)
-            # x.view.expand: ()
-            # START HERE recieving runtime error during validation
-            return (
+            # x.view.expand: (B, C, out_h, 1*h_upsample_factor, out_w, 1*width_upsample_factor); expand repeats the dimension along its axis axes;
+            #                this will first repeat along the last two axes, then it will repeat on the 2nd and 3rd axes effectively quadrupling the values;
+            #                here's a snippet I wrote to sort of understand this:
+            #                   (Pdb) temp (2, 1, 1, 3)
+            #                   tensor([[[[1, 2, 3]]],
+            #
+            #                          [[[6, 7, 8]]]])
+            #                   (Pdb) temp.expand(2,2,2,3)
+            #                    tensor([[[[1, 2, 3], <----------notice these rows sort of quadruple
+            #                              [1, 2, 3]],
+            #
+            #                             [[1, 2, 3],
+            #                              [1, 2, 3]]],
+            #
+            #
+            #                            [[[6, 7, 8],
+            #                              [6, 7, 8]],
+            #
+            #                             [[6, 7, 8],
+            #                              [6, 7, 8]]]])
+            #
+            # x.view.expand.contiguous.view: (B, C, target_size_h, target_size_w); this merges the last 4 axes into a rectangle
+            upsampled_x = (
                 x.view(x.size(0), x.size(1), x.size(2), 1, x.size(3), 1)
                 .expand(
-                    x.size(0),
+                x.size(0),
                     x.size(1),
                     x.size(2),
                     target_size[2] // x.size(2),
@@ -85,6 +107,13 @@ class Upsample(nn.Module):
                 .contiguous()
                 .view(x.size(0), x.size(1), target_size[2], target_size[3])
             )
+            #interp_x = F.interpolate(
+            #    x, size=(target_size[2], target_size[3]), mode="nearest"
+            #)
+            
+            # torch.allclose(upsampled_x, interp_x) # THIS RETURNS TRUE, I HAVE NO IDEA WHY YOU NEED ALL THIS VIEW AND EXPAND LOGIC
+            
+            return upsampled_x
         else:
             return F.interpolate(
                 x, size=(target_size[2], target_size[3]), mode="nearest"
@@ -136,7 +165,13 @@ class Neck(nn.Module):
         self.conv19 = Conv_Bn_Activation(128, 256, 3, 1, "leaky")
         self.conv20 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
 
-    def forward(self, input: torch.Tensor, downsample3: torch.Tensor, downsample2: torch.Tensor, inference: bool = False):
+    def forward(
+        self,
+        input: torch.Tensor,
+        downsample3: torch.Tensor,
+        downsample2: torch.Tensor,
+        inference: bool = False,
+    ):
         """
 
         Args:
@@ -159,7 +194,7 @@ class Neck(nn.Module):
         x5 = self.conv5(x4)
         x6 = self.conv6(x5)
         x7 = self.conv7(x6)
-        
+
         # Upsample to size of downsample3.shape; if inferencing, TODO
         x7_up = self.upsample1(x7, downsample3.shape, inference)
         # R 85
