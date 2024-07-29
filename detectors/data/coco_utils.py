@@ -215,7 +215,7 @@ def get_coco_object(dataset: Dataset):
 
 def explore_coco(dataset: torchvision.datasets.CocoDetection):
     """Display dataset information based on the coco format
-    
+
     Args:
         dataset: Dataset instance that is dervied from torchvision.datasets.CocoDetection
     """

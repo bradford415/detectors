@@ -65,8 +65,8 @@ class Upsample(nn.Module):
         assert len(target_size) == 4
 
         if inference:
-            # ATTENTION: This inference case seems to be the EXACT SAME as interpolation with nearest neighbors 
-            #            i.e., the `else` case in this if statement; 
+            # ATTENTION: This inference case seems to be the EXACT SAME as interpolation with nearest neighbors
+            #            i.e., the `else` case in this if statement;
             #            I HAVE NO IDEA WHY THEY WROTE IT LIKE THIS IF INTERPOLATION RETURNS THE SAME THING
 
             # This code works in the following manner:
@@ -112,10 +112,10 @@ class Upsample(nn.Module):
             interp_x = F.interpolate(
                 x, size=(target_size[2], target_size[3]), mode="nearest"
             )
-            
+
             # torch.allclose(upsampled_x, interp_x) # THIS RETURNS TRUE, I HAVE NO IDEA WHY YOU NEED ALL THIS VIEW AND EXPAND LOGIC
-            
-            #return upsampled_x
+
+            # return upsampled_x
             return interp_x
         else:
             return F.interpolate(

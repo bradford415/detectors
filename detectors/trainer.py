@@ -11,12 +11,13 @@ from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.utils import misc
+from detectors.utils.box_ops import val_preds_to_img_size
 
 
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, output_path, device: torch.device = torch.device("cpu")):
+    def __init__(self, output_path: str, device: torch.device = torch.device("cpu")):
         """Constructor for the Trainer class
 
         Args:
@@ -31,9 +32,8 @@ class Trainer:
 
         # Paths
         self.output_paths = {
-            "output_dir": Path(
-                f"{output_path}_{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
-            ),
+            "output_dir": Path(output_path)
+            / f"{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
         }
 
     def train(
@@ -56,19 +56,24 @@ class Trainer:
             optimizer:
             ckpt_every:
         """
+
+        # Initializations
+        self.output_paths["output_dir"].mkdir(parents=True, exist_ok=True)
+
         print("Start training")
         start_time = time.time()
         for epoch in range(start_epoch, epochs):
+            print(epoch)
             train_stats = self._train_one_epoch(
                 model, criterion, dataloader_train, optimizer
             )
             scheduler.step()
 
-            self._evaluate(model, criterion, dataloader_val, val_coco_api)
+            test_stats, coco_evalulator = self._evaluate(model, criterion, dataloader_val, val_coco_api)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
-                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
+                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch+1:04}"
                 self._save_model(
                     model,
                     optimizer,
@@ -77,6 +82,10 @@ class Trainer:
                     ckpt_every,
                     save_path=ckpt_path,
                 )
+        
+        total_time = time.time() - start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        print('Training time {}'.format(total_time_str))
 
     def _train_one_epoch(
         self,
@@ -92,7 +101,6 @@ class Trainer:
             criterion: Loss function
             dataloader_train: Dataloader for the training set
             optimizer: Optimizer to update the models weights
-            device: Device to train the model on
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
             samples = samples.to(self.device)
@@ -134,7 +142,6 @@ class Trainer:
         """
 
         model.eval()
-        ## START HERE!!!!!!!!!!!!!! added val_coco_api hopefully it's the right one
 
         coco_evaluator = CocoEvaluator(
             val_coco_api, iou_types=["bbox"]
@@ -147,16 +154,25 @@ class Trainer:
                 for t in targets
             ]
 
-            bbox_predictions = model(samples, inference=True)
+            # Inference outputs bbox_preds (cx, cy, w, h) and class confidences (num_classes);
+            # TODO: These should all be between 0-1 but some look greater than 1, need to investigate 
+            bbox_preds, class_conf = model(samples, inference=True)
 
-            final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-                bbox_predictions, targets
-            )
-
+            # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+            #    bbox_predictions, targets
+            # )
+            
+            ## TODO
+            val_preds_to_img_size()
             # TODO: placeholder; change later
             test_stats = 5
+            breakpoint()
+            ########################################### START HERE: the network should be predicteing cx cy, w, h but the code shows it uses topleft bottom right, coords. It must convert to this format somewhere
+            res = {target['image_id'].item(): output for target, output in zip(targets, results)}
+            if coco_evaluator is not None:
+                coco_evaluator.update(res)
 
-            return test_stats, coco_evaluator
+        return test_stats, coco_evaluator
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

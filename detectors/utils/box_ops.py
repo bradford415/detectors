@@ -148,14 +148,14 @@ def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
 
 
 def get_region_boxes(boxes_and_confs: List[Tuple]):
-    """Extracts the boxes and confidences from different scales and concatenates 
+    """Extracts the boxes and confidences from different scales and concatenates
     along the flattened cell dimension; since the out_h and out_w are flattened, we're
     able to concat them even though their predictions are at different dimensions.
 
     Args:
         boxes_and_confidences: list of bbox coordinate predictions and confidences for each output scale;
                                the bbox preds have been flattened so boxes shape (B, out_h*out_w, 1, 4);
-                               this comes from the YoloLayer during inference; 
+                               this comes from the YoloLayer during inference;
                                YoloV4 has 3 output scales so len(boxes_and_confs) = 3
     """
     # print('Getting boxes from boxes and confs ...')
@@ -173,3 +173,35 @@ def get_region_boxes(boxes_and_confs: List[Tuple]):
     confs = torch.cat(confs_list, dim=1)
 
     return [boxes, confs]
+
+
+def val_preds_to_img_size(image: torch.Tensor, bbox_preds, targets):
+    """Scale the bounding box predictions to the original image size
+    
+    Args:
+        image: Input image to the model 
+        bbox_preds: Bounding box outputs during evaluation
+        targets: Ground truth labels
+    """
+    # TODO
+    for img, target, boxes, confs in zip(image, targets, outputs[0], outputs[1]):
+        img_height, img_width = img.shape[:2]
+        # boxes = output[...,:4].copy()  # output boxes in yolo format
+        boxes = boxes.squeeze(2).cpu().detach().numpy()
+        boxes[...,2:] = boxes[...,2:] - boxes[...,:2] # Transform [x1, y1, x2, y2] to [x1, y1, w, h]
+        boxes[...,0] = boxes[...,0]*img_width
+        boxes[...,1] = boxes[...,1]*img_height
+        boxes[...,2] = boxes[...,2]*img_width
+        boxes[...,3] = boxes[...,3]*img_height
+        boxes = torch.as_tensor(boxes, dtype=torch.float32)
+        # confs = output[...,4:].copy()
+        confs = confs.cpu().detach().numpy()
+        labels = np.argmax(confs, axis=1).flatten()
+        labels = torch.as_tensor(labels, dtype=torch.int64)
+        scores = np.max(confs, axis=1).flatten()
+        scores = torch.as_tensor(scores, dtype=torch.float32)
+        res[target["image_id"].item()] = {
+            "boxes": boxes,
+            "scores": scores,
+            "labels": labels,
+        }
