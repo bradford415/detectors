@@ -69,7 +69,9 @@ class Trainer:
             )
             scheduler.step()
 
-            test_stats, coco_evalulator = self._evaluate(model, criterion, dataloader_val, val_coco_api)
+            test_stats, coco_evalulator = self._evaluate(
+                model, criterion, dataloader_val, val_coco_api
+            )
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
@@ -82,10 +84,10 @@ class Trainer:
                     ckpt_every,
                     save_path=ckpt_path,
                 )
-        
+
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print('Training time {}'.format(total_time_str))
+        print("Training time {}".format(total_time_str))
 
     def _train_one_epoch(
         self,
@@ -155,23 +157,33 @@ class Trainer:
             ]
 
             # Inference outputs bbox_preds (cx, cy, w, h) and class confidences (num_classes);
-            # TODO: These should all be between 0-1 but some look greater than 1, need to investigate 
+            # TODO: These should all be between 0-1 but some look greater than 1, need to investigate
             bbox_preds, class_conf = model(samples, inference=True)
 
             # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
             #    bbox_predictions, targets
             # )
-            
+
             ## TODO
-            val_preds_to_img_size()
+            breakpoint()
+            ## TODO: Comment this
+            results = val_preds_to_img_size(samples, targets, bbox_preds, class_conf)
+            
             # TODO: placeholder; change later
             test_stats = 5
-            breakpoint()
-            ########################################### START HERE: the network should be predicteing cx cy, w, h but the code shows it uses topleft bottom right, coords. It must convert to this format somewhere
-            res = {target['image_id'].item(): output for target, output in zip(targets, results)}
-            if coco_evaluator is not None:
-                coco_evaluator.update(res)
+            
+            ## TODO: still VERY fuzzy on what the network actually predicts during validation and 
+            #        how we scale back to original image size
+            
+            evaluator_time = time.time()
+            coco_evaluator.update(results)
+            evaluator_time = time.time() - evaluator_time
+            
+        # Accumulate predictions from all processes 
+        coco_evaluator.accumulate()
+        coco_evaluator.summarize()
 
+        ################### START HERE continue with val loop #################### 
         return test_stats, coco_evaluator
 
     def _save_model(

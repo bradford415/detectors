@@ -4,6 +4,7 @@ Utilities for bounding box manipulation and GIoU.
 """
 from typing import List, Tuple
 
+import numpy as np
 import torch
 from torchvision.ops.boxes import box_area
 
@@ -175,24 +176,35 @@ def get_region_boxes(boxes_and_confs: List[Tuple]):
     return [boxes, confs]
 
 
-def val_preds_to_img_size(image: torch.Tensor, bbox_preds, targets):
+def val_preds_to_img_size(
+    image: torch.Tensor, targets, bbox_preds: torch.Tensor, class_conf: torch.Tensor
+):
     """Scale the bounding box predictions to the original image size
-    
+
     Args:
-        image: Input image to the model 
-        bbox_preds: Bounding box outputs during evaluation
+        image: Input image to the model
         targets: Ground truth labels
+        bbox_preds: Bounding box outputs during evaluation
+                    (B, scale_1_w*h + scale_2_w*h + scale_3_w*h, 1, 4)
+        class_conf: Class confidence predictions, calculated as (objectness * class_confidences)
+                    (B, scale_1_w*h + scale_2_w*h + scale_3_w*h, 3)
+
+    Return: TODO
     """
     # TODO
-    for img, target, boxes, confs in zip(image, targets, outputs[0], outputs[1]):
-        img_height, img_width = img.shape[:2]
+    result = {}
+    for img, target, boxes, confs in zip(image, targets, bbox_preds, class_conf):
+        breakpoint()
+        img_height, img_width = image.shape[:2]
         # boxes = output[...,:4].copy()  # output boxes in yolo format
         boxes = boxes.squeeze(2).cpu().detach().numpy()
-        boxes[...,2:] = boxes[...,2:] - boxes[...,:2] # Transform [x1, y1, x2, y2] to [x1, y1, w, h]
-        boxes[...,0] = boxes[...,0]*img_width
-        boxes[...,1] = boxes[...,1]*img_height
-        boxes[...,2] = boxes[...,2]*img_width
-        boxes[...,3] = boxes[...,3]*img_height
+        boxes[..., 2:] = (
+            boxes[..., 2:] - boxes[..., :2]
+        )  # Transform [x1, y1, x2, y2] to [x1, y1, w, h]
+        boxes[..., 0] = boxes[..., 0] * img_width
+        boxes[..., 1] = boxes[..., 1] * img_height
+        boxes[..., 2] = boxes[..., 2] * img_width
+        boxes[..., 3] = boxes[..., 3] * img_height
         boxes = torch.as_tensor(boxes, dtype=torch.float32)
         # confs = output[...,4:].copy()
         confs = confs.cpu().detach().numpy()
@@ -200,8 +212,10 @@ def val_preds_to_img_size(image: torch.Tensor, bbox_preds, targets):
         labels = torch.as_tensor(labels, dtype=torch.int64)
         scores = np.max(confs, axis=1).flatten()
         scores = torch.as_tensor(scores, dtype=torch.float32)
-        res[target["image_id"].item()] = {
+        result[target["image_id"].item()] = {
             "boxes": boxes,
             "scores": scores,
             "labels": labels,
         }
+        
+        return result
