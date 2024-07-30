@@ -185,7 +185,7 @@ class YoloV4Loss(nn.Module):
         """
         # Note: tgt_mask is initalized to zeros and obj_mask is intialized to ones because
         #       only the objectness score is calculated in the loss for every prediction,
-        #       while the bbox and class label predictions that correspond with the best anchor are used
+        #       while only the bbox and class label predictions that correspond with the best anchor are used
 
         # Binary target mask to 0 out predictions which do not correspond to a best anchor;
         # only 1 anchor corresponds to an object;
