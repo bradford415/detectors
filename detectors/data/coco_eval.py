@@ -12,10 +12,14 @@ from detectors.utils import misc
 
 
 class CocoEvaluator(object):
-    def __init__(self, coco_gt, iou_types):
+    def __init__(self, coco_gt, iou_types, bbox_format="coc"):
         assert isinstance(iou_types, (list, tuple))
         coco_gt = copy.deepcopy(coco_gt)
         self.coco_gt = coco_gt
+        breakpoint()
+
+        self.bbox_format = bbox_format.lower()
+        assert self.bbox_format in ["voc", "coco", "yolo"]
 
         self.iou_types = iou_types
         self.coco_eval = {}
@@ -36,6 +40,7 @@ class CocoEvaluator(object):
             # suppress pycocotools prints
             with open(os.devnull, "w") as devnull:
                 with contextlib.redirect_stdout(devnull):
+                    #breakpoint()
                     coco_dt = COCO.loadRes(self.coco_gt, results) if results else COCO()
             coco_eval = self.coco_eval[iou_type]
 
@@ -77,8 +82,11 @@ class CocoEvaluator(object):
             if len(prediction) == 0:
                 continue
 
-            boxes = prediction["boxes"]
-            boxes = convert_to_xywh(boxes).tolist()
+            if self.bbox_format == "coco":
+                boxes = prediction["boxes"].tolist()
+            else:
+                boxes = prediction["boxes"]
+                boxes = convert_to_xywh(boxes, fmt=self.bbox_format).tolist()
             scores = prediction["scores"].tolist()
             labels = prediction["labels"].tolist()
 
@@ -159,9 +167,15 @@ class CocoEvaluator(object):
         return coco_results
 
 
-def convert_to_xywh(boxes):
-    xmin, ymin, xmax, ymax = boxes.unbind(1)
-    return torch.stack((xmin, ymin, xmax - xmin, ymax - ymin), dim=1)
+def convert_to_xywh(boxes, bbox_format="voc"):
+    if bbox_format.lower() == "voc":
+        xmin, ymin, xmax, ymax = boxes.unbind(1)
+        return torch.stack((xmin, ymin, xmax - xmin, ymax - ymin), dim=1)
+    elif bbox_format.lower() == "yolo":
+        xcen, ycen, w, h = boxes.unbind(1)
+        return torch.stack(
+            (xcen - w / 2, ycen - h / 2, w, h), dim=1
+        )  # this converts c_x, c_y, w, h to tl_x, tl_y, br_x, br_y
 
 
 def merge(img_ids, eval_imgs):

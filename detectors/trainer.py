@@ -69,7 +69,7 @@ class Trainer:
             )
             scheduler.step()
 
-            test_stats, coco_evalulator = self._evaluate(
+            test_stats, coco_evaluator = self._evaluate(
                 model, criterion, dataloader_val, val_coco_api
             )
 
@@ -85,9 +85,12 @@ class Trainer:
                     save_path=ckpt_path,
                 )
 
-        total_time = time.time() - start_time
-        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print("Training time {}".format(total_time_str))
+            total_time = time.time() - start_time
+            total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+            print("Training time {}".format(total_time_str))
+
+            bbox_stats = coco_evaluator.coco_eval["bbox"].stats
+            print(bbox_stats)
 
     def _train_one_epoch(
         self,
@@ -144,10 +147,12 @@ class Trainer:
         """
 
         model.eval()
+        ########################## START HERE - I THINK I NEED TO GRAB THE COCO API FROM THIS METHOD 
+        # https://github.com/pytorch/vision/blob/main/references/detection/coco_utils.py
 
         coco_evaluator = CocoEvaluator(
-            val_coco_api, iou_types=["bbox"]
-        )  # , bbox_fmt="coco")
+            val_coco_api, iou_types=["bbox"], bbox_format="coco"
+        )
 
         for steps, (samples, targets) in enumerate(dataloader_val):
             samples = samples.to(self.device)
@@ -164,26 +169,25 @@ class Trainer:
             #    bbox_predictions, targets
             # )
 
-            ## TODO
-            breakpoint()
             ## TODO: Comment this
             results = val_preds_to_img_size(samples, targets, bbox_preds, class_conf)
-            
+
             # TODO: placeholder; change later
             test_stats = 5
-            
-            ## TODO: still VERY fuzzy on what the network actually predicts during validation and 
+
+            ## TODO: still VERY fuzzy on what the network actually predicts during validation and
             #        how we scale back to original image size
-            
+
             evaluator_time = time.time()
+            breakpoint()
             coco_evaluator.update(results)
             evaluator_time = time.time() - evaluator_time
-            
-        # Accumulate predictions from all processes 
+
+        # Accumulate predictions from all processes
         coco_evaluator.accumulate()
         coco_evaluator.summarize()
 
-        ################### START HERE continue with val loop #################### 
+        ################### START HERE continue with val loop ####################
         return test_stats, coco_evaluator
 
     def _save_model(

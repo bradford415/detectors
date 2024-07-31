@@ -194,7 +194,6 @@ def val_preds_to_img_size(
     # TODO
     result = {}
     for img, target, boxes, confs in zip(image, targets, bbox_preds, class_conf):
-        breakpoint()
         img_height, img_width = image.shape[:2]
         # boxes = output[...,:4].copy()  # output boxes in yolo format
         boxes = boxes.squeeze(2).cpu().detach().numpy()
@@ -217,5 +216,5 @@ def val_preds_to_img_size(
             "scores": scores,
             "labels": labels,
         }
-        
+
         return result
