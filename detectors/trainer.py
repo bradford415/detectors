@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -34,7 +34,7 @@ class Trainer:
         # Paths
         self.output_paths = {
             "output_dir": Path(output_path)
-            / f"{datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+            / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
         }
 
     def train(
@@ -178,11 +178,13 @@ class Trainer:
 
             ## TODO: still VERY fuzzy on what the network actually predicts during validation and
             #        how we scale back to original image size
-            breakpoint()
+            #breakpoint()
             ### START HERE
             evaluator_time = time.time()
             coco_evaluator.update(results)
             evaluator_time = time.time() - evaluator_time
+
+        coco_evaluator.synchronize_between_processes()
 
         # Accumulate predictions from all processes
         coco_evaluator.accumulate()
