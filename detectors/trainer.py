@@ -10,6 +10,7 @@ from torch import nn
 from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
+from detectors.data.coco_utils import convert_to_coco_api
 from detectors.utils import misc
 from detectors.utils.box_ops import val_preds_to_img_size
 
@@ -70,8 +71,7 @@ class Trainer:
             scheduler.step()
 
             test_stats, coco_evaluator = self._evaluate(
-                model, criterion, dataloader_val, val_coco_api
-            )
+                model, criterion, dataloader_val)#, val_coco_api)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
@@ -134,7 +134,7 @@ class Trainer:
         model: nn.Module,
         criterion: nn.Module,
         dataloader_val: Iterable,
-        val_coco_api: COCO,
+        #val_coco_api: COCO,
     ):
         """A single forward pass to evluate the val set after training an epoch
 
@@ -150,6 +150,7 @@ class Trainer:
         ########################## START HERE - I THINK I NEED TO GRAB THE COCO API FROM THIS METHOD 
         # https://github.com/pytorch/vision/blob/main/references/detection/coco_utils.py
 
+        val_coco_api = convert_to_coco_api(dataloader_val.dataset ,bbox_fmt="coco")
         coco_evaluator = CocoEvaluator(
             val_coco_api, iou_types=["bbox"], bbox_format="coco"
         )
@@ -177,9 +178,9 @@ class Trainer:
 
             ## TODO: still VERY fuzzy on what the network actually predicts during validation and
             #        how we scale back to original image size
-
-            evaluator_time = time.time()
             breakpoint()
+            ### START HERE
+            evaluator_time = time.time()
             coco_evaluator.update(results)
             evaluator_time = time.time() - evaluator_time
 
