@@ -2,10 +2,10 @@
 Modular objection detection framework, mostly my own learning and practice.
 
 ## Table of Contents
-* [Training a Model](#train-a-model)
+* [Training a Model](#training-a-model)
 * [Resources](#resources)
 
-## Train a Model
+## Training a Model
 `python scripts/train.py scripts/configs/base-config.yaml scripts/configs/yolov4/model-base.yaml`
 
 ## Resources
