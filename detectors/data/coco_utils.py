@@ -5,9 +5,9 @@ import pycocotools.mask as mask_util
 import torch
 import torchvision
 from PIL import Image
+from pycocotools import mask as coco_mask
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-from pycocotools import mask as coco_mask
 from torch import Tensor
 from torch.utils.data import Dataset
 
@@ -220,25 +220,35 @@ def explore_coco(dataset: torchvision.datasets.CocoDetection):
     Args:
         dataset: Dataset instance that is dervied from torchvision.datasets.CocoDetection
     """
-    print("\nDisplaying COCO information:")
+    print("\nExploring COCO dataset:")
     # Category IDs.
     cat_ids = dataset.coco.getCatIds()
-    print(f"Number of Unique Categories: {len(cat_ids)}")
+    print(f"\tunique categories: {len(cat_ids)}")
 
     img_ids = dataset.coco.getImgIds()
-    print(f"Number of images in the entire dataset: {len(img_ids)}")
+    print(f"\timages in the entire dataset: {len(img_ids)}")
 
-    print(f"Number of images in used for the current run: {len(dataset.ids)}")
+    print(f"\tnumber of images in used for the current run: {len(dataset.ids)}")
 
 
-def convert_to_coco_api(ds, bbox_fmt='voc'):
-    """
+def convert_to_coco_api(ds, bbox_fmt="voc"):
+    """This function is required to create a proper coco api from your dataset.
+    Not all object detection Repos use this e.g., detr and I'm not sure why
+
+    Args:
+        ds: The dataset object from torch.utils.data.Dataset; a cool trick is you can
+            extract the dataset from the dataloader with dataloader.dataset
+        bbox_fmt: The format of the bounding boxes i.e.,
+                  what the elements of the bbox represent
+                  1. coco: [topleft_x, topleft_y, w, h]
+                  2. yolo: [center_x, center_y, w, h]
+                  3. voc: TODO
     """
     print("in function convert_to_coco_api...")
     coco_ds = COCO()
     # annotation IDs need to start at 1, not 0, see torchvision issue #1530
     ann_id = 1
-    dataset = {'images': [], 'categories': [], 'annotations': []}
+    dataset = {"images": [], "categories": [], "annotations": []}
     categories = set()
     for img_idx in range(len(ds)):
         # find better way to get target
@@ -246,49 +256,49 @@ def convert_to_coco_api(ds, bbox_fmt='voc'):
         img, targets = ds[img_idx]
         image_id = targets["image_id"].item()
         img_dict = {}
-        img_dict['id'] = image_id
-        img_dict['height'] = img.shape[-2]
-        img_dict['width'] = img.shape[-1]
-        dataset['images'].append(img_dict)
+        img_dict["id"] = image_id
+        img_dict["height"] = img.shape[-2]
+        img_dict["width"] = img.shape[-1]
+        dataset["images"].append(img_dict)
         bboxes = targets["boxes"]
         # to coco format: xmin, ymin, w, h
         if bbox_fmt.lower() == "voc":  # xmin, ymin, xmax, ymax
             bboxes[:, 2:] -= bboxes[:, :2]
         elif bbox_fmt.lower() == "yolo":  # xcen, ycen, w, h
-            bboxes[:, :2] = bboxes[:, :2] - bboxes[:, 2:]/2
+            bboxes[:, :2] = bboxes[:, :2] - bboxes[:, 2:] / 2
         elif bbox_fmt.lower() == "coco":
             pass
         else:
             raise ValueError(f"bounding box format {bbox_fmt} not supported!")
         bboxes = bboxes.tolist()
-        labels = targets['labels'].tolist()
-        areas = targets['area'].tolist()
-        iscrowd = targets['iscrowd'].tolist()
-        if 'masks' in targets:
-            masks = targets['masks']
+        labels = targets["labels"].tolist()
+        areas = targets["area"].tolist()
+        iscrowd = targets["iscrowd"].tolist()
+        if "masks" in targets:
+            masks = targets["masks"]
             # make masks Fortran contiguous for coco_mask
             masks = masks.permute(0, 2, 1).contiguous().permute(0, 2, 1)
-        if 'keypoints' in targets:
-            keypoints = targets['keypoints']
+        if "keypoints" in targets:
+            keypoints = targets["keypoints"]
             keypoints = keypoints.reshape(keypoints.shape[0], -1).tolist()
         num_objs = len(bboxes)
         for i in range(num_objs):
             ann = {}
-            ann['image_id'] = image_id
-            ann['bbox'] = bboxes[i]
-            ann['category_id'] = labels[i]
+            ann["image_id"] = image_id
+            ann["bbox"] = bboxes[i]
+            ann["category_id"] = labels[i]
             categories.add(labels[i])
-            ann['area'] = areas[i]
-            ann['iscrowd'] = iscrowd[i]
-            ann['id'] = ann_id
-            if 'masks' in targets:
+            ann["area"] = areas[i]
+            ann["iscrowd"] = iscrowd[i]
+            ann["id"] = ann_id
+            if "masks" in targets:
                 ann["segmentation"] = coco_mask.encode(masks[i].numpy())
-            if 'keypoints' in targets:
-                ann['keypoints'] = keypoints[i]
-                ann['num_keypoints'] = sum(k != 0 for k in keypoints[i][2::3])
-            dataset['annotations'].append(ann)
+            if "keypoints" in targets:
+                ann["keypoints"] = keypoints[i]
+                ann["num_keypoints"] = sum(k != 0 for k in keypoints[i][2::3])
+            dataset["annotations"].append(ann)
             ann_id += 1
-    dataset['categories'] = [{'id': i} for i in sorted(categories)]
+    dataset["categories"] = [{"id": i} for i in sorted(categories)]
     coco_ds.dataset = dataset
     coco_ds.createIndex()
     return coco_ds

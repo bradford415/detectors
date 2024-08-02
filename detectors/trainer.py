@@ -1,5 +1,5 @@
-import time
 import datetime
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -18,7 +18,7 @@ from detectors.utils.box_ops import val_preds_to_img_size
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, output_path: str, device: torch.device = torch.device("cpu")):
+    def __init__(self, output_path: str, device: torch.device = torch.device("cpu"), logging_intervals: Dict = {}):
         """Constructor for the Trainer class
 
         Args:
@@ -33,9 +33,12 @@ class Trainer:
 
         # Paths
         self.output_paths = {
-            "output_dir": Path(output_path)
-            / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+            "output_dir": Path(output_path),
         }
+        
+        self.log_intervals = logging_intervals
+        if not logging_intervals:
+            self.log_intervals = {"train_steps_freq": 100}
 
     def train(
         self,
@@ -43,7 +46,6 @@ class Trainer:
         criterion,
         dataloader_train,
         dataloader_val,
-        val_coco_api: COCO,
         optimizer,
         scheduler,
         start_epoch=0,
@@ -57,25 +59,26 @@ class Trainer:
             optimizer:
             ckpt_every:
         """
-
-        # Initializations
-        self.output_paths["output_dir"].mkdir(parents=True, exist_ok=True)
-
-        print("Start training")
+        print("\nStart training")
         start_time = time.time()
+
+        # Starting the epoch at 1 makes calculations more intuitive
+        start_epoch = 1  # Once checkpointing is implemented we can overwrite this value
         for epoch in range(start_epoch, epochs):
-            print(epoch)
+
+            ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
             train_stats = self._train_one_epoch(
                 model, criterion, dataloader_train, optimizer
             )
             scheduler.step()
 
             test_stats, coco_evaluator = self._evaluate(
-                model, criterion, dataloader_val)#, val_coco_api)
+                model, criterion, dataloader_val
+            )
 
             # Save the model every ckpt_every
-            if ckpt_every is not None and (epoch + 1) % ckpt_every == 0:
-                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch+1:04}"
+            if ckpt_every is not None and (epoch) % ckpt_every == 0:
+                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
                 self._save_model(
                     model,
                     optimizer,
@@ -98,6 +101,7 @@ class Trainer:
         criterion: nn.Module,
         dataloader_train: Iterable,
         optimizer: torch.optim.Optimizer,
+        epoch: int,
     ):
         """Train one epoch
 
@@ -106,6 +110,7 @@ class Trainer:
             criterion: Loss function
             dataloader_train: Dataloader for the training set
             optimizer: Optimizer to update the models weights
+            epoch: Used for logging purposes
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
             samples = samples.to(self.device)
@@ -123,6 +128,10 @@ class Trainer:
                 bbox_predictions, targets
             )
 
+            if steps % self.log_intervals["train_steps_freq"] == 0:
+                print(
+                    f"epoch: {epoch}\t''iter: {steps}/{len(dataloader_train)}\t''loss: {final_loss:.4f}")
+
             # Calculate gradients and updates weights
             final_loss.backward()
             optimizer.step()
@@ -134,7 +143,6 @@ class Trainer:
         model: nn.Module,
         criterion: nn.Module,
         dataloader_val: Iterable,
-        #val_coco_api: COCO,
     ):
         """A single forward pass to evluate the val set after training an epoch
 
@@ -147,10 +155,10 @@ class Trainer:
         """
 
         model.eval()
-        ########################## START HERE - I THINK I NEED TO GRAB THE COCO API FROM THIS METHOD 
+        ########################## START HERE - I THINK I NEED TO GRAB THE COCO API FROM THIS METHOD
         # https://github.com/pytorch/vision/blob/main/references/detection/coco_utils.py
 
-        val_coco_api = convert_to_coco_api(dataloader_val.dataset ,bbox_fmt="coco")
+        val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="coco")
         coco_evaluator = CocoEvaluator(
             val_coco_api, iou_types=["bbox"], bbox_format="coco"
         )
@@ -178,7 +186,7 @@ class Trainer:
 
             ## TODO: still VERY fuzzy on what the network actually predicts during validation and
             #        how we scale back to original image size
-            #breakpoint()
+            # breakpoint()
             ### START HERE
             evaluator_time = time.time()
             coco_evaluator.update(results)

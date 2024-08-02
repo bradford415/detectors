@@ -1,3 +1,5 @@
+import datetime
+import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
@@ -33,6 +35,9 @@ loss_map = {
 
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
+# Initialize the root logger
+logger = logging.getLogger(__name__)
+
 
 ## TODO: Move this to a more appropriate spot
 def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:
@@ -65,14 +70,34 @@ def main(base_config_path: str, model_config_path):
         model_config_path: path to the detection model configuration file
 
     """
-
-    print("Initializations...\n")
-
+    # Load configuration files
     with open(base_config_path, "r") as f:
         base_config = yaml.safe_load(f)
 
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
+
+    # Initialize paths
+    output_path = (
+        Path(base_config["output_path"])
+        / base_config["exp_name"]
+        / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
+    )
+    output_path.mkdir(parents=True, exist_ok=True)
+    log_path = output_path / "training.log"
+
+    # Dictionary of logging parameters; used to log training and evaluation progress after certain intervals
+    logging_intervals = base_config["logging"]
+
+
+    # Configure logger that prints to a log file and stdout
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
+    )
+
+    logger.info("Initializing...\n")
 
     # Apply reproducibility seeds
     misc.reproducibility(**base_config["reproducibility"])
@@ -120,9 +145,6 @@ def main(base_config_path: str, model_config_path):
         **val_kwargs,
     )
 
-    # Return the Coco object (api) from PyCocoTools; used for coco evaluation
-    val_coco_api = get_coco_object(dataset_train)
-
     # Initalize model components
     backbone = backbone_map[model_config["backbone"]["name"]](
         pretrain=model_config["backbone"]["pretrained"],
@@ -154,8 +176,7 @@ def main(base_config_path: str, model_config_path):
         lr_drop=train_args["lr_drop"],
     )
 
-    output_path = Path(base_config["output_path"]) / base_config["exp_name"]
-    trainer = Trainer(output_path=str(output_path), device=device)
+    trainer = Trainer(output_path=str(output_path), device=device, logging_intervals = logging_intervals)
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 
@@ -165,7 +186,6 @@ def main(base_config_path: str, model_config_path):
         "criterion": criterion,
         "dataloader_train": dataloader_train,
         "dataloader_val": dataloader_val,
-        "val_coco_api": val_coco_api,
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         **train_args["epochs"],
