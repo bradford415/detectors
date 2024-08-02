@@ -5,5 +5,10 @@ Modular objection detection framework, mostly my own learning and practice.
 * [Training a Model](#train-a-model)
 * [Resources](#resources)
 
-## Train a model
+## Train a Model
 `python scripts/train.py scripts/configs/base-config.yaml scripts/configs/yolov4/model-base.yaml`
+
+## Resources
+### COCO Format
+- [COCO object detection format](https://cocodataset.org/#format-data)
+  - Explains the coco format of the json annotation file 
