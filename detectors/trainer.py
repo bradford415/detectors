@@ -68,7 +68,7 @@ class Trainer:
 
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
             train_stats = self._train_one_epoch(
-                model, criterion, dataloader_train, optimizer
+                model, criterion, dataloader_train, optimizer, epoch
             )
             scheduler.step()
 

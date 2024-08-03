@@ -36,7 +36,7 @@ loss_map = {
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
 
 # Initialize the root logger
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 ## TODO: Move this to a more appropriate spot
@@ -97,7 +97,7 @@ def main(base_config_path: str, model_config_path):
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
-    logger.info("Initializing...\n")
+    log.info("Initializing...\n")
 
     # Apply reproducibility seeds
     misc.reproducibility(**base_config["reproducibility"])
@@ -112,7 +112,7 @@ def main(base_config_path: str, model_config_path):
     }
 
     if use_cuda:
-        print(f"Using {len(base_config['cuda']['gpus'])} GPU(s): ")
+        log.info(f"Using %d GPU(s): ", len(base_config['cuda']['gpus']))
         for gpu in range(len(base_config["cuda"]["gpus"])):
             print(f"    -{torch.cuda.get_device_name(gpu)}")
 
