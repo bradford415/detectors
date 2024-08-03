@@ -1,4 +1,5 @@
 import datetime
+import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable
@@ -14,11 +15,18 @@ from detectors.data.coco_utils import convert_to_coco_api
 from detectors.utils import misc
 from detectors.utils.box_ops import val_preds_to_img_size
 
+log = logging.getLogger(__name__)
+
 
 class Trainer:
     """Trainer TODO: comment"""
 
-    def __init__(self, output_path: str, device: torch.device = torch.device("cpu"), logging_intervals: Dict = {}):
+    def __init__(
+        self,
+        output_path: str,
+        device: torch.device = torch.device("cpu"),
+        logging_intervals: Dict = {},
+    ):
         """Constructor for the Trainer class
 
         Args:
@@ -35,7 +43,7 @@ class Trainer:
         self.output_paths = {
             "output_dir": Path(output_path),
         }
-        
+
         self.log_intervals = logging_intervals
         if not logging_intervals:
             self.log_intervals = {"train_steps_freq": 100}
@@ -53,19 +61,18 @@ class Trainer:
         ckpt_every=None,
     ):
         """Train a model
-
+        ## TODO
         Args:
             model:
             optimizer:
             ckpt_every:
         """
-        print("\nStart training")
+        log.info("\nTraining started\n")
         start_time = time.time()
 
         # Starting the epoch at 1 makes calculations more intuitive
         start_epoch = 1  # Once checkpointing is implemented we can overwrite this value
         for epoch in range(start_epoch, epochs):
-
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
             train_stats = self._train_one_epoch(
                 model, criterion, dataloader_train, optimizer, epoch
@@ -90,10 +97,12 @@ class Trainer:
 
             total_time = time.time() - start_time
             total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-            print("Training time {}".format(total_time_str))
-
+            log.info("Training time %s", total_time_str)
+            breakpoint()
+            # Extracts list of the final AP and AR valus reported
             bbox_stats = coco_evaluator.coco_eval["bbox"].stats
-            print(bbox_stats)
+            breakpoint()
+            log.info("%s", bbox_stats)
 
     def _train_one_epoch(
         self,
@@ -129,8 +138,13 @@ class Trainer:
             )
 
             if steps % self.log_intervals["train_steps_freq"] == 0:
-                print(
-                    f"epoch: {epoch}\t''iter: {steps}/{len(dataloader_train)}\t''loss: {final_loss:.4f}")
+                log.info(
+                    "epoch: %d\titer: %d/%d\tloss: %.4f",
+                    epoch,
+                    steps,
+                    len(dataloader_train),
+                    final_loss.item(),
+                )
 
             # Calculate gradients and updates weights
             final_loss.backward()
@@ -155,8 +169,6 @@ class Trainer:
         """
 
         model.eval()
-        ########################## START HERE - I THINK I NEED TO GRAB THE COCO API FROM THIS METHOD
-        # https://github.com/pytorch/vision/blob/main/references/detection/coco_utils.py
 
         val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="coco")
         coco_evaluator = CocoEvaluator(
@@ -196,9 +208,11 @@ class Trainer:
 
         # Accumulate predictions from all processes
         coco_evaluator.accumulate()
+        ################### START HERE and figure out how to log to the log file ####################
+        breakpoint()
+        #### 
         coco_evaluator.summarize()
 
-        ################### START HERE continue with val loop ####################
         return test_stats, coco_evaluator
 
     def _save_model(

@@ -224,7 +224,6 @@ def create_common_coco_eval(coco_eval, img_ids, eval_imgs):
 # This function is only copied comment out the hard coded print statement
 def createIndex(self):
     # create index
-    # print('creating index...')
     anns, cats, imgs = {}, {}, {}
     imgToAnns, catToImgs = defaultdict(list), defaultdict(list)
     if "annotations" in self.dataset:
@@ -243,8 +242,6 @@ def createIndex(self):
     if "annotations" in self.dataset and "categories" in self.dataset:
         for ann in self.dataset["annotations"]:
             catToImgs[ann["category_id"]].append(ann["image_id"])
-
-    # print('index created!')
 
     # create class members
     self.anns = anns

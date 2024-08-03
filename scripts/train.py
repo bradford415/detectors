@@ -89,7 +89,6 @@ def main(base_config_path: str, model_config_path):
     # Dictionary of logging parameters; used to log training and evaluation progress after certain intervals
     logging_intervals = base_config["logging"]
 
-
     # Configure logger that prints to a log file and stdout
     logging.basicConfig(
         level=logging.INFO,
@@ -112,9 +111,9 @@ def main(base_config_path: str, model_config_path):
     }
 
     if use_cuda:
-        log.info(f"Using %d GPU(s): ", len(base_config['cuda']['gpus']))
+        log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
         for gpu in range(len(base_config["cuda"]["gpus"])):
-            print(f"    -{torch.cuda.get_device_name(gpu)}")
+            log.info("    -%s", torch.cuda.get_device_name(gpu))
 
         cuda_kwargs = {
             "num_workers": base_config["cuda"]["num_workers"],
@@ -124,7 +123,7 @@ def main(base_config_path: str, model_config_path):
         train_kwargs.update(cuda_kwargs)
         val_kwargs.update(cuda_kwargs)
     else:
-        print("Using CPU")
+        log.info("Using CPU")
 
     dataset_kwargs = base_config["dataset"]
     dataset_train = dataset_map[base_config["dataset_name"]](
@@ -176,7 +175,9 @@ def main(base_config_path: str, model_config_path):
         lr_drop=train_args["lr_drop"],
     )
 
-    trainer = Trainer(output_path=str(output_path), device=device, logging_intervals = logging_intervals)
+    trainer = Trainer(
+        output_path=str(output_path), device=device, logging_intervals=logging_intervals
+    )
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 

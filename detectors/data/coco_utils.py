@@ -1,3 +1,5 @@
+import contextlib
+import os
 from typing import Any, Dict, Tuple
 
 import numpy as np
@@ -244,7 +246,6 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
                   2. yolo: [center_x, center_y, w, h]
                   3. voc: TODO
     """
-    print("in function convert_to_coco_api...")
     coco_ds = COCO()
     # annotation IDs need to start at 1, not 0, see torchvision issue #1530
     ann_id = 1
@@ -300,5 +301,8 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
             ann_id += 1
     dataset["categories"] = [{"id": i} for i in sorted(categories)]
     coco_ds.dataset = dataset
-    coco_ds.createIndex()
+    # suppress pycocotools prints
+    with open(os.devnull, "w") as devnull:
+        with contextlib.redirect_stdout(devnull):
+            coco_ds.createIndex()
     return coco_ds

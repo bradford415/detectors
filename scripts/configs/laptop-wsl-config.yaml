@@ -14,7 +14,7 @@ input_data: "data/input.txt"
 output_path: "output"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
-exp_name: "developing"
+exp_name: "development"
 
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetectionMiniTrain"
