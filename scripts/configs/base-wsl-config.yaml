@@ -6,7 +6,7 @@
 debug_mode: True
 
 # Root directory of your project; type "pwd" in the command line to find it
-root_dir: "C:/Users/bsele/Documents/Programming/machine-learning/detectors"
+root_dir: "/home/bselee/programming/detectors"
 
 input_data: "data/input.txt"
 
@@ -56,8 +56,8 @@ cuda:
 # Logging parameters
 logging:
 
-  # Estimate loss every eval_iters iterations
-  eval_interval: 100
+  # Log the train progress every n steps
+  train_steps_freq: 100
 
 # Reproducibility information
 reproducibility:
