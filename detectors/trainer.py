@@ -7,7 +7,9 @@ from typing import Any, Dict, Iterable
 import numpy as np
 import torch
 from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
 from torch import nn
+from torch.utils import data
 from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
@@ -50,36 +52,51 @@ class Trainer:
 
     def train(
         self,
-        model,
-        criterion,
-        dataloader_train,
-        dataloader_val,
-        optimizer,
-        scheduler,
-        start_epoch=0,
-        epochs=100,
-        ckpt_every=None,
+        model: nn.Module,
+        criterion: nn.Module,
+        dataloader_train: data.DataLoader,
+        dataloader_val: data.DataLoader,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler,
+        start_epoch: int = 1,
+        epochs: int = 100,
+        ckpt_every: int = None,
     ):
-        """Train a model
-        ## TODO
+        """Trains a model
+
+        Specifically, this method trains a model for n epochs and evaluates on the validation set.
+        A model checkpoint is saved at user-specified intervals
+
         Args:
-            model:
-            optimizer:
-            ckpt_every:
+            model: A pytorch model to be trained
+            criterion: The loss function to use for training 
+            dataloader_train: Torch dataloader to loop through the train dataset 
+            dataloader_val: Torch dataloader to loop through the val dataset
+            optimizer: Optimizer which determines how to update the weights
+            scheduler: Scheduler which determines how to change the learning rate
+            start_epoch: Epoch to start the training on; starting at 1 is a good default because it makes
+                         checkpointing and calculations more intuitive
+            epochs: The epoch to end training on; unless starting from a check point, this will be the number of epochs to train for
+            ckpt_every: Save the model after n epochs
         """
         log.info("\nTraining started\n")
-        start_time = time.time()
+        total_train_start_time = time.time()
 
         # Starting the epoch at 1 makes calculations more intuitive
-        start_epoch = 1  # Once checkpointing is implemented we can overwrite this value
         for epoch in range(start_epoch, epochs):
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
+            
+            # Track the time it takes for one epoch (train and val)
+            one_epoch_start_time = time.time()
+
+            # Train one epoch
             train_stats = self._train_one_epoch(
                 model, criterion, dataloader_train, optimizer, epoch
             )
             scheduler.step()
 
-            test_stats, coco_evaluator = self._evaluate(
+            # Evaluate the model on the validation set
+            coco_evaluator = self._evaluate(
                 model, criterion, dataloader_val
             )
 
@@ -95,14 +112,33 @@ class Trainer:
                     save_path=ckpt_path,
                 )
 
-            total_time = time.time() - start_time
-            total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-            log.info("Training time %s", total_time_str)
-            breakpoint()
             # Extracts list of the final AP and AR valus reported
             bbox_stats = coco_evaluator.coco_eval["bbox"].stats
-            breakpoint()
-            log.info("%s", bbox_stats)
+
+            log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
+            log.info("train\t%-10s =  %-15.4f", "AP50",bbox_stats[1])
+            log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
+            log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
+            log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
+            log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
+            log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
+            log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
+            log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
+            log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
+            log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
+            log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
+
+            # Current epoch time (train/val)
+            one_epoch_time = time.time() - one_epoch_start_time
+            print(one_epoch_time)
+            one_epoch_time_str = str(datetime.timedelta(seconds=int(one_epoch_time)))
+            log.info("Time for train & val this epoch  (h:mm:ss): %s", one_epoch_time_str)
+
+        # Entire training time
+        total_time = time.time() - total_train_start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        log.info("Training time for %d epochs (h:mm:ss): %s ", start_epoch - epochs, total_time_str)
+
 
     def _train_one_epoch(
         self,
@@ -139,7 +175,7 @@ class Trainer:
 
             if steps % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
-                    "epoch: %d\titer: %d/%d\tloss: %.4f",
+                    "\nepoch: %d\titer: %d/%d\tloss: %.4f",
                     epoch,
                     steps,
                     len(dataloader_train),
@@ -157,7 +193,7 @@ class Trainer:
         model: nn.Module,
         criterion: nn.Module,
         dataloader_val: Iterable,
-    ):
+    ) -> COCOeval:
         """A single forward pass to evluate the val set after training an epoch
 
         Args:
@@ -186,6 +222,8 @@ class Trainer:
             # TODO: These should all be between 0-1 but some look greater than 1, need to investigate
             bbox_preds, class_conf = model(samples, inference=True)
 
+            # TODO, might have to change the output of the bboxes
+
             # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
             #    bbox_predictions, targets
             # )
@@ -208,12 +246,9 @@ class Trainer:
 
         # Accumulate predictions from all processes
         coco_evaluator.accumulate()
-        ################### START HERE and figure out how to log to the log file ####################
-        breakpoint()
-        #### 
         coco_evaluator.summarize()
 
-        return test_stats, coco_evaluator
+        return coco_evaluator
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

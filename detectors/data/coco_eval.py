@@ -67,7 +67,6 @@ class CocoEvaluator(object):
             coco_eval.accumulate()
 
     def summarize(self):
-        breakpoint()
         for iou_type, coco_eval in self.coco_eval.items():
             print("IoU metric: {}".format(iou_type))
             coco_eval.summarize()
