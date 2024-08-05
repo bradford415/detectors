@@ -69,8 +69,8 @@ class Trainer:
 
         Args:
             model: A pytorch model to be trained
-            criterion: The loss function to use for training 
-            dataloader_train: Torch dataloader to loop through the train dataset 
+            criterion: The loss function to use for training
+            dataloader_train: Torch dataloader to loop through the train dataset
             dataloader_val: Torch dataloader to loop through the val dataset
             optimizer: Optimizer which determines how to update the weights
             scheduler: Scheduler which determines how to change the learning rate
@@ -85,7 +85,7 @@ class Trainer:
         # Starting the epoch at 1 makes calculations more intuitive
         for epoch in range(start_epoch, epochs):
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
-            
+
             # Track the time it takes for one epoch (train and val)
             one_epoch_start_time = time.time()
 
@@ -96,9 +96,7 @@ class Trainer:
             scheduler.step()
 
             # Evaluate the model on the validation set
-            coco_evaluator = self._evaluate(
-                model, criterion, dataloader_val
-            )
+            coco_evaluator = self._evaluate(model, criterion, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch) % ckpt_every == 0:
@@ -116,7 +114,7 @@ class Trainer:
             bbox_stats = coco_evaluator.coco_eval["bbox"].stats
 
             log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
-            log.info("train\t%-10s =  %-15.4f", "AP50",bbox_stats[1])
+            log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
             log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
             log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
             log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
@@ -132,13 +130,16 @@ class Trainer:
             one_epoch_time = time.time() - one_epoch_start_time
             print(one_epoch_time)
             one_epoch_time_str = str(datetime.timedelta(seconds=int(one_epoch_time)))
-            log.info("Time for train & val this epoch  (h:mm:ss): %s", one_epoch_time_str)
+            log.info("\nEpcoh time  (h:mm:ss): %s", one_epoch_time_str)
 
         # Entire training time
         total_time = time.time() - total_train_start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        log.info("Training time for %d epochs (h:mm:ss): %s ", start_epoch - epochs, total_time_str)
-
+        log.info(
+            "Training time for %d epochs (h:mm:ss): %s ",
+            start_epoch - epochs,
+            total_time_str,
+        )
 
     def _train_one_epoch(
         self,
@@ -173,11 +174,11 @@ class Trainer:
                 bbox_predictions, targets
             )
 
-            if steps % self.log_intervals["train_steps_freq"] == 0:
+            if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
-                    "\nepoch: %d\titer: %d/%d\tloss: %.4f",
+                    "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
                     epoch,
-                    steps,
+                    steps + 1,
                     len(dataloader_train),
                     final_loss.item(),
                 )
@@ -185,7 +186,6 @@ class Trainer:
             # Calculate gradients and updates weights
             final_loss.backward()
             optimizer.step()
-            break
 
     @torch.no_grad()
     def _evaluate(
@@ -241,6 +241,13 @@ class Trainer:
             evaluator_time = time.time()
             coco_evaluator.update(results)
             evaluator_time = time.time() - evaluator_time
+
+            if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
+                log.info(
+                    "val steps:%d/%-10d ",
+                    steps+1,
+                    len(dataloader_val),
+                )
 
         coco_evaluator.synchronize_between_processes()
 

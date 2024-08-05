@@ -56,6 +56,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         self.prepare = PreprocessCoco()
 
+        # Substantially reduces the dataset size to quickly test code
         if debug_mode:
             self.ids = self.ids[:5]
 

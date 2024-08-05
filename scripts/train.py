@@ -133,14 +133,18 @@ def main(base_config_path: str, model_config_path):
         dataset_split="val", debug_mode=base_config["debug_mode"], **dataset_kwargs
     )
 
+    # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
+    # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
     dataloader_train = DataLoader(
         dataset_train,
         collate_fn=collate_fn,
+        drop_last=True,
         **train_kwargs,
     )
     dataloader_val = DataLoader(
         dataset_val,
         collate_fn=collate_fn,
+        drop_last=True,
         **val_kwargs,
     )
 
@@ -160,7 +164,12 @@ def main(base_config_path: str, model_config_path):
     model = detectors_map[model_config["detector"]](**model_components)
     model.to(device)
 
-    criterion = YoloV4Loss(anchors=model_config["priors"]["anchors"], device=device)
+    # For the YoloV4Loss function, if the batch size is different than the
+    criterion = YoloV4Loss(
+        anchors=model_config["priors"]["anchors"],
+        batch_size=base_config["train"]["batch_size"],
+        device=device,
+    )
 
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}

@@ -50,7 +50,7 @@ class YoloV4Loss(nn.Module):
            and the ground-truth label confidence probability
     """
 
-    def __init__(self, anchors, n_classes=80, n_anchors=3, device=None, batch=2):
+    def __init__(self, anchors, batch_size, n_classes=80, n_anchors=3, device=None):
         """TODO
 
         Args:
@@ -60,6 +60,7 @@ class YoloV4Loss(nn.Module):
         self.device = device
         self.strides = [8, 16, 32]
         image_size = 512
+        self.batch_size = batch_size
         self.n_classes = n_classes
         self.n_anchors = n_anchors
 
@@ -121,12 +122,12 @@ class YoloV4Loss(nn.Module):
             # Create x & y grid of feature map pixel indices (B, num_anchors, H/stride, W/stride)
             grid_x = (
                 torch.arange(feature_map_sizes, dtype=torch.float)
-                .repeat(batch, 3, feature_map_sizes, 1)
+                .repeat(self.batch_size, 3, feature_map_sizes, 1)
                 .to(device)
             )
             grid_y = (
                 torch.arange(feature_map_sizes, dtype=torch.float)
-                .repeat(batch, 3, feature_map_sizes, 1)
+                .repeat(self.batch_size, 3, feature_map_sizes, 1)
                 .permute(0, 1, 3, 2)
                 .to(device)
             )
@@ -134,13 +135,13 @@ class YoloV4Loss(nn.Module):
             # Create grid of the w & h of each anchor box w/ size of the feature maps (B, num_anchors, H/stride, W/stride)
             anchor_w = (
                 torch.from_numpy(masked_anchors[:, 0])
-                .repeat(batch, feature_map_sizes, feature_map_sizes, 1)
+                .repeat(self.batch_size, feature_map_sizes, feature_map_sizes, 1)
                 .permute(0, 3, 1, 2)
                 .to(device)
             )
             anchor_h = (
                 torch.from_numpy(masked_anchors[:, 1])
-                .repeat(batch, feature_map_sizes, feature_map_sizes, 1)
+                .repeat(self.batch_size, feature_map_sizes, feature_map_sizes, 1)
                 .permute(0, 3, 1, 2)
                 .to(device)
             )
@@ -156,7 +157,6 @@ class YoloV4Loss(nn.Module):
         self,
         pred: list[torch.Tensor],
         labels: list[dict],
-        batch_size,
         f_map_size,
         num_pred_ch,
         output_id,
@@ -175,7 +175,6 @@ class YoloV4Loss(nn.Module):
                   (B, n_anchors, H, W, bbox_pred_coords)
             labels: Labels scaled labels for all images in the batch;
                     includes a lot of information but moset notably: bbox_coords, class labels, etc...
-            batch_size: TODO; remove this parameter and extract batch from pred.shape;
             f_map_size: Feature map dimensions at specific output; YoloV4 has 3 different outputs each at a different resolution
             num_pred_ch: Number of predictions per cell; 5 + num_classes
             output_id: The index of the output feature map scale; since YoloV4 has 3 outputs, the possible indices are [0, 1, 2]
@@ -193,24 +192,25 @@ class YoloV4Loss(nn.Module):
         #   "Unlike faster r-cnn our system only assigns one bounding box prior for each ground truth
         #    object. If a bounding box prior is not assigned to a ground
         #    truth object it incurs no loss for coordinate or class predictions, only objectness."
+
         tgt_mask = torch.zeros(
-            batch_size, self.n_anchors, f_map_size, f_map_size, 4 + self.n_classes
+            self.batch_size, self.n_anchors, f_map_size, f_map_size, 4 + self.n_classes
         ).to(device=self.device)
 
         # Binary object mask used to set the predictions objectess score (index 4) to 0 if it surpasses the self.iou_ignore_threshold;
         # (B, num_cell_preds, out_H, out_W);
-        obj_mask = torch.ones(batch_size, self.n_anchors, f_map_size, f_map_size).to(
-            device=self.device
-        )
+        obj_mask = torch.ones(
+            self.batch_size, self.n_anchors, f_map_size, f_map_size
+        ).to(device=self.device)
 
         # TODO: comment this once I know what it does (B, num_anchors,  out_h, out_w)
         tgt_scale = torch.zeros(
-            batch_size, self.n_anchors, f_map_size, f_map_size, 2
+            self.batch_size, self.n_anchors, f_map_size, f_map_size, 2
         ).to(self.device)
 
         # Tensor to store the ground truth t_x, t_y, t_w, t_h, t_o and the class label (a 1 in the class position)
         target = torch.zeros(
-            batch_size, self.n_anchors, f_map_size, f_map_size, num_pred_ch
+            self.batch_size, self.n_anchors, f_map_size, f_map_size, num_pred_ch
         ).to(self.device)
 
         # Get the maximum number of objects in an image for the entire batch;
@@ -251,7 +251,7 @@ class YoloV4Loss(nn.Module):
         truth_cell_y_all = scaled_truth_cy_all.to(torch.int16).cpu().numpy()
 
         # Loop through each image in the batch
-        for batch in range(batch_size):
+        for batch in range(self.batch_size):
             num_objs_img = int(n_objs[batch])
 
             # skip image if no labels in image
@@ -443,6 +443,8 @@ class YoloV4Loss(nn.Module):
             feature_size = bbox_predictions.shape[2]
             num_pred_ch = 5 + self.n_classes
 
+            assert batchsize == self.batch_size
+
             # (B, num_anchors, ch_per_anchor, H, W); num_anchors is basically the number of bounding box predictions per cell
             bbox_predictions = bbox_predictions.view(
                 batchsize, self.n_anchors, num_pred_ch, feature_size, feature_size
@@ -470,7 +472,7 @@ class YoloV4Loss(nn.Module):
             pred[..., 3] = torch.exp(pred[..., 3]) * self.anchor_h[bbox_id]
 
             obj_mask, tgt_mask, tgt_scale, target = self.build_ground_truth_tensors(
-                pred, labels, batchsize, feature_size, num_pred_ch, bbox_id
+                pred, labels, feature_size, num_pred_ch, bbox_id
             )
 
             # Loss calculation
