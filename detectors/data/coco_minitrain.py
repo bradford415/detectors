@@ -124,6 +124,7 @@ def make_coco_transforms(dataset_split):
     if dataset_split == "val":
         return T.Compose(
             [
+                ## TODO: Implement padding to run multiple batches
                 T.RandomResize([800], max_size=1333),
                 # T.RandomResize(scales),
                 T.ToTensorNoNormalization(),

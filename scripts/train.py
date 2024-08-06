@@ -54,12 +54,31 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
     # Convert a batch of images and annoations [(image, annoations), (image, annoations), ...]
     # to (image, image), (annotations, annotations), ... ; this operation is called iterable unpacking
     images, annotations = zip(*batch)  # images (C, H, W)
+    
+    # The below padding method is from the DETR repo here:
+    # https://github.com/facebookresearch/detr/blob/29901c51d7fe8712168b8d0d64351170bc0f83e0/util/misc.py#L307
+    
+    # Zero pad images on the right and bottom of the image with the max h/w of the batch;
+    # this allows us to batch images of different sizes together;
+    # in the current implementation, padding should only be applied for the validation set
+    channels, max_h, max_w = images[0].shape
+    for image in images[1:]:
+        if image.shape[1] > max_h:
+            max_h = image.shape[1]
+        if image.shape[2] > max_w:
+            max_w = image.shape[2]
+    
+    # Initalize tensor of zeros for 0-padding and copy the images into the top_left of each padded batch
+    batch_size = len(batch)
+    padded_images = torch.zeros(batch_size, channels, max_h, max_w) # (B, C, batch_max_H, batch_max_W)
+    for img, padded_img in zip(images, padded_images):
+        padded_img[:img.shape[0], :img.shape[1], :img.shape[2]].copy_(img)
 
     # (B, C, H, W)
-    images = torch.stack(images, dim=0)
+    #images = torch.stack(images, dim=0) # This was written before the padding above
 
     # This is what will be returned in the main train for loop (samples, targets)
-    return images, annotations
+    return padded_images, annotations
 
 
 def main(base_config_path: str, model_config_path):
