@@ -241,7 +241,9 @@ class YoloV4Loss(nn.Module):
         n_objs = (gt_labels.sum(dim=2) > 0).sum(dim=1)
 
         # Resize ground truth boxes to match the output dimensions by divding by the stride; stride = input_dims/final_output_dims
-        # transforms.Normalize already converted the gt boxes to yolo format ([cx, cy, w, h]), so we do not need to calcuate that here
+        # The starting bbox labels are in coco format [tl_x, tl_y, w, h], then data.coco_utisl.PreprocessCoco() converts
+        # the bbox labels [tl_x, tl_y, br_x, br_y], and finally data.transforms.Normalize()
+        # converts to bbox labels to yolo format ([cx, cy, w, h]), so we do not need to calcuate that here
         scaled_truth_cx_all = gt_labels[:, :, 0] / self.strides[output_id]
         scaled_truth_cy_all = gt_labels[:, :, 1] / self.strides[output_id]
         scaled_truth_w_all = gt_labels[:, :, 2] / self.strides[output_id]
