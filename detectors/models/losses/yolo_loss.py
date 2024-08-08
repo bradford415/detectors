@@ -272,7 +272,7 @@ class YoloV4Loss(nn.Module):
                 batch, :num_objs_img
             ]
 
-            # Extract gt w, h for the current batch
+            # Extract gt cx, cy for the current batch
             truth_cell_x = truth_cell_x_all[batch, :num_objs_img]
             truth_cell_y = truth_cell_y_all[batch, :num_objs_img]
 
