@@ -252,6 +252,7 @@ class YoloV4Loss(nn.Module):
         truth_cell_x_all = scaled_truth_cx_all.to(torch.int16).cpu().numpy()
         truth_cell_y_all = scaled_truth_cy_all.to(torch.int16).cpu().numpy()
 
+        # TODO: This comment is actually wrong I think, need to relook into it; I think its grabbing the best 3 anchor boxes that match with the ground truth
         # Loop through each image in the batch
         for batch in range(self.batch_size):
             num_objs_img = int(n_objs[batch])
