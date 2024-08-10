@@ -414,7 +414,9 @@ class YoloV4Loss(nn.Module):
         n_objs = (gt_labels.sum(dim=2) > 0).sum(dim=1)
 
         # Resize ground truth boxes to match the output dimensions by divding by the stride; stride = input_dims/final_output_dims
-        # transforms.Normalize already converted the gt boxes to yolo format ([cx, cy, w, h]), so we do not need to calcuate that here
+        # The starting bbox labels are in coco format [tl_x, tl_y, w, h], then data.coco_utisl.PreprocessCoco() converts
+        # the bbox labels [tl_x, tl_y, br_x, br_y], and finally data.transforms.Normalize()
+        # converts to bbox labels to yolo format ([cx, cy, w, h]), so we do not need to calcuate that here
         scaled_truth_cx_all = gt_labels[:, :, 0] / self.strides[output_id]
         scaled_truth_cy_all = gt_labels[:, :, 1] / self.strides[output_id]
         scaled_truth_w_all = gt_labels[:, :, 2] / self.strides[output_id]
@@ -423,6 +425,7 @@ class YoloV4Loss(nn.Module):
         truth_cell_x_all = scaled_truth_cx_all.to(torch.int16).cpu().numpy()
         truth_cell_y_all = scaled_truth_cy_all.to(torch.int16).cpu().numpy()
 
+        # TODO: This comment is actually wrong I think, need to relook into it; I think its grabbing the best 3 anchor boxes that match with the ground truth
         # Loop through each image in the batch
         for batch in range(self.batch_size):
             num_objs_img = int(n_objs[batch])
@@ -442,7 +445,7 @@ class YoloV4Loss(nn.Module):
                 batch, :num_objs_img
             ]
 
-            # Extract gt w, h for the current batch
+            # Extract gt cx, cy for the current batch
             truth_cell_x = truth_cell_x_all[batch, :num_objs_img]
             truth_cell_y = truth_cell_y_all[batch, :num_objs_img]
 
