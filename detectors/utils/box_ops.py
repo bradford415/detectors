@@ -89,31 +89,31 @@ def masks_to_boxes(masks):
     return torch.stack([x_min, y_min, x_max, y_max], 1)
 
 
-def get_region_boxes(boxes_and_confs):
-    """Unpack bboxes and confidences and combine into 1 tensor of boxes
-    and 1 tensor of confidences.
+# def get_region_boxes(boxes_and_confs):
+#     """Unpack bboxes and confidences and combine into 1 tensor of boxes
+#     and 1 tensor of confidences.
 
-    Args:
-        boxes_and_confs: bboxes and cls confidences from YoloLayer
+#     Args:
+#         boxes_and_confs: bboxes and cls confidences from YoloLayer
 
-    Returns:
-        1. Tensor of bboxes (B, num_pred_1 + num_pred_2 + num_pred_3, 1, 4)
-        2. Tensor of confidences (B, num_pred_1 + num_pred_2 + num_pred_3, num_classes)
-    """
+#     Returns:
+#         1. Tensor of bboxes (B, num_pred_1 + num_pred_2 + num_pred_3, 1, 4)
+#         2. Tensor of confidences (B, num_pred_1 + num_pred_2 + num_pred_3, num_classes)
+#     """
 
-    boxes_list = []
-    confs_list = []
+#     boxes_list = []
+#     confs_list = []
 
-    for bbox, confidence in boxes_and_confs:
-        boxes_list.append(bbox)
-        confs_list.append(confidence)
+#     for bbox, confidence in boxes_and_confs:
+#         boxes_list.append(bbox)
+#         confs_list.append(confidence)
 
-    # boxes: [batch, num1 + num2 + num3, 1, 4]
-    # confs: [batch, num1 + num2 + num3, num_classes]
-    boxes = torch.cat(boxes_list, dim=1)
-    confs = torch.cat(confs_list, dim=1)
+#     # boxes: [batch, num1 + num2 + num3, 1, 4]
+#     # confs: [batch, num1 + num2 + num3, num_classes]
+#     boxes = torch.cat(boxes_list, dim=1)
+#     confs = torch.cat(confs_list, dim=1)
 
-    return (boxes, confs)
+#     return (boxes, confs)
 
 
 def bbox_ious(boxes1, boxes2, x1y1x2y2=True):
@@ -177,12 +177,12 @@ def get_region_boxes(boxes_and_confs: List[Tuple]):
 
 
 def val_preds_to_img_size(
-    image: torch.Tensor, targets, bbox_preds: torch.Tensor, class_conf: torch.Tensor
+    images: torch.Tensor, targets, bbox_preds: torch.Tensor, class_conf: torch.Tensor
 ):
     """Scale the bounding box predictions to the original image size
 
     Args:
-        image: Input image to the model
+        images: Images that were input to the model
         targets: Ground truth labels
         bbox_preds: Bounding box outputs during evaluation
                     (B, scale_1_w*h + scale_2_w*h + scale_3_w*h, 1, 4)
@@ -193,8 +193,8 @@ def val_preds_to_img_size(
     """
     # TODO
     result = {}
-    for img, target, boxes, confs in zip(image, targets, bbox_preds, class_conf):
-        img_height, img_width = image.shape[:2]
+    for img, target, boxes, confs in zip(images, targets, bbox_preds, class_conf):
+        img_height, img_width = img.shape[:2]
         # boxes = output[...,:4].copy()  # output boxes in yolo format
         boxes = boxes.squeeze(2).cpu().detach().numpy()
         boxes[..., 2:] = (

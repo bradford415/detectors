@@ -217,6 +217,7 @@ class Trainer:
                 {key: value.to(self.device) for key, value in t.items()}
                 for t in targets
             ]
+            breakpoint()
 
             # Inference outputs bbox_preds (cx, cy, w, h) and class confidences (num_classes);
             # TODO: These should all be between 0-1 but some look greater than 1, need to investigate
@@ -236,7 +237,7 @@ class Trainer:
 
             ## TODO: still VERY fuzzy on what the network actually predicts during validation and
             #        how we scale back to original image size
-            # breakpoint()
+            #breakpoint()
             ### START HERE
             evaluator_time = time.time()
             coco_evaluator.update(results)

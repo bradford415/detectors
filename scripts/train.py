@@ -12,8 +12,9 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.coco_utils import get_coco_object
 from detectors.models.backbones import backbone_map
-from detectors.models.losses.yolo_loss import YoloV4Loss
-from detectors.models.yolov4 import YoloV4
+from detectors.models.losses.yolo_loss import YoloV4Loss, Yolo_loss
+from detectors.models.yolov4 import YoloV4, Yolov4_pytorch
+from detectors.models.darknet import Darknet
 from detectors.trainer import Trainer
 from detectors.utils import misc
 
@@ -29,8 +30,6 @@ optimizer_map = {
 
 loss_map = {
     "cross_entropy": nn.CrossEntropyLoss(),
-    "adamw": torch.optim.AdamW,
-    "sgd": torch.optim.SGD,
 }
 
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
@@ -180,15 +179,19 @@ def main(base_config_path: str, model_config_path):
     }
 
     # Initialize detection model and transfer to GPU
-    model = detectors_map[model_config["detector"]](**model_components)
+    #model = detectors_map[model_config["detector"]](**model_components)
+    #model = Darknet("scripts/configs/yolov4.cfg")
+    model = Yolov4_pytorch(n_classes=80,inference=False)
     model.to(device)
 
     # For the YoloV4Loss function, if the batch size is different than the
-    criterion = YoloV4Loss(
-        anchors=model_config["priors"]["anchors"],
-        batch_size=base_config["train"]["batch_size"],
-        device=device,
-    )
+    # criterion = YoloV4Loss(
+    #     anchors=model_config["priors"]["anchors"],
+    #     batch_size=base_config["train"]["batch_size"],
+    #     device=device,
+    # )
+    
+    criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
 
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}
