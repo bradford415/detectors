@@ -43,12 +43,16 @@ def yolo_forward_dynamic(
     # H = output.size(2)
     # W = output.size(3)
 
-    # Extract prediction offsets (tx,ty), width/height, objectness, and class confidence by slicing the head output
-    # Each list will have length of num_anchors
+    # Lists to store prediction offsets (tx,ty), width/height, objectness, and class confidence 
+    # by slicing the head output
     bxy_list = []
     bwh_list = []
     object_confs_list = []
     cls_confs_list = []
+
+    # Each list will have length of num_anchors becuase each cell predicts num_anchors bboxes;
+    # 1 bbox prediction has length (5 + num_classes), so if we let each cell predict 3 bboxes per cell,
+    # the last dimension will have length 3 * (5 + num_classes), so each list alement will have (5 + num_classes)
     for i in range(num_anchors):
         begin = i * (5 + num_classes)
         end = (i + 1) * (5 + num_classes)
@@ -86,22 +90,25 @@ def yolo_forward_dynamic(
     # NOTE: view/reshape only changes the shape and the way you access the tensor, it does not change the memory layout.
     #       permute/transpose DOES change the memory layout so this will affect how the data is processed
 
-    # Shape: [batch, num_anchors, num_classes, H * W] --> [batch, num_anchors * H * W, num_classes]
+    # permute: (batch, num_anchors, num_classes, H * W]) -> (batch, num_anchors, H * W, num_classes)
+    # reshape: (batch, num_anchors, H * W, num_classes) -> (batch, num_anchors * H * W, num_classes)
     cls_confs = cls_confs.permute(0, 1, 3, 2).reshape(
         output.size(0), num_anchors * output.size(2) * output.size(3), num_classes
     )
 
-    # These next few equations are described in the YoloV2 paper in figure 3
+    # These next few equations are described in the YoloV2 paper in figure 3.
     # Contrain bxy to [0, 1] with sigmoid; this represents the center of the bounding box relative to the grid cell
     # This is only computes the first part of bx and by because we still need to add CxCy
     bxy = torch.sigmoid(bxy) * scale_x_y - 0.5 * (
         scale_x_y - 1
     )  # scale_x_y in this case is 1
 
-    # Scale the w/h predictions by computing the first part of bw and bh, we still need to multiply by anchor dimensions
+    # Scale the w/h predictions by computing the first part of bw and bh, we will still need to multiply by anchor dimensions.
     # The e^bwh is explained in the link below; basically, this is how the authors decided to parametize the scaling because it has nice properties, it does not have to be done like this
     # https://stats.stackexchange.com/questions/345251/coordinate-prediction-parameterization-in-object-detection-networks/345267#345267
     bwh = torch.exp(bwh)
+
+    # Similarly, scale the objectness and class confidences between [0,1] 
     object_confs = torch.sigmoid(object_confs)
     cls_confs = torch.sigmoid(cls_confs)
 
@@ -150,15 +157,18 @@ def yolo_forward_dynamic(
     # Apply C-x, C-y, P-w, P-h; add grid offsets and multiply anchor dimensions to predictions
     for i in range(num_anchors):
         ii = i * 2
-        # Shape: [batch, 1, H, W]
+
+        # Add x/y grid offsets to the x preds and store the result 
+        # bx: (batch, 1, H, W), by: (batch, 1, H, W)
         bx = bxy[:, ii : ii + 1] + torch.tensor(
             grid_x, device=device, dtype=torch.float32
         )  # grid_x.to(device=device, dtype=torch.float32)
-        # Shape: [batch, 1, H, W]
         by = bxy[:, ii + 1 : ii + 2] + torch.tensor(
             grid_y, device=device, dtype=torch.float32
         )  # grid_y.to(device=device, dtype=torch.float32)
-        # Shape: [batch, 1, H, W]
+        
+        # Multiply w/h anchor by the predictions to scale them and store result (batch, 1, H, W)
+        # bw: (batch, 1, H, W), bh: (batch, 1, H, W)
         bw = bwh[:, ii : ii + 1] * anchor_w[i]
         # Shape: [batch, 1, H, W]
         bh = bwh[:, ii + 1 : ii + 2] * anchor_h[i]
@@ -176,11 +186,12 @@ def yolo_forward_dynamic(
     bh = torch.cat(bh_list, dim=1)
 
     # Concat [final x coord, final width] and [final y coord, final height]
-    # bx_bw, by_bh(B, 2 * num_anchors, H, W)
+    # bx_bw, by_bh (B, 2 * num_anchors, H, W)
     bx_bw = torch.cat((bx, bw), dim=1)
     by_bh = torch.cat((by, bh), dim=1)
 
-    # Normalize coordinates to [0, 1]
+    # Normalize coordinates to [0, 1]; 
+    # reminder output shape is (B, C, H, W) where H/W are downsampled by the stride
     bx_bw /= output.size(3)
     by_bh /= output.size(2)
 
@@ -198,7 +209,8 @@ def yolo_forward_dynamic(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1
     )
 
-    # Get the x and y coordinates of the upper left and lower right of the bounding box prediction
+    # Get the x and y coordinates of the upper left and lower right of the bounding box prediction;
+    # Currently, bx/by are the center coordinate predictions;
     # The coordinates are still normalized at this point and may contain negatives
     bx1 = bx - bw * 0.5
     by1 = by - bh * 0.5
@@ -217,16 +229,19 @@ def yolo_forward_dynamic(
     # cls_confs: [batch, num_anchors * H * W, num_classes]
     # det_confs: [batch, num_anchors * H * W]
 
+    # (B, num_anchors * H * W, 1)
     object_confs = object_confs.view(
         output.size(0), num_anchors * output.size(2) * output.size(3), 1
     )
 
+    # Get final confidence scores by multiplying objectness by the class confidences
     confs = cls_confs * object_confs
 
     # Final prediction shapes
     # boxes: [batch, num_anchors * H * W, 1, 4]
     # confs: [batch, num_anchors * H * W, num_classes]
 
+    ################### START HERE AND SEE WHERE IT TAKES US ################
     return boxes, confs
 
 
@@ -306,7 +321,6 @@ def yolo_forward_dynamic_pytorch(output, conf_thresh, num_classes, anchors, num_
     bwh_list = []
     det_confs_list = []
     cls_confs_list = []
-    breakpoint()
 
     for i in range(num_anchors):
         begin = i * (5 + num_classes)

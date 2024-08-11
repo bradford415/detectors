@@ -49,7 +49,7 @@ validation:
 cuda:
 
   # List of GPU devices to use
-  gpus: [0]
+  gpus: [] #[0]
 
   num_workers: 0
 

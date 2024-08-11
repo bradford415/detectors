@@ -179,9 +179,9 @@ def main(base_config_path: str, model_config_path):
     }
 
     # Initialize detection model and transfer to GPU
-    #model = detectors_map[model_config["detector"]](**model_components)
+    model = detectors_map[model_config["detector"]](**model_components)
     #model = Darknet("scripts/configs/yolov4.cfg")
-    model = Yolov4_pytorch(n_classes=80,inference=False)
+    #model = Yolov4_pytorch(n_classes=80,inference=False)
     model.to(device)
 
     # For the YoloV4Loss function, if the batch size is different than the

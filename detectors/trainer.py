@@ -205,8 +205,8 @@ class Trainer:
         """
 
         model.eval()
-
-        val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="coco")
+        
+        val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="yolo")
         coco_evaluator = CocoEvaluator(
             val_coco_api, iou_types=["bbox"], bbox_format="coco"
         )

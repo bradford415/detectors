@@ -242,9 +242,9 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
             extract the dataset from the dataloader with dataloader.dataset
         bbox_fmt: The format of the bounding boxes i.e.,
                   what the elements of the bbox represent
-                  1. coco: [topleft_x, topleft_y, w, h]
-                  2. yolo: [center_x, center_y, w, h]
-                  3. voc: TODO
+                  1. voc: [topleft_x, topleft_y, botright_x, botright_y]
+                  2. coco: [topleft_x, topleft_y, w, h]
+                  3. yolo: [center_x, center_y, w, h]
     """
     coco_ds = COCO()
     # annotation IDs need to start at 1, not 0, see torchvision issue #1530
@@ -262,7 +262,12 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
         img_dict["width"] = img.shape[-1]
         dataset["images"].append(img_dict)
         bboxes = targets["boxes"]
-        # to coco format: xmin, ymin, w, h
+
+        # Convert to COCO format: tl_x, tl_y, w, h;
+        # bbox_fmt is the format that the bboxes are CURRENTLY in and then they 
+        # will be converted to coco format; in this implementation, the
+        # transform Normalize and ToTensorNoNormalize converts the bboxes to yolo, so for the evaluator
+        # we need to convert it back to coco format
         if bbox_fmt.lower() == "voc":  # xmin, ymin, xmax, ymax
             bboxes[:, 2:] -= bboxes[:, :2]
         elif bbox_fmt.lower() == "yolo":  # xcen, ycen, w, h
