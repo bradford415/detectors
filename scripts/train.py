@@ -185,13 +185,13 @@ def main(base_config_path: str, model_config_path):
     model.to(device)
 
     # For the YoloV4Loss function, if the batch size is different than the
-    # criterion = YoloV4Loss(
-    #     anchors=model_config["priors"]["anchors"],
-    #     batch_size=base_config["train"]["batch_size"],
-    #     device=device,
-    # )
+    criterion = YoloV4Loss(
+        anchors=model_config["priors"]["anchors"],
+        batch_size=base_config["train"]["batch_size"],
+        device=device,
+    )
     
-    criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
+    #criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
 
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}

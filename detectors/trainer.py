@@ -168,6 +168,7 @@ class Trainer:
             optimizer.zero_grad()
 
             # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
+            breakpoint()
             bbox_predictions = model(samples)
 
             final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
@@ -217,7 +218,6 @@ class Trainer:
                 {key: value.to(self.device) for key, value in t.items()}
                 for t in targets
             ]
-            breakpoint()
 
             # Inference outputs bbox_preds (cx, cy, w, h) and class confidences (num_classes);
             # TODO: These should all be between 0-1 but some look greater than 1, need to investigate

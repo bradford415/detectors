@@ -15,7 +15,6 @@ criterion_mean = nn.BCEWithLogitsLoss(reduction="mean")
 optimizer = optim.SGD(model.parameters(), lr=1e-1)
 
 for epoch in range(20):
-    breakpoint()
     optimizer.zero_grad()
     output = model(x)
     loss = criterion(output, y)  # (2, 5)

@@ -425,7 +425,7 @@ class YoloV4Loss(nn.Module):
         truth_cell_x_all = scaled_truth_cx_all.to(torch.int16).cpu().numpy()
         truth_cell_y_all = scaled_truth_cy_all.to(torch.int16).cpu().numpy()
 
-        # TODO: This comment is actually wrong I think, need to relook into it; I think its grabbing the best 3 anchor boxes that match with the ground truth
+        # TODO: This comment is might be wrong I think, need to relook into it; I think its grabbing the best 3 anchor boxes that match with the ground truth
         # Loop through each image in the batch
         for batch in range(self.batch_size):
             num_objs_img = int(n_objs[batch])
@@ -543,7 +543,9 @@ class YoloV4Loss(nn.Module):
                     tgt_mask[batch, best_anch, cell_y, cell_x, :] = 1
 
                     # Store the x, y offsets from the grid cell top_left coordinate;
-                    # Ex: grid_cell_x = 63 and x_prediction = 63.35 the value stored will be 0.35
+                    # Ex: grid_cell_x = 43 and x_gt = 43.35 the value stored will be 0.35
+                    # Even though the variables are the same, this works becuase convert to an integer
+                    # will truncate the floatW
                     target[batch, best_anch, cell_y, cell_x, 0] = scaled_truth_cx_all[
                         batch, img_object
                     ] - scaled_truth_cx_all[batch, img_object].to(torch.int16).to(
@@ -560,7 +562,6 @@ class YoloV4Loss(nn.Module):
                     # so we need to solve for it, or at least that's what I believe they're doing here;
                     # we can solve for t_w with: log(b_w/p_w) = t_w
                     # This is also expressed in the YoloV3 paper section 2.1: "This ground truth value can be easily computed by inverting the equations above."
-
                     target[batch, best_anch, cell_y, cell_x, 2] = torch.log(
                         scaled_truth_w_all[batch, img_object]
                         / torch.Tensor(self.masked_anchors[output_id])[
@@ -675,6 +676,7 @@ class YoloV4Loss(nn.Module):
             # YoloV3 paper section 2.1 mentions: "During training we use sum of squared error loss"
             # whcih would be the mse_loss with reduction="sum";
             # breakpoint() # for testing use index [0,2,63,4]
+            breakpoint()
             loss_xy += F.binary_cross_entropy(
                 input=bbox_predictions[..., :2],
                 target=target[..., :2],
