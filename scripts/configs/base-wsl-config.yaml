@@ -40,7 +40,7 @@ train:
 
     # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
     start_epoch: 1
-    epochs: 50
+    epochs: 100
 
     # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
     ckpt_every: 10

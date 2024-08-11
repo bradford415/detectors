@@ -674,7 +674,6 @@ class YoloV4Loss(nn.Module):
             # YoloV3 paper section 2.1 mentions: "During training we use sum of squared error loss"
             # whcih would be the mse_loss with reduction="sum";
             # breakpoint() # for testing use index [0,2,63,4]
-            breakpoint()
             loss_xy += F.binary_cross_entropy(
                 input=bbox_predictions[..., :2],
                 target=target[..., :2],

@@ -168,7 +168,6 @@ class Trainer:
             optimizer.zero_grad()
 
             # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
-            breakpoint()
             bbox_predictions = model(samples)
 
             final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
@@ -232,13 +231,6 @@ class Trainer:
             ## TODO: Comment this
             results = val_preds_to_img_size(samples, targets, bbox_preds, class_conf)
 
-            # TODO: placeholder; change later
-            test_stats = 5
-
-            ## TODO: still VERY fuzzy on what the network actually predicts during validation and
-            #        how we scale back to original image size
-            #breakpoint()
-            ### START HERE
             evaluator_time = time.time()
 
             # results is a dict containing:

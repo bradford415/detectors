@@ -180,6 +180,10 @@ def val_preds_to_img_size(
     images: torch.Tensor, targets, bbox_preds: torch.Tensor, class_conf: torch.Tensor
 ):
     """Scale the bounding box predictions to the original image size
+    
+    NOTE: The YoloV4 pytorch implementation resizes the validation/testing images to the size they were trained on (608,608) but
+          does not resize the targets. I believe this is okay to do since it will predict the bboxes on the resized image, but
+          then we can scale the predictions back to the original image size.
 
     Args:
         images: Images that were input to the model
@@ -192,7 +196,6 @@ def val_preds_to_img_size(
     Return: TODO
     """
     # TODO
-    breakpoint()
     result = {}
     for img, target, boxes, confs in zip(images, targets, bbox_preds, class_conf):
         img_height, img_width = img.shape[-2:]
