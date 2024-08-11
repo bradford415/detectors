@@ -192,14 +192,20 @@ def val_preds_to_img_size(
     Return: TODO
     """
     # TODO
+    breakpoint()
     result = {}
     for img, target, boxes, confs in zip(images, targets, bbox_preds, class_conf):
-        img_height, img_width = img.shape[:2]
+        img_height, img_width = img.shape[-2:]
         # boxes = output[...,:4].copy()  # output boxes in yolo format
-        boxes = boxes.squeeze(2).cpu().detach().numpy()
+        boxes = boxes.squeeze(2).cpu().detach().numpy() # There's 1 length dim in the 2nd dimension so I'm not sure what the squeeze is for
+
+        # Convert from [tl_x, tl_y, br_x, br_y] to [tl_x, tl_y, w, h]
         boxes[..., 2:] = (
             boxes[..., 2:] - boxes[..., :2]
-        )  # Transform [x1, y1, x2, y2] to [x1, y1, w, h]
+        )  
+        
+        # Since box predictions are between [0, 1] we can multiply by the input image
+        # w/h to scale the predictions back to the original size 
         boxes[..., 0] = boxes[..., 0] * img_width
         boxes[..., 1] = boxes[..., 1] * img_height
         boxes[..., 2] = boxes[..., 2] * img_width

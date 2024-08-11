@@ -27,7 +27,8 @@ def yolo_forward_dynamic(
 
     Returns:
         1. boxes: (B, num_anchors * H * W, 1, 4) Normalized bounding box predictions, predicts num_anchors per grid cell (H, W);
-                  grid cell -> size of final feature map ; 4 = normalized upper left and lower right bbox coordinates;
+                  grid cell -> size of final feature map; 
+                  4 = normalized upper left and lower right bbox coordinates;
                   the coordinates are not the size of input dimensions, they are normalized
         2. confs: (B, num_anchors * H * W, num_classes) confidences of each class in the ontology;
                   these are NOT probabilities because they do not sum to 1
@@ -104,8 +105,10 @@ def yolo_forward_dynamic(
     )  # scale_x_y in this case is 1
 
     # Scale the w/h predictions by computing the first part of bw and bh, we will still need to multiply by anchor dimensions.
+    # Reminder, the equation is b_wh = p_wh*e^(t_wh).
     # The e^bwh is explained in the link below; basically, this is how the authors decided to parametize the scaling because it has nice properties, it does not have to be done like this
     # https://stats.stackexchange.com/questions/345251/coordinate-prediction-parameterization-in-object-detection-networks/345267#345267
+ 
     bwh = torch.exp(bwh)
 
     # Similarly, scale the objectness and class confidences between [0,1] 

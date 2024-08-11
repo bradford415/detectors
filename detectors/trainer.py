@@ -219,8 +219,8 @@ class Trainer:
                 for t in targets
             ]
 
-            # Inference outputs bbox_preds (cx, cy, w, h) and class confidences (num_classes);
-            # TODO: These should all be between 0-1 but some look greater than 1, need to investigate
+            # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
+            # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
             bbox_preds, class_conf = model(samples, inference=True)
 
             # TODO, might have to change the output of the bboxes
@@ -240,6 +240,11 @@ class Trainer:
             #breakpoint()
             ### START HERE
             evaluator_time = time.time()
+
+            # results is a dict containing:
+            #   "img_id": {boxes: [], "scores": [], "labels", []}
+            # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
+            # and labels is the index of the maximum class probability; reminder
             coco_evaluator.update(results)
             evaluator_time = time.time() - evaluator_time
 

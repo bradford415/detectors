@@ -52,7 +52,6 @@ class Yolo_loss(nn.Module):
         target = torch.zeros(batchsize, self.n_anchors, fsize, fsize, n_ch).to(self.device)
 
         # labels = labels.cpu().data
-        #breakpoint()
         #nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
         nlabel = max([len(label["boxes"]) for label in labels])  # number of objects
         
@@ -584,7 +583,6 @@ class YoloV4Loss(nn.Module):
                     # remains 0 because it is not that object;
                     # the class predictions are after the first 5 elements in the last dimension, so index 5 would be the first object label
                     # if gt_labels[batch, img_object, 4] >= 80:
-                    # breakpoint()
                     target[
                         batch,
                         best_anch,

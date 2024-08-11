@@ -221,7 +221,6 @@ class Darknet(nn.Module):
                 #     boxes = self.models[ind](x)
                 #     out_boxes.append(boxes)
                 boxes = self.models[ind](x)
-
                 out_boxes.append(boxes)
             elif block['type'] == 'cost':
                 continue
@@ -229,7 +228,6 @@ class Darknet(nn.Module):
                 print('unknown type %s' % (block['type']))
 
         if self.training:
-
             return out_boxes
         else:
             return get_region_boxes(out_boxes)
