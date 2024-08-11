@@ -223,7 +223,6 @@ class Neck(nn.Module):
             downsample2: Feature map output from 2nd downsample block in backbone; largest feature map passed to Neck
             inference: If inferencing or not
         """
-        # breakpoint()
         x1 = self.conv1(input)
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
@@ -372,7 +371,6 @@ class Yolov4Head(nn.Module):
             y1 = self.yolo1(predictions_scale1)
             y2 = self.yolo2(predictions_scale2)
             y3 = self.yolo3(predictions_scale3)
-            breakpoint()
             return get_region_boxes([y1, y2, y3])
 
         else:
@@ -384,6 +382,20 @@ class YoloV4(nn.Module):
     """Yolov4 based on the architecture described here https://arxiv.org/pdf/2004.10934.pdf
 
     Yolov4 implementation details in paper section 3.4
+
+    Args:
+        TODO
+
+    Returns:
+        During training:
+            TODO
+        During inference:
+             A list of
+                1. bbox coordinate predictions for each output scale; 
+                   shape (B, sum([h*w for h, w in scales_hw]), 1, 4);
+                   4 = (tl_x, tl_y, br_x, br_y) and the coords have normalized by their respective scales h/w
+                2. confidence scores of shape (B, sum([h*w for h, w in scales_hw]), num_classes);
+                   the conf scores = objecteness_pred * class_conf_pred
     """
 
     def __init__(
