@@ -305,6 +305,7 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
             dataset["annotations"].append(ann)
             ann_id += 1
     dataset["categories"] = [{"id": i} for i in sorted(categories)]
+    #breakpoint()
     coco_ds.dataset = dataset
     # suppress pycocotools prints
     with open(os.devnull, "w") as devnull:

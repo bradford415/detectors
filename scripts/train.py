@@ -1,5 +1,6 @@
 import datetime
 import logging
+import tracemalloc
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
@@ -134,7 +135,7 @@ def main(base_config_path: str, model_config_path):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
 
         cuda_kwargs = {
-            "num_workers": base_config["cuda"]["num_workers"],
+            "num_workers": base_config["dataset"]["num_workers"],
             "pin_memory": True,
         }
 
@@ -143,7 +144,7 @@ def main(base_config_path: str, model_config_path):
     else:
         log.info("Using CPU")
 
-    dataset_kwargs = base_config["dataset"]
+    dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_train = dataset_map[base_config["dataset_name"]](
         dataset_split="train", debug_mode=base_config["debug_mode"], **dataset_kwargs
     )

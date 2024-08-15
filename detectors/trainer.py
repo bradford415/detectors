@@ -1,6 +1,7 @@
 import datetime
 import logging
 import time
+import psutil
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -9,6 +10,7 @@ import torch
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from torch import nn
+from torchvision.transforms import functional as F
 from torch.utils import data
 from tqdm import tqdm
 
@@ -16,6 +18,8 @@ from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
 from detectors.utils import misc
 from detectors.utils.box_ops import val_preds_to_img_size
+
+import cProfile
 
 log = logging.getLogger(__name__)
 
@@ -90,13 +94,14 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            train_stats = self._train_one_epoch(
+            self._train_one_epoch(
                 model, criterion, dataloader_train, optimizer, epoch
             )
             scheduler.step()
 
             # Evaluate the model on the validation set
-            coco_evaluator = self._evaluate(model, criterion, dataloader_val)
+            #log.info("\nEvaluating on validation set — epoch %d", epoch)
+            #coco_evaluator = self._evaluate(model, criterion, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch) % ckpt_every == 0:
@@ -110,27 +115,26 @@ class Trainer:
                     save_path=ckpt_path,
                 )
 
-            # Extracts list of the final AP and AR valus reported
-            bbox_stats = coco_evaluator.coco_eval["bbox"].stats
+            # # Extracts list of the final AP and AR valus reported
+            # bbox_stats = coco_evaluator.coco_eval["bbox"].stats
 
-            log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
-            log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
-            log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
-            log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
-            log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
-            log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
-            log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
-            log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
-            log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
-            log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
-            log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
-            log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
+            # log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
+            # log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
+            # log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
+            # log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
+            # log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
+            # log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
+            # log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
+            # log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
+            # log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
+            # log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
+            # log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
+            # log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
-            print(one_epoch_time)
             one_epoch_time_str = str(datetime.timedelta(seconds=int(one_epoch_time)))
-            log.info("\nEpcoh time  (h:mm:ss): %s", one_epoch_time_str)
+            log.info("\nEpoch time  (h:mm:ss): %s", one_epoch_time_str)
 
         # Entire training time
         total_time = time.time() - total_train_start_time
@@ -174,6 +178,11 @@ class Trainer:
                 bbox_predictions, targets
             )
 
+            
+            # Calculate gradients and updates weights
+            final_loss.backward()
+            optimizer.step()
+            
             if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
@@ -182,10 +191,11 @@ class Trainer:
                     len(dataloader_train),
                     final_loss.item(),
                 )
-
-            # Calculate gradients and updates weights
-            final_loss.backward()
-            optimizer.step()
+                
+                log.info("cpu utilization: %s", psutil.virtual_memory().percent)
+            # if (steps + 1) % 100 == 0:
+            #     break
+                
 
     @torch.no_grad()
     def _evaluate(
@@ -205,8 +215,14 @@ class Trainer:
         """
 
         model.eval()
-        
-        val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="yolo")
+
+        #val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="yolo")
+
+        # In datasets that inherit torchvision.CocoDetection a COCO object is created so we do not have to create one;
+        # this coco object stores the raw ground truth labels such as bboxes in coco format and original image height/width;
+        # this is useful because the CocoEvaluator wants the original image dimensions and bboxes in coco format;
+        # the images can still be resized for validation, however, the final evaluation score should be resized to the original image height 
+        val_coco_api = dataloader_val.dataset.coco
         coco_evaluator = CocoEvaluator(
             val_coco_api, iou_types=["bbox"], bbox_format="coco"
         )
@@ -217,7 +233,9 @@ class Trainer:
                 {key: value.to(self.device) for key, value in t.items()}
                 for t in targets
             ]
-
+            
+            samples = F.resize(samples, [512, 512], antialias=None)
+            
             # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
             # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
             bbox_preds, class_conf = model(samples, inference=True)
@@ -228,8 +246,9 @@ class Trainer:
             #    bbox_predictions, targets
             # )
 
+            ## TODO: Turn this into the PostProcess() like in DETR
             ## TODO: Comment this
-            results = val_preds_to_img_size(samples, targets, bbox_preds, class_conf)
+            results = val_preds_to_img_size(targets, bbox_preds, class_conf)
 
             evaluator_time = time.time()
 
@@ -246,6 +265,8 @@ class Trainer:
                     steps+1,
                     len(dataloader_val),
                 )
+                print(psutil.virtual_memory().percent)
+
 
         coco_evaluator.synchronize_between_processes()
 

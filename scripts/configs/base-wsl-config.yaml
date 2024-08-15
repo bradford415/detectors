@@ -25,12 +25,15 @@ dataset:
   # Path to the root of the dataset
   root: "/mnt/c/Users/bsele/Documents/Datasets/coco_minitrain_25k"
 
+  # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
+  num_workers: 4
+
 train:
 
   optimizer: "adam"
   scheduler: "step_lr"
 
-  batch_size: 4
+  batch_size: 16
   learning_rate: 0.001 #1e-3
   weight_decay: 0.0001
   lr_drop: 200
@@ -40,21 +43,19 @@ train:
 
     # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
     start_epoch: 1
-    epochs: 100
+    epochs: 200
 
     # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
     ckpt_every: 10
 
 validation:
-  batch_size: 2
+  batch_size: 8
 
 # GPU parameters
 cuda:
 
   # List of GPU devices to use
   gpus: [0]
-
-  num_workers: 0
 
 # Logging parameters
 logging:
