@@ -13,9 +13,9 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.coco_utils import get_coco_object
 from detectors.models.backbones import backbone_map
-from detectors.models.losses.yolo_loss import YoloV4Loss, Yolo_loss
-from detectors.models.yolov4 import YoloV4, Yolov4_pytorch
 from detectors.models.darknet import Darknet
+from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
+from detectors.models.yolov4 import YoloV4, Yolov4_pytorch
 from detectors.trainer import Trainer
 from detectors.utils import misc
 
@@ -54,10 +54,10 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
     # Convert a batch of images and annoations [(image, annoations), (image, annoations), ...]
     # to (image, image), (annotations, annotations), ... ; this operation is called iterable unpacking
     images, annotations = zip(*batch)  # images (C, H, W)
-    
+
     # The below padding method is from the DETR repo here:
     # https://github.com/facebookresearch/detr/blob/29901c51d7fe8712168b8d0d64351170bc0f83e0/util/misc.py#L307
-    
+
     # Zero pad images on the right and bottom of the image with the max h/w of the batch;
     # this allows us to batch images of different sizes together;
     # in the current implementation, padding should only be applied for the validation set
@@ -67,15 +67,17 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
             max_h = image.shape[1]
         if image.shape[2] > max_w:
             max_w = image.shape[2]
-    
+
     # Initalize tensor of zeros for 0-padding and copy the images into the top_left of each padded batch
     batch_size = len(batch)
-    padded_images = torch.zeros(batch_size, channels, max_h, max_w) # (B, C, batch_max_H, batch_max_W)
+    padded_images = torch.zeros(
+        batch_size, channels, max_h, max_w
+    )  # (B, C, batch_max_H, batch_max_W)
     for img, padded_img in zip(images, padded_images):
-        padded_img[:img.shape[0], :img.shape[1], :img.shape[2]].copy_(img)
+        padded_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
 
     # (B, C, H, W)
-    #images = torch.stack(images, dim=0) # This was written before the padding above
+    # images = torch.stack(images, dim=0) # This was written before the padding above
 
     # This is what will be returned in the main train for loop (samples, targets)
     return padded_images, annotations
@@ -181,8 +183,8 @@ def main(base_config_path: str, model_config_path):
 
     # Initialize detection model and transfer to GPU
     model = detectors_map[model_config["detector"]](**model_components)
-    #model = Darknet("scripts/configs/yolov4.cfg")
-    #model = Yolov4_pytorch(n_classes=80,inference=False)
+    # model = Darknet("scripts/configs/yolov4.cfg")
+    # model = Yolov4_pytorch(n_classes=80,inference=False)
     model.to(device)
 
     # For the YoloV4Loss function, if the batch size is different than the
@@ -191,8 +193,8 @@ def main(base_config_path: str, model_config_path):
         batch_size=base_config["train"]["batch_size"],
         device=device,
     )
-    
-    #criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
+
+    # criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
 
     # Extract the train arguments from base config
     train_args = {**base_config["train"]}

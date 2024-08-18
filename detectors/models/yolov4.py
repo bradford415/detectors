@@ -1,7 +1,8 @@
+import sys
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import sys
 
 from detectors.models.layers.yolo import YoloLayer, YoloLayer_pytorch
 from detectors.utils.box_ops import get_region_boxes
@@ -56,18 +57,33 @@ class Conv_Bn_Activation_old(nn.Module):
         for l in self.conv:
             x = l(x)
         return x
-  
-    
+
+
 class Conv_Bn_Activation(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, activation, bn=True, bias=False):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        activation,
+        bn=True,
+        bias=False,
+    ):
         super().__init__()
         pad = (kernel_size - 1) // 2
 
         self.conv = nn.ModuleList()
         if bias:
-            self.conv.append(nn.Conv2d(in_channels, out_channels, kernel_size, stride, pad))
+            self.conv.append(
+                nn.Conv2d(in_channels, out_channels, kernel_size, stride, pad)
+            )
         else:
-            self.conv.append(nn.Conv2d(in_channels, out_channels, kernel_size, stride, pad, bias=False))
+            self.conv.append(
+                nn.Conv2d(
+                    in_channels, out_channels, kernel_size, stride, pad, bias=False
+                )
+            )
         if bn:
             self.conv.append(nn.BatchNorm2d(out_channels))
         if activation == "mish":
@@ -79,8 +95,13 @@ class Conv_Bn_Activation(nn.Module):
         elif activation == "linear":
             pass
         else:
-            print("activate error !!! {} {} {}".format(sys._getframe().f_code.co_filename,
-                                                       sys._getframe().f_code.co_name, sys._getframe().f_lineno))
+            print(
+                "activate error !!! {} {} {}".format(
+                    sys._getframe().f_code.co_filename,
+                    sys._getframe().f_code.co_name,
+                    sys._getframe().f_lineno,
+                )
+            )
 
     def forward(self, x):
         for l in self.conv:
@@ -391,7 +412,7 @@ class YoloV4(nn.Module):
             TODO
         During inference:
              A list of
-                1. bbox coordinate predictions for each output scale; 
+                1. bbox coordinate predictions for each output scale;
                    shape (B, sum([h*w for h, w in scales_hw]), 1, 4);
                    4 = (tl_x, tl_y, br_x, br_y) and the coords have normalized by their respective scales h/w
                 2. confidence scores of shape (B, sum([h*w for h, w in scales_hw]), num_classes);
@@ -444,11 +465,11 @@ class YoloV4(nn.Module):
         head_out = self.head(neck_out, x13, x6, inference=inference)
 
         return head_out
-    
 
 
 ############################################## github code starts here  ############################################################
- 
+
+
 class ResBlock(nn.Module):
     """
     Sequential residual blocks each of which consists of \
@@ -465,8 +486,8 @@ class ResBlock(nn.Module):
         self.module_list = nn.ModuleList()
         for i in range(nblocks):
             resblock_one = nn.ModuleList()
-            resblock_one.append(Conv_Bn_Activation(ch, ch, 1, 1, 'mish'))
-            resblock_one.append(Conv_Bn_Activation(ch, ch, 3, 1, 'mish'))
+            resblock_one.append(Conv_Bn_Activation(ch, ch, 1, 1, "mish"))
+            resblock_one.append(Conv_Bn_Activation(ch, ch, 3, 1, "mish"))
             self.module_list.append(resblock_one)
 
     def forward(self, x):
@@ -481,24 +502,24 @@ class ResBlock(nn.Module):
 class DownSample1(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = Conv_Bn_Activation(3, 32, 3, 1, 'mish')
+        self.conv1 = Conv_Bn_Activation(3, 32, 3, 1, "mish")
 
-        self.conv2 = Conv_Bn_Activation(32, 64, 3, 2, 'mish')
-        self.conv3 = Conv_Bn_Activation(64, 64, 1, 1, 'mish')
+        self.conv2 = Conv_Bn_Activation(32, 64, 3, 2, "mish")
+        self.conv3 = Conv_Bn_Activation(64, 64, 1, 1, "mish")
         # [route]
         # layers = -2
-        self.conv4 = Conv_Bn_Activation(64, 64, 1, 1, 'mish')
+        self.conv4 = Conv_Bn_Activation(64, 64, 1, 1, "mish")
 
-        self.conv5 = Conv_Bn_Activation(64, 32, 1, 1, 'mish')
-        self.conv6 = Conv_Bn_Activation(32, 64, 3, 1, 'mish')
+        self.conv5 = Conv_Bn_Activation(64, 32, 1, 1, "mish")
+        self.conv6 = Conv_Bn_Activation(32, 64, 3, 1, "mish")
         # [shortcut]
         # from=-3
         # activation = linear
 
-        self.conv7 = Conv_Bn_Activation(64, 64, 1, 1, 'mish')
+        self.conv7 = Conv_Bn_Activation(64, 64, 1, 1, "mish")
         # [route]
         # layers = -1, -7
-        self.conv8 = Conv_Bn_Activation(128, 64, 1, 1, 'mish')
+        self.conv8 = Conv_Bn_Activation(128, 64, 1, 1, "mish")
 
     def forward(self, input):
         x1 = self.conv1(input)
@@ -522,17 +543,17 @@ class DownSample1(nn.Module):
 class DownSample2(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = Conv_Bn_Activation(64, 128, 3, 2, 'mish')
-        self.conv2 = Conv_Bn_Activation(128, 64, 1, 1, 'mish')
+        self.conv1 = Conv_Bn_Activation(64, 128, 3, 2, "mish")
+        self.conv2 = Conv_Bn_Activation(128, 64, 1, 1, "mish")
         # r -2
-        self.conv3 = Conv_Bn_Activation(128, 64, 1, 1, 'mish')
+        self.conv3 = Conv_Bn_Activation(128, 64, 1, 1, "mish")
 
         self.resblock = ResBlock(ch=64, nblocks=2)
 
         # s -3
-        self.conv4 = Conv_Bn_Activation(64, 64, 1, 1, 'mish')
+        self.conv4 = Conv_Bn_Activation(64, 64, 1, 1, "mish")
         # r -1 -10
-        self.conv5 = Conv_Bn_Activation(128, 128, 1, 1, 'mish')
+        self.conv5 = Conv_Bn_Activation(128, 128, 1, 1, "mish")
 
     def forward(self, input):
         x1 = self.conv1(input)
@@ -550,13 +571,13 @@ class DownSample2(nn.Module):
 class DownSample3(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = Conv_Bn_Activation(128, 256, 3, 2, 'mish')
-        self.conv2 = Conv_Bn_Activation(256, 128, 1, 1, 'mish')
-        self.conv3 = Conv_Bn_Activation(256, 128, 1, 1, 'mish')
+        self.conv1 = Conv_Bn_Activation(128, 256, 3, 2, "mish")
+        self.conv2 = Conv_Bn_Activation(256, 128, 1, 1, "mish")
+        self.conv3 = Conv_Bn_Activation(256, 128, 1, 1, "mish")
 
         self.resblock = ResBlock(ch=128, nblocks=8)
-        self.conv4 = Conv_Bn_Activation(128, 128, 1, 1, 'mish')
-        self.conv5 = Conv_Bn_Activation(256, 256, 1, 1, 'mish')
+        self.conv4 = Conv_Bn_Activation(128, 128, 1, 1, "mish")
+        self.conv5 = Conv_Bn_Activation(256, 256, 1, 1, "mish")
 
     def forward(self, input):
         x1 = self.conv1(input)
@@ -574,13 +595,13 @@ class DownSample3(nn.Module):
 class DownSample4(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = Conv_Bn_Activation(256, 512, 3, 2, 'mish')
-        self.conv2 = Conv_Bn_Activation(512, 256, 1, 1, 'mish')
-        self.conv3 = Conv_Bn_Activation(512, 256, 1, 1, 'mish')
+        self.conv1 = Conv_Bn_Activation(256, 512, 3, 2, "mish")
+        self.conv2 = Conv_Bn_Activation(512, 256, 1, 1, "mish")
+        self.conv3 = Conv_Bn_Activation(512, 256, 1, 1, "mish")
 
         self.resblock = ResBlock(ch=256, nblocks=8)
-        self.conv4 = Conv_Bn_Activation(256, 256, 1, 1, 'mish')
-        self.conv5 = Conv_Bn_Activation(512, 512, 1, 1, 'mish')
+        self.conv4 = Conv_Bn_Activation(256, 256, 1, 1, "mish")
+        self.conv5 = Conv_Bn_Activation(512, 512, 1, 1, "mish")
 
     def forward(self, input):
         x1 = self.conv1(input)
@@ -598,13 +619,13 @@ class DownSample4(nn.Module):
 class DownSample5(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = Conv_Bn_Activation(512, 1024, 3, 2, 'mish')
-        self.conv2 = Conv_Bn_Activation(1024, 512, 1, 1, 'mish')
-        self.conv3 = Conv_Bn_Activation(1024, 512, 1, 1, 'mish')
+        self.conv1 = Conv_Bn_Activation(512, 1024, 3, 2, "mish")
+        self.conv2 = Conv_Bn_Activation(1024, 512, 1, 1, "mish")
+        self.conv3 = Conv_Bn_Activation(1024, 512, 1, 1, "mish")
 
         self.resblock = ResBlock(ch=512, nblocks=4)
-        self.conv4 = Conv_Bn_Activation(512, 512, 1, 1, 'mish')
-        self.conv5 = Conv_Bn_Activation(1024, 1024, 1, 1, 'mish')
+        self.conv4 = Conv_Bn_Activation(512, 512, 1, 1, "mish")
+        self.conv5 = Conv_Bn_Activation(1024, 1024, 1, 1, "mish")
 
     def forward(self, input):
         x1 = self.conv1(input)
@@ -624,9 +645,9 @@ class Neck_pytorch(nn.Module):
         super().__init__()
         self.inference = inference
 
-        self.conv1 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
-        self.conv2 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
-        self.conv3 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
+        self.conv1 = Conv_Bn_Activation(1024, 512, 1, 1, "leaky")
+        self.conv2 = Conv_Bn_Activation(512, 1024, 3, 1, "leaky")
+        self.conv3 = Conv_Bn_Activation(1024, 512, 1, 1, "leaky")
         # SPP
         self.maxpool1 = nn.MaxPool2d(kernel_size=5, stride=1, padding=5 // 2)
         self.maxpool2 = nn.MaxPool2d(kernel_size=9, stride=1, padding=9 // 2)
@@ -634,31 +655,31 @@ class Neck_pytorch(nn.Module):
 
         # R -1 -3 -5 -6
         # SPP
-        self.conv4 = Conv_Bn_Activation(2048, 512, 1, 1, 'leaky')
-        self.conv5 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
-        self.conv6 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
-        self.conv7 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
+        self.conv4 = Conv_Bn_Activation(2048, 512, 1, 1, "leaky")
+        self.conv5 = Conv_Bn_Activation(512, 1024, 3, 1, "leaky")
+        self.conv6 = Conv_Bn_Activation(1024, 512, 1, 1, "leaky")
+        self.conv7 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
         # UP
         self.upsample1 = Upsample()
         # R 85
-        self.conv8 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
+        self.conv8 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
         # R -1 -3
-        self.conv9 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
-        self.conv10 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
-        self.conv11 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
-        self.conv12 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
-        self.conv13 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
-        self.conv14 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
+        self.conv9 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
+        self.conv10 = Conv_Bn_Activation(256, 512, 3, 1, "leaky")
+        self.conv11 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
+        self.conv12 = Conv_Bn_Activation(256, 512, 3, 1, "leaky")
+        self.conv13 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
+        self.conv14 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
         # UP
         self.upsample2 = Upsample()
         # R 54
-        self.conv15 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
+        self.conv15 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
         # R -1 -3
-        self.conv16 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
-        self.conv17 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
-        self.conv18 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
-        self.conv19 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
-        self.conv20 = Conv_Bn_Activation(256, 128, 1, 1, 'leaky')
+        self.conv16 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
+        self.conv17 = Conv_Bn_Activation(128, 256, 3, 1, "leaky")
+        self.conv18 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
+        self.conv19 = Conv_Bn_Activation(128, 256, 3, 1, "leaky")
+        self.conv20 = Conv_Bn_Activation(256, 128, 1, 1, "leaky")
 
     def forward(self, input, downsample4, downsample3, inference=False):
         x1 = self.conv1(input)
@@ -708,47 +729,119 @@ class Yolov4Head_pytorch(nn.Module):
         super().__init__()
         self.inference = inference
 
-        self.conv1 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
-        self.conv2 = Conv_Bn_Activation(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        self.conv1 = Conv_Bn_Activation(128, 256, 3, 1, "leaky")
+        self.conv2 = Conv_Bn_Activation(
+            256, output_ch, 1, 1, "linear", bn=False, bias=True
+        )
 
         self.yolo1 = YoloLayer_pytorch(
-                                anchor_mask=[0, 1, 2], num_classes=n_classes,
-                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
-                                num_anchors=9, stride=8)
+            anchor_mask=[0, 1, 2],
+            num_classes=n_classes,
+            anchors=[
+                12,
+                16,
+                19,
+                36,
+                40,
+                28,
+                36,
+                75,
+                76,
+                55,
+                72,
+                146,
+                142,
+                110,
+                192,
+                243,
+                459,
+                401,
+            ],
+            num_anchors=9,
+            stride=8,
+        )
 
         # R -4
-        self.conv3 = Conv_Bn_Activation(128, 256, 3, 2, 'leaky')
+        self.conv3 = Conv_Bn_Activation(128, 256, 3, 2, "leaky")
 
         # R -1 -16
-        self.conv4 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
-        self.conv5 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
-        self.conv6 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
-        self.conv7 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
-        self.conv8 = Conv_Bn_Activation(512, 256, 1, 1, 'leaky')
-        self.conv9 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
-        self.conv10 = Conv_Bn_Activation(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
-        
+        self.conv4 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
+        self.conv5 = Conv_Bn_Activation(256, 512, 3, 1, "leaky")
+        self.conv6 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
+        self.conv7 = Conv_Bn_Activation(256, 512, 3, 1, "leaky")
+        self.conv8 = Conv_Bn_Activation(512, 256, 1, 1, "leaky")
+        self.conv9 = Conv_Bn_Activation(256, 512, 3, 1, "leaky")
+        self.conv10 = Conv_Bn_Activation(
+            512, output_ch, 1, 1, "linear", bn=False, bias=True
+        )
+
         self.yolo2 = YoloLayer_pytorch(
-                                anchor_mask=[3, 4, 5], num_classes=n_classes,
-                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
-                                num_anchors=9, stride=16)
+            anchor_mask=[3, 4, 5],
+            num_classes=n_classes,
+            anchors=[
+                12,
+                16,
+                19,
+                36,
+                40,
+                28,
+                36,
+                75,
+                76,
+                55,
+                72,
+                146,
+                142,
+                110,
+                192,
+                243,
+                459,
+                401,
+            ],
+            num_anchors=9,
+            stride=16,
+        )
 
         # R -4
-        self.conv11 = Conv_Bn_Activation(256, 512, 3, 2, 'leaky')
+        self.conv11 = Conv_Bn_Activation(256, 512, 3, 2, "leaky")
 
         # R -1 -37
-        self.conv12 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
-        self.conv13 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
-        self.conv14 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
-        self.conv15 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
-        self.conv16 = Conv_Bn_Activation(1024, 512, 1, 1, 'leaky')
-        self.conv17 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
-        self.conv18 = Conv_Bn_Activation(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
-        
+        self.conv12 = Conv_Bn_Activation(1024, 512, 1, 1, "leaky")
+        self.conv13 = Conv_Bn_Activation(512, 1024, 3, 1, "leaky")
+        self.conv14 = Conv_Bn_Activation(1024, 512, 1, 1, "leaky")
+        self.conv15 = Conv_Bn_Activation(512, 1024, 3, 1, "leaky")
+        self.conv16 = Conv_Bn_Activation(1024, 512, 1, 1, "leaky")
+        self.conv17 = Conv_Bn_Activation(512, 1024, 3, 1, "leaky")
+        self.conv18 = Conv_Bn_Activation(
+            1024, output_ch, 1, 1, "linear", bn=False, bias=True
+        )
+
         self.yolo3 = YoloLayer_pytorch(
-                                anchor_mask=[6, 7, 8], num_classes=n_classes,
-                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
-                                num_anchors=9, stride=32)
+            anchor_mask=[6, 7, 8],
+            num_classes=n_classes,
+            anchors=[
+                12,
+                16,
+                19,
+                36,
+                40,
+                28,
+                36,
+                75,
+                76,
+                55,
+                72,
+                146,
+                142,
+                110,
+                192,
+                243,
+                459,
+                401,
+            ],
+            num_anchors=9,
+            stride=32,
+        )
 
     def forward(self, input1, input2, input3, inference):
         x1 = self.conv1(input1)
@@ -777,14 +870,14 @@ class Yolov4Head_pytorch(nn.Module):
         x16 = self.conv16(x15)
         x17 = self.conv17(x16)
         x18 = self.conv18(x17)
-        
+
         if inference:
             y1 = self.yolo1(x2)
             y2 = self.yolo2(x10)
             y3 = self.yolo3(x18)
 
             return get_region_boxes([y1, y2, y3])
-        
+
         else:
             return [x2, x10, x18]
 
@@ -805,19 +898,22 @@ class Yolov4_pytorch(nn.Module):
         self.neck = Neck_pytorch(inference)
         # yolov4conv137
         if yolov4conv137weight:
-            _model = nn.Sequential(self.down1, self.down2, self.down3, self.down4, self.down5, self.neck)
+            _model = nn.Sequential(
+                self.down1, self.down2, self.down3, self.down4, self.down5, self.neck
+            )
             pretrained_dict = torch.load(yolov4conv137weight)
 
             model_dict = _model.state_dict()
             # 1. filter out unnecessary keys
-            pretrained_dict = {k1: v for (k, v), k1 in zip(pretrained_dict.items(), model_dict)}
+            pretrained_dict = {
+                k1: v for (k, v), k1 in zip(pretrained_dict.items(), model_dict)
+            }
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             _model.load_state_dict(model_dict)
-        
+
         # head
         self.head = Yolov4Head_pytorch(output_ch, n_classes, inference)
-
 
     def forward(self, input, inference=False):
         d1 = self.down1(input)

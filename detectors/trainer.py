@@ -1,25 +1,24 @@
+import cProfile
 import datetime
 import logging
 import time
-import psutil
+import tracemalloc
 from pathlib import Path
 from typing import Any, Dict, Iterable
-import tracemalloc
 
 import numpy as np
+import psutil
 import torch
 from pycocotools.coco import COCO
 from torch import nn
-from torchvision.transforms import functional as F
 from torch.utils import data
+from torchvision.transforms import functional as F
 from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
-from detectors.utils import misc
+from detectors.utils import misc, plots
 from detectors.utils.box_ops import val_preds_to_img_size
-
-import cProfile
 
 log = logging.getLogger(__name__)
 
@@ -94,9 +93,7 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            self._train_one_epoch(
-                model, criterion, dataloader_train, optimizer, epoch
-            )
+            self._train_one_epoch(model, criterion, dataloader_train, optimizer, epoch)
             scheduler.step()
 
             # Evaluate the model on the validation set
@@ -117,7 +114,7 @@ class Trainer:
 
             # # Extracts list of the final AP and AR valus reported
             bbox_stats = coco_evaluator.coco_eval["bbox"].stats
-            #bbox_stats = coco_evaluator.coco_eval["bbox"].eval
+            # bbox_stats = coco_evaluator.coco_eval["bbox"].eval
 
             log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
             log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
@@ -145,7 +142,7 @@ class Trainer:
             start_epoch - epochs,
             total_time_str,
         )
-        
+
         del coco_evaluator
 
     def _train_one_epoch(
@@ -172,6 +169,9 @@ class Trainer:
                 for t in targets
             ]
 
+            plots.visualize_img_tensors(samples)
+            exit()
+
             optimizer.zero_grad()
 
             # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
@@ -181,11 +181,10 @@ class Trainer:
                 bbox_predictions, targets
             )
 
-            
             # Calculate gradients and updates weights
             final_loss.backward()
             optimizer.step()
-            
+
             if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
@@ -194,13 +193,12 @@ class Trainer:
                     len(dataloader_train),
                     final_loss.item(),
                 )
-                
+
                 log.info("cpu utilization: %s", psutil.virtual_memory().percent)
             # if (steps + 1) % 100 == 0:
             #     break
-                
 
-    #@torch.no_grad()
+    @torch.no_grad()
     def _evaluate(
         self,
         model: nn.Module,
@@ -219,83 +217,81 @@ class Trainer:
 
         model.eval()
 
-        #tracemalloc.start()
-        #val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="yolo")
+        # tracemalloc.start()
+        # val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="yolo")
 
         # In datasets that inherit torchvision.CocoDetection a COCO object is created so we do not have to create one;
         # this coco object stores the raw ground truth labels such as bboxes in coco format and original image height/width;
         # this is useful because the CocoEvaluator wants the original image dimensions and bboxes in coco format;
-        # the images can still be resized for validation, however, the final evaluation score should be resized to the original image height 
+        # the images can still be resized for validation, however, the final evaluation score should be resized to the original image height
         val_coco_api = dataloader_val.dataset.coco
         coco_evaluator = CocoEvaluator(
             val_coco_api, iou_types=["bbox"], bbox_format="coco"
         )
-        
-        # snapshot = tracemalloc.take_snapshot() 
+
+        # snapshot = tracemalloc.take_snapshot()
         # top_stats = snapshot.statistics('lineno')
-        # for stat in top_stats[:10]: 
+        # for stat in top_stats[:10]:
         #     print(stat)
 
-        with torch.no_grad():
-            for steps, (samples, targets) in enumerate(dataloader_val):
-                samples = samples.to(self.device)
-                targets = [
-                    {key: value.to(self.device) for key, value in t.items()}
-                    for t in targets
-                ]
-                
-                #samples = F.resize(samples, [512, 512], antialias=None)
-                
-                # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
-                # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
-                bbox_preds, class_conf = model(samples, inference=True)
+        for steps, (samples, targets) in enumerate(dataloader_val):
+            samples = samples.to(self.device)
+            targets = [
+                {key: value.to(self.device) for key, value in t.items()}
+                for t in targets
+            ]
 
-                # TODO, might have to change the output of the bboxes
+            # samples = F.resize(samples, [512, 512], antialias=None)
 
-                # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-                #    bbox_predictions, targets
-                # )
+            # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
+            # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
+            bbox_preds, class_conf = model(samples, inference=True)
 
-                ## TODO: Turn this into the PostProcess() like in DETR
-                ## TODO: Comment this
-                results = val_preds_to_img_size(targets, bbox_preds, class_conf)
+            # TODO, might have to change the output of the bboxes
 
-                evaluator_time = time.time()
+            # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+            #    bbox_predictions, targets
+            # )
 
-                # results is a dict containing:
-                #   "img_id": {boxes: [], "scores": [], "labels", []}
-                # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
-                # and labels is the index of the maximum class probability; reminder
-                if coco_evaluator is not None:
-                    coco_evaluator.update(results)
-                evaluator_time = time.time() - evaluator_time
+            ## TODO: Turn this into the PostProcess() like in DETR
+            ## TODO: Comment this
+            results = val_preds_to_img_size(targets, bbox_preds, class_conf)
 
-                if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
-                    log.info(
-                        "val steps:%d/%-10d ",
-                        steps+1,
-                        len(dataloader_val),
-                    )
-                    log.info("cpu utilization: %s", psutil.virtual_memory().percent)
+            evaluator_time = time.time()
 
-                    
-                    # snapshot = tracemalloc.take_snapshot() 
-                    # top_stats = snapshot.statistics('lineno')
-                    # for stat in top_stats[:10]: 
-                    #     print(stat)
-
+            # results is a dict containing:
+            #   "img_id": {boxes: [], "scores": [], "labels", []}
+            # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
+            # and labels is the index of the maximum class probability; reminder
             if coco_evaluator is not None:
-                coco_evaluator.synchronize_between_processes()
-        
-                # Accumulate predictions from all processes
-                coco_evaluator.accumulate()
-                coco_evaluator.summarize()
-            # snapshot = tracemalloc.take_snapshot() 
-            # top_stats = snapshot.statistics('lineno')
-            # for stat in top_stats[:10]: 
-            #     print(stat)
+                coco_evaluator.update(results)
+            evaluator_time = time.time() - evaluator_time
 
-            return coco_evaluator
+            if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
+                log.info(
+                    "val steps:%d/%-10d ",
+                    steps + 1,
+                    len(dataloader_val),
+                )
+                log.info("cpu utilization: %s", psutil.virtual_memory().percent)
+
+                # snapshot = tracemalloc.take_snapshot()
+                # top_stats = snapshot.statistics('lineno')
+                # for stat in top_stats[:10]:
+                #     print(stat)
+
+        if coco_evaluator is not None:
+            coco_evaluator.synchronize_between_processes()
+
+            # Accumulate predictions from all processes
+            coco_evaluator.accumulate()
+            coco_evaluator.summarize()
+        # snapshot = tracemalloc.take_snapshot()
+        # top_stats = snapshot.statistics('lineno')
+        # for stat in top_stats[:10]:
+        #     print(stat)
+
+        return coco_evaluator
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path

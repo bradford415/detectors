@@ -264,7 +264,7 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
         bboxes = targets["boxes"]
 
         # Convert to COCO format: tl_x, tl_y, w, h;
-        # bbox_fmt is the format that the bboxes are CURRENTLY in and then they 
+        # bbox_fmt is the format that the bboxes are CURRENTLY in and then they
         # will be converted to coco format; in this implementation, the
         # transform Normalize and ToTensorNoNormalize converts the bboxes to yolo, so for the evaluator
         # we need to convert it back to coco format
@@ -305,7 +305,7 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
             dataset["annotations"].append(ann)
             ann_id += 1
     dataset["categories"] = [{"id": i} for i in sorted(categories)]
-    #breakpoint()
+    # breakpoint()
     coco_ds.dataset = dataset
     # suppress pycocotools prints
     with open(os.devnull, "w") as devnull:

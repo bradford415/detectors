@@ -176,11 +176,9 @@ def get_region_boxes(boxes_and_confs: List[Tuple]):
     return [boxes, confs]
 
 
-def val_preds_to_img_size(
-    targets, bbox_preds: torch.Tensor, class_conf: torch.Tensor
-):
+def val_preds_to_img_size(targets, bbox_preds: torch.Tensor, class_conf: torch.Tensor):
     """Scale the bounding box predictions to the original image size
-    
+
     NOTE: The YoloV4 pytorch implementation resizes the validation/testing images to the size they were trained on (608,608) but
           does not resize the targets. I believe this is okay to do since it will predict the bboxes on the resized image, but
           then we can scale the predictions back to the original image size.
@@ -202,15 +200,15 @@ def val_preds_to_img_size(
         img_height, img_width = target["orig_size"].cpu().detach().numpy()
         # boxes = output[...,:4].copy()  # output boxes in yolo format
 
-        boxes = boxes.squeeze(2).cpu().detach().numpy() # There's 1 length dim in the 2nd dimension so I'm not sure what the squeeze is for
+        boxes = (
+            boxes.squeeze(2).cpu().detach().numpy()
+        )  # There's 1 length dim in the 2nd dimension so I'm not sure what the squeeze is for
 
         # Convert from [tl_x, tl_y, br_x, br_y] to [tl_x, tl_y, w, h]
-        boxes[..., 2:] = (
-            boxes[..., 2:] - boxes[..., :2]
-        )  
-        
+        boxes[..., 2:] = boxes[..., 2:] - boxes[..., :2]
+
         # Since box predictions are between [0, 1] we can multiply by the input image
-        # w/h to scale the predictions back to the original size 
+        # w/h to scale the predictions back to the original size
         boxes[..., 0] = boxes[..., 0] * img_width
         boxes[..., 1] = boxes[..., 1] * img_height
         boxes[..., 2] = boxes[..., 2] * img_width
