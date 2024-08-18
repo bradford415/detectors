@@ -12,12 +12,13 @@ from torch.utils.data import DataLoader
 
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.coco_utils import get_coco_object
+from detectors.data.collate_functions import collate_fn
 from detectors.models.backbones import backbone_map
 from detectors.models.darknet import Darknet
 from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
 from detectors.models.yolov4 import YoloV4, Yolov4_pytorch
 from detectors.trainer import Trainer
-from detectors.utils import misc
+from detectors.utils import misc, learning
 
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
@@ -33,54 +34,12 @@ loss_map = {
     "cross_entropy": nn.CrossEntropyLoss(),
 }
 
-scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR}
+scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR,
+                 "lambda_lr": torch.optim.lr_scheduler.LambdaLR, # Define scheduler based on a user-defined function
+                 }
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
-
-
-## TODO: Move this to a more appropriate spot
-def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:
-    """Collect samples appropriately to be used at each iteration in the train loop
-
-    At each train iteration, the DataLoader returns a batch of samples.
-    E.g., for images, annotations in train_loader
-
-    Args:
-        batch: A batch of samples from the dataset. The batch is a list of
-               samples, each sample containg a tuple of (image, image_annotations).
-    """
-
-    # Convert a batch of images and annoations [(image, annoations), (image, annoations), ...]
-    # to (image, image), (annotations, annotations), ... ; this operation is called iterable unpacking
-    images, annotations = zip(*batch)  # images (C, H, W)
-
-    # The below padding method is from the DETR repo here:
-    # https://github.com/facebookresearch/detr/blob/29901c51d7fe8712168b8d0d64351170bc0f83e0/util/misc.py#L307
-
-    # Zero pad images on the right and bottom of the image with the max h/w of the batch;
-    # this allows us to batch images of different sizes together;
-    # in the current implementation, padding should only be applied for the validation set
-    channels, max_h, max_w = images[0].shape
-    for image in images[1:]:
-        if image.shape[1] > max_h:
-            max_h = image.shape[1]
-        if image.shape[2] > max_w:
-            max_w = image.shape[2]
-
-    # Initalize tensor of zeros for 0-padding and copy the images into the top_left of each padded batch
-    batch_size = len(batch)
-    padded_images = torch.zeros(
-        batch_size, channels, max_h, max_w
-    )  # (B, C, batch_max_H, batch_max_W)
-    for img, padded_img in zip(images, padded_images):
-        padded_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-
-    # (B, C, H, W)
-    # images = torch.stack(images, dim=0) # This was written before the padding above
-
-    # This is what will be returned in the main train for loop (samples, targets)
-    return padded_images, annotations
 
 
 def main(base_config_path: str, model_config_path):
@@ -197,16 +156,19 @@ def main(base_config_path: str, model_config_path):
     # criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
 
     # Extract the train arguments from base config
-    train_args = {**base_config["train"]}
+    train_args = base_config["train"]
+
+    # Extract the learning parameters such as lr, optimizer params and lr scheduler
+    learning_config = train_args["learning_config"]
+    learning_params = base_config[learning_config]
 
     # Initialize training objects
     optimizer, lr_scheduler = _init_training_objects(
         model_params=model.parameters(),
-        optimizer=train_args["optimizer"],
-        scheduler=train_args["scheduler"],
-        learning_rate=train_args["learning_rate"],
-        weight_decay=train_args["weight_decay"],
-        lr_drop=train_args["lr_drop"],
+        optimizer=learning_params["optimizer"],
+        scheduler=learning_params["lr_scheduler"],
+        learning_rate=learning_params["learning_rate"],
+        weight_decay=learning_params["weight_decay"],
     )
 
     trainer = Trainer(
@@ -239,7 +201,7 @@ def _init_training_objects(
     optimizer = optimizer_map[optimizer](
         model_params, lr=learning_rate, weight_decay=weight_decay
     )
-    lr_scheduler = scheduler_map[scheduler](optimizer, lr_drop)
+    lr_scheduler = scheduler_map[scheduler](optimizer, learning.burnin_schedule)
     return optimizer, lr_scheduler
 
 

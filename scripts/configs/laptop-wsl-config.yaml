@@ -29,13 +29,10 @@ dataset:
 
 train:
 
-  optimizer: "adam"
-  scheduler: "step_lr"
+  # Configurations for learning parameters such as the optmizier and lr scheduler
+  learning_config: "learning_config_1"
 
   batch_size: 4
-  learning_rate: 0.001 #1e-3
-  weight_decay: 0.0001
-  lr_drop: 200
 
   # Various epochs used during training
   epochs:
@@ -65,3 +62,17 @@ logging:
 # Reproducibility information
 reproducibility:
   seed: 42
+
+# Params for training objects
+
+
+# Adam optimizer parameters defined here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/config/yolov3.cfg
+learning_config_1:
+  optimizer: "adam"
+
+  learning_rate: 0.0001 #1e-4
+
+  # L2 regulartization penalty to add to the loss function: 
+  weight_decay: 0.0005
+
+  lr_scheduler: "lambda_lr"

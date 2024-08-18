@@ -93,8 +93,7 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            self._train_one_epoch(model, criterion, dataloader_train, optimizer, epoch)
-            scheduler.step()
+            self._train_one_epoch(model, criterion, dataloader_train, optimizer, scheduler, epoch)
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
@@ -152,6 +151,7 @@ class Trainer:
         criterion: nn.Module,
         dataloader_train: Iterable,
         optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler,
         epoch: int,
     ):
         """Train one epoch
@@ -161,6 +161,7 @@ class Trainer:
             criterion: Loss function
             dataloader_train: Dataloader for the training set
             optimizer: Optimizer to update the models weights
+            scheduler: Learning rate scheduler to update the learning rate
             epoch: Used for logging purposes
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
@@ -173,7 +174,7 @@ class Trainer:
             # Visualize the first batch of augmented images
             if steps == 0:
                 plots.visualize_norm_img_tensors(samples, self.output_paths["output_dir"] / "train-images")
-            break
+
             optimizer.zero_grad()
 
             # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
@@ -187,6 +188,10 @@ class Trainer:
             final_loss.backward()
             optimizer.step()
 
+            # Calling scheduler step within the epoch passes the step number to the Lambda function;
+            # if step is called outside this loop, then it will pass the epoch number
+            scheduler.step()
+
             if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
@@ -197,8 +202,7 @@ class Trainer:
                 )
 
                 log.info("cpu utilization: %s", psutil.virtual_memory().percent)
-            # if (steps + 1) % 100 == 0:
-            #     break
+
 
     @torch.no_grad()
     def _evaluate(
@@ -246,7 +250,6 @@ class Trainer:
             # Visualize the first batch of val images
             if steps == 0:
                 plots.visualize_norm_img_tensors(samples, self.output_paths["output_dir"] / "val-images")
-            exit()
 
             # samples = F.resize(samples, [512, 512], antialias=None)
 
