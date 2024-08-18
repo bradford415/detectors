@@ -3,7 +3,7 @@
 
 # Mode to use for debugging/development; this only uses a few samples in in the train/val dataset
 # to quickly run the code
-debug_mode: True
+debug_mode: False
 
 # Root directory of your project; type "pwd" in the command line to find it
 root_dir: "/home/bselee/programming/detectors"
@@ -25,42 +25,43 @@ dataset:
   # Path to the root of the dataset
   root: "/mnt/c/Users/bsele/Documents/datasets/coco_minitrain_25k"
 
+  num_workers: 2
+
 train:
-  optimizer: "adamw"
+
+  optimizer: "adam"
   scheduler: "step_lr"
 
-  batch_size: 2
+  batch_size: 4
   learning_rate: 0.001 #1e-3
   weight_decay: 0.0001
   lr_drop: 200
 
   # Various epochs used during training
   epochs:
-    start_epoch: 0
-    epochs: 50
+
+    # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
+    start_epoch: 1
+    epochs: 200
 
     # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
     ckpt_every: 10
 
 validation:
-  batch_size: 1
+  batch_size: 2
 
 # GPU parameters
 cuda:
 
   # List of GPU devices to use
-  gpus: [] #[0]
-
-  num_workers: 0
+  gpus: [0]
 
 # Logging parameters
 logging:
 
   # Log the train progress every n steps
-  train_steps_freq: 100
+  train_steps_freq: 20
 
 # Reproducibility information
 reproducibility:
   seed: 42
-
-

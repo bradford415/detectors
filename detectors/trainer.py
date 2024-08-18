@@ -94,14 +94,15 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            self._train_one_epoch(
-                model, criterion, dataloader_train, optimizer, epoch
-            )
-            scheduler.step()
+            #self._train_one_epoch(
+            #    model, criterion, dataloader_train, optimizer, epoch
+            #)
+            #scheduler.step()
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
-            coco_evaluator = self._evaluate(model, criterion, dataloader_val)
+            #coco_evaluator = self._evaluate(model, criterion, dataloader_val)
+            self._evaluate(model, criterion, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch) % ckpt_every == 0:
@@ -116,21 +117,21 @@ class Trainer:
                 )
 
             # # Extracts list of the final AP and AR valus reported
-            bbox_stats = coco_evaluator.coco_eval["bbox"].stats
-            #bbox_stats = coco_evaluator.coco_eval["bbox"].eval
-
-            log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
-            log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
-            log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
-            log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
-            log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
-            log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
-            log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
-            log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
-            log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
-            log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
-            log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
-            log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
+            #bbox_stats = coco_evaluator.coco_eval["bbox"].stats
+            ##bbox_stats = coco_evaluator.coco_eval["bbox"].eval
+#
+            #log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
+            #log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
+            #log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
+            #log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
+            #log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
+            #log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
+            #log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
+            #log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
+            #log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
+            #log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
+            #log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
+            #log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -226,10 +227,10 @@ class Trainer:
         # this coco object stores the raw ground truth labels such as bboxes in coco format and original image height/width;
         # this is useful because the CocoEvaluator wants the original image dimensions and bboxes in coco format;
         # the images can still be resized for validation, however, the final evaluation score should be resized to the original image height 
-        val_coco_api = dataloader_val.dataset.coco
-        coco_evaluator = CocoEvaluator(
-            val_coco_api, iou_types=["bbox"], bbox_format="coco"
-        )
+        #val_coco_api = dataloader_val.dataset.coco
+        #coco_evaluator = CocoEvaluator(
+        #    val_coco_api, iou_types=["bbox"], bbox_format="coco"
+        #)
         
         # snapshot = tracemalloc.take_snapshot() 
         # top_stats = snapshot.statistics('lineno')
@@ -266,8 +267,7 @@ class Trainer:
                 #   "img_id": {boxes: [], "scores": [], "labels", []}
                 # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
                 # and labels is the index of the maximum class probability; reminder
-                if coco_evaluator is not None:
-                    coco_evaluator.update(results)
+                #coco_evaluator.update(results)
                 evaluator_time = time.time() - evaluator_time
 
                 if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
@@ -284,18 +284,17 @@ class Trainer:
                     # for stat in top_stats[:10]: 
                     #     print(stat)
 
-            if coco_evaluator is not None:
-                coco_evaluator.synchronize_between_processes()
+            #coco_evaluator.synchronize_between_processes()
         
                 # Accumulate predictions from all processes
-                coco_evaluator.accumulate()
-                coco_evaluator.summarize()
+            #coco_evaluator.accumulate()
+            #coco_evaluator.summarize()
             # snapshot = tracemalloc.take_snapshot() 
             # top_stats = snapshot.statistics('lineno')
             # for stat in top_stats[:10]: 
             #     print(stat)
 
-            return coco_evaluator
+            #return coco_evaluator
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
