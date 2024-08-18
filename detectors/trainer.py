@@ -98,7 +98,8 @@ class Trainer:
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
-            coco_evaluator = self._evaluate(model, criterion, dataloader_val)
+            #coco_evaluator = self._evaluate(model, criterion, dataloader_val)
+            self._evaluate(model, criterion, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch) % ckpt_every == 0:
@@ -169,9 +170,10 @@ class Trainer:
                 for t in targets
             ]
 
-            plots.visualize_img_tensors(samples)
-            exit()
-
+            # Visualize the first batch of augmented images
+            if steps == 0:
+                plots.visualize_norm_img_tensors(samples, self.output_paths["output_dir"] / "train-images")
+            break
             optimizer.zero_grad()
 
             # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
@@ -240,6 +242,11 @@ class Trainer:
                 {key: value.to(self.device) for key, value in t.items()}
                 for t in targets
             ]
+            
+            # Visualize the first batch of val images
+            if steps == 0:
+                plots.visualize_norm_img_tensors(samples, self.output_paths["output_dir"] / "val-images")
+            exit()
 
             # samples = F.resize(samples, [512, 512], antialias=None)
 
