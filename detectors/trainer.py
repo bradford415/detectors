@@ -97,8 +97,8 @@ class Trainer:
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
-            #coco_evaluator = self._evaluate(model, criterion, dataloader_val)
-            self._evaluate(model, criterion, dataloader_val)
+            coco_evaluator = self._evaluate(model, criterion, dataloader_val)
+            #self._evaluate(model, criterion, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch) % ckpt_every == 0:
@@ -188,10 +188,16 @@ class Trainer:
             final_loss.backward()
             optimizer.step()
 
-            # Calling scheduler step within the epoch passes the step number to the Lambda function;
-            # if step is called outside this loop, then it will pass the epoch number
+            # Calling scheduler step increments a counter which is passed to the lambda function;
+            # if .step() is called after every batch, then it will pass the current step;
+            # if .step() is called after every epoch, then it will pass the epoch number; 
+            # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
             scheduler.step()
-
+            
+            
+            if (steps + 1) % 100:
+                log.info("Current learning_rate: %s", optimizer.state_dict()['param_groups'][0]['lr'])
+            
             if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
@@ -273,8 +279,7 @@ class Trainer:
             #   "img_id": {boxes: [], "scores": [], "labels", []}
             # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
             # and labels is the index of the maximum class probability; reminder
-            if coco_evaluator is not None:
-                coco_evaluator.update(results)
+            coco_evaluator.update(results)
             evaluator_time = time.time() - evaluator_time
 
             if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
@@ -290,12 +295,11 @@ class Trainer:
                 # for stat in top_stats[:10]:
                 #     print(stat)
 
-        if coco_evaluator is not None:
-            coco_evaluator.synchronize_between_processes()
+        coco_evaluator.synchronize_between_processes()
 
-            # Accumulate predictions from all processes
-            coco_evaluator.accumulate()
-            coco_evaluator.summarize()
+        # Accumulate predictions from all processes
+        coco_evaluator.accumulate()
+        coco_evaluator.summarize()
         # snapshot = tracemalloc.take_snapshot()
         # top_stats = snapshot.statistics('lineno')
         # for stat in top_stats[:10]:

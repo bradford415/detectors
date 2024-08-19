@@ -18,7 +18,7 @@ from detectors.models.darknet import Darknet
 from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
 from detectors.models.yolov4 import YoloV4, Yolov4_pytorch
 from detectors.trainer import Trainer
-from detectors.utils import misc, learning
+from detectors.utils import misc, schedulers
 
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
@@ -35,7 +35,7 @@ loss_map = {
 }
 
 scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR,
-                 "lambda_lr": torch.optim.lr_scheduler.LambdaLR, # Define scheduler based on a user-defined function
+                 "lambda_lr": torch.optim.lr_scheduler.LambdaLR, # Multiply the initial lr by a factor determined by a user-defined function; it does NOT multiply the factor by the current lr, always the initial lr
                  }
 
 # Initialize the root logger
@@ -201,7 +201,7 @@ def _init_training_objects(
     optimizer = optimizer_map[optimizer](
         model_params, lr=learning_rate, weight_decay=weight_decay
     )
-    lr_scheduler = scheduler_map[scheduler](optimizer, learning.burnin_schedule)
+    lr_scheduler = scheduler_map[scheduler](optimizer, schedulers.burnin_schedule_modified)
     return optimizer, lr_scheduler
 
 
