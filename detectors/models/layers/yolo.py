@@ -26,7 +26,7 @@ def yolo_forward_dynamic(
         scale_x_y:
 
     Returns:
-        1. boxes: (B, num_anchors * H * W, 1, 4) Normalized bounding box predictions, predicts num_anchors per grid cell (H, W);
+        1. boxes: (B, num_anchors * H * W, 1, 4) Normalized bounding box predictions [0,1], predicts num_anchors per grid cell (H, W);
                   grid cell -> size of final feature map;
                   4 = normalized upper left and lower right bbox coordinates;
                   the coordinates are not the size of input dimensions, they are normalized
@@ -51,7 +51,7 @@ def yolo_forward_dynamic(
     object_confs_list = []
     cls_confs_list = []
 
-    # Each list will have length of num_anchors becuase each cell predicts num_anchors bboxes;
+    # Each list will have length of num_anchors because each cell predicts num_anchors bboxes;
     # 1 bbox prediction has length (5 + num_classes), so if we let each cell predict 3 bboxes per cell,
     # the last dimension will have length 3 * (5 + num_classes), so each list alement will have (5 + num_classes)
     for i in range(num_anchors):
@@ -98,11 +98,11 @@ def yolo_forward_dynamic(
     )
 
     # These next few equations are described in the YoloV2 paper in figure 3.
-    # Contrain bxy to [0, 1] with sigmoid; this represents the center of the bounding box relative to the grid cell
+    # Contsrain bxy to [0, 1] with sigmoid; this represents the center of the bounding box relative to the grid cell
     # This is only computes the first part of bx and by because we still need to add CxCy
     bxy = torch.sigmoid(bxy) * scale_x_y - 0.5 * (
         scale_x_y - 1
-    )  # scale_x_y in this case is 1
+    )  # scale_x_y in this case is 1 which would 0 out the 2nd term
 
     # Scale the w/h predictions by computing the first part of bw and bh, we will still need to multiply by anchor dimensions.
     # Reminder, the equation is b_wh = p_wh*e^(t_wh).
@@ -244,7 +244,6 @@ def yolo_forward_dynamic(
     # boxes: [batch, num_anchors * H * W, 1, 4]
     # confs: [batch, num_anchors * H * W, num_classes]
 
-    ################### START HERE AND SEE WHERE IT TAKES US ################
     return boxes, confs
 
 
