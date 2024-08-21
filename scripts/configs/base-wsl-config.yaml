@@ -3,7 +3,7 @@
 
 # Mode to use for debugging/development; this only uses a few samples in in the train/val dataset
 # to quickly run the code
-debug_mode: False
+debug_mode: True
 
 # Root directory of your project; type "pwd" in the command line to find it
 root_dir: "/home/bselee/programming/detectors"
