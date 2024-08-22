@@ -251,7 +251,7 @@ class ToTensor(object):
 class ToTensorNoNormalization:
     def __call__(self, pil_image: PILImage, target) -> torch.Tensor:
         """Converts a PIL Image (H, W, C) to a Tensor (B, C, H, W) without normalization
-        
+
         This also converts the target["bbox"]
 
         Most of the code is from here: https://pytorch.org/vision/main/_modules/torchvision/transforms/functional.html#to_tensor
@@ -332,12 +332,12 @@ class Normalize:
             # boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return image, target
-    
-    
+
+
 class UnNormalize(object):
     """Unormalize a tensor that normalized by torchvision.transforms.Normalize (subtracted mean and divided by std dev)"""
-    
-    def __init__(self, mean, std, inplace = False):
+
+    def __init__(self, mean, std, inplace=False):
         self.mean = mean
         self.std = std
         self.inplace = inplace
@@ -351,7 +351,7 @@ class UnNormalize(object):
         """
         if not self.inplace:
             tensor = tensor.clone()
-        
+
         for t, m, s in zip(tensor, self.mean, self.std):
             t.mul_(s).add_(m)
             # The normalize code -> t.sub_(m).div_(s)

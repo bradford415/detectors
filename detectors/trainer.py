@@ -17,8 +17,8 @@ from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
-from detectors.utils import misc, plots
 from detectors.postprocessing.nms import non_max_suppression
+from detectors.utils import misc, plots
 from detectors.utils.box_ops import val_preds_to_img_size
 
 log = logging.getLogger(__name__)
@@ -94,12 +94,14 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            self._train_one_epoch(model, criterion, dataloader_train, optimizer, scheduler, epoch)
+            self._train_one_epoch(
+                model, criterion, dataloader_train, optimizer, scheduler, epoch
+            )
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
             coco_evaluator = self._evaluate(model, criterion, dataloader_val)
-            #self._evaluate(model, criterion, dataloader_val)
+            # self._evaluate(model, criterion, dataloader_val)
 
             # Save the model every ckpt_every
             if ckpt_every is not None and (epoch) % ckpt_every == 0:
@@ -174,7 +176,9 @@ class Trainer:
 
             # Visualize the first batch of augmented images
             if steps == 0:
-                plots.visualize_norm_img_tensors(samples, self.output_paths["output_dir"] / "train-images")
+                plots.visualize_norm_img_tensors(
+                    samples, self.output_paths["output_dir"] / "train-images"
+                )
 
             optimizer.zero_grad()
 
@@ -191,14 +195,16 @@ class Trainer:
 
             # Calling scheduler step increments a counter which is passed to the lambda function;
             # if .step() is called after every batch, then it will pass the current step;
-            # if .step() is called after every epoch, then it will pass the epoch number; 
+            # if .step() is called after every epoch, then it will pass the epoch number;
             # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
             scheduler.step()
-            
-            
+
             if (steps + 1) % 100:
-                log.info("Current learning_rate: %s", optimizer.state_dict()['param_groups'][0]['lr'])
-            
+                log.info(
+                    "Current learning_rate: %s",
+                    optimizer.state_dict()["param_groups"][0]["lr"],
+                )
+
             if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
@@ -209,7 +215,6 @@ class Trainer:
                 )
 
                 log.info("cpu utilization: %s", psutil.virtual_memory().percent)
-
 
     @torch.no_grad()
     def _evaluate(
@@ -253,19 +258,23 @@ class Trainer:
                 {key: value.to(self.device) for key, value in t.items()}
                 for t in targets
             ]
-            
+
             # Visualize the first batch of val images
             if steps == 0:
-                plots.visualize_norm_img_tensors(samples, self.output_paths["output_dir"] / "val-images")
+                plots.visualize_norm_img_tensors(
+                    samples, self.output_paths["output_dir"] / "val-images"
+                )
 
             # samples = F.resize(samples, [512, 512], antialias=None)
 
             # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
             # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
             bbox_preds, class_conf, objectness = model(samples, inference=True)
-            
+
             ########################### START HERE ######################## implement non max suppression
-            non_max_suppression(bbox_preds, class_conf, objectness, conf_thres=0.1, iou_thres=0.5)
+            non_max_suppression(
+                bbox_preds, class_conf, objectness, conf_thres=0.1, iou_thres=0.5
+            )
 
             # TODO, might have to change the output of the bboxes
 

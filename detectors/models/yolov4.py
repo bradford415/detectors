@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from detectors.models.layers.yolo import YoloLayer, YoloLayer_pytorch
+from detectors.models.layers.yolo import YoloLayer#, YoloLayer_pytorch
 from detectors.utils.box_ops import get_region_boxes
 
 

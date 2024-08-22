@@ -34,9 +34,10 @@ loss_map = {
     "cross_entropy": nn.CrossEntropyLoss(),
 }
 
-scheduler_map = {"step_lr": torch.optim.lr_scheduler.StepLR,
-                 "lambda_lr": torch.optim.lr_scheduler.LambdaLR, # Multiply the initial lr by a factor determined by a user-defined function; it does NOT multiply the factor by the current lr, always the initial lr
-                 }
+scheduler_map = {
+    "step_lr": torch.optim.lr_scheduler.StepLR,
+    "lambda_lr": torch.optim.lr_scheduler.LambdaLR,  # Multiply the initial lr by a factor determined by a user-defined function; it does NOT multiply the factor by the current lr, always the initial lr
+}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -201,7 +202,9 @@ def _init_training_objects(
     optimizer = optimizer_map[optimizer](
         model_params, lr=learning_rate, weight_decay=weight_decay
     )
-    lr_scheduler = scheduler_map[scheduler](optimizer, schedulers.burnin_schedule_modified)
+    lr_scheduler = scheduler_map[scheduler](
+        optimizer, schedulers.burnin_schedule_modified
+    )
     return optimizer, lr_scheduler
 
 
