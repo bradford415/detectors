@@ -1,4 +1,5 @@
-from typing import Tuple
+from itertools import chain
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -146,7 +147,7 @@ def yolo_forward_dynamic_old(
         anchor_w.append(anchors[i * 2])
         anchor_h.append(anchors[i * 2 + 1])
 
-    device = None
+    device = "cpu"
     cuda_check = output.is_cuda
     if cuda_check:
         device = output.get_device()
@@ -261,7 +262,7 @@ def yolo_forward_dynamic(
 class YoloLayer(nn.Module):
     """Yolo layer only used at inference time"""
 
-    def __init__(self, num_classes=80, anchors=[], stride=32, num_anchors=3):
+    def __init__(self, anchors: List[int], num_classes=80, stride=32, num_anchors=3):
         """Initalize Yolo Inference Layer
 
         Args:
@@ -273,6 +274,10 @@ class YoloLayer(nn.Module):
         """
         super().__init__()
         self.num_classes = num_classes
+        
+        # The number of outputs for a single prediction
+        self.num_output = num_classes + 5
+        
         self.anchors = anchors
         self.num_anchors = num_anchors
         self.coord_scale = 1
@@ -283,6 +288,16 @@ class YoloLayer(nn.Module):
         self.stride = stride
         self.seen = 0
         self.scale_x_y = 1
+        
+        # Flatten anchors to 1d python list then convert to tensor (anchor_pairs, 2)
+        #anchors = [pair for anchor_pair in anchors for pair in anchor_pair] # commenting out for now since 1d lists are easiest to store in .yamls (should consider making the anchors a config.py)
+        anchors = torch.tensor(anchors).float().view(-1, 2)
+        
+        # Assign parameters to be saved/restored by the state_dict but no trained by the optimizer;
+        # these also become attributes of the class
+        self.register_buffer('anchors', anchors)
+        self.register_buffer(
+            'anchor_grid', anchors.clone().view(1, -1, 1, 1, 2)) # (1, anchor_pairs, 1, 1, 2)
 
     def forward(self, head_output) -> Tuple[torch.tensor, torch.tensor]:
         """TODO
@@ -299,14 +314,14 @@ class YoloLayer(nn.Module):
         # the input size to the head_output size
         anchors = [anchor / self.stride for anchor in self.anchors]
 
-        return yolo_forward_dynamic_old(
-            head_output,
-            self.thresh,
-            self.num_classes,
-            anchors,
-            num_anchors=3,  # int(len(scaled_anchors) / 2),
-            scale_x_y=self.scale_x_y,
-        )
+        # return yolo_forward_dynamic_old(
+        #     head_output,
+        #     self.thresh,
+        #     self.num_classes,
+        #     anchors,
+        #     num_anchors=3,  # int(len(scaled_anchors) / 2),
+        #     scale_x_y=self.scale_x_y,
+        # )
         """Computes the normalized Yolo prediction bounding boxes (not input dim sized).
         This function is only called during inference, once for each prediction scale.
 
@@ -319,6 +334,7 @@ class YoloLayer(nn.Module):
             scale_x_y:
 
         Returns:
+        # TODO recomment this for the new code
             1. boxes: (B, num_anchors * H * W, 1, 4) Normalized bounding box predictions [0,1], predicts num_anchors per grid cell (H, W);
                     grid cell -> size of final feature map;
                     4 = normalized upper left and lower right bbox coordinates;
@@ -337,179 +353,33 @@ class YoloLayer(nn.Module):
         # H = output.size(2)
         # W = output.size(3)
 
-        # Lists to store prediction offsets (tx,ty), width/height, objectness, and class confidence
-        # by slicing the head output
-        bxy_list = []
-        bwh_list = []
-        object_confs_list = []
-        cls_confs_list = []
-        
         batch_size, _, grid_h, grid_w = head_output.shape
         
         # (B, num_anchors*(num_classes+5), out_h, out_w) -> (B, num_anchors, (num_classes+5), out_h, out_w) -> (B, num_anchors, out_h, out_w, (num_classes+5))
-        head_output = head_output.view(bs, self.num_anchors, 85, ny, nx).permute(0, 1, 3, 4, 2)
+        head_output = head_output.view(batch_size, self.num_anchors, self.num_output, grid_h, grid_w).permute(0, 1, 3, 4, 2)
 
         breakpoint()
-        self.grid = _make_grid(nx, ny) ########################################## START HERE ##############################
-        # These next few equations are described in the YoloV2 paper in figure 3.
-        # Contsrain bxy to [0, 1] with sigmoid; this represents the center of the bounding box relative to the grid cell
-        # This is only computes the first part of bx and by because we still need to add CxCy
-        bxy = torch.sigmoid(bxy) * self.scale_x_y - 0.5 * (
-            self.scale_x_y - 1
-        )  # scale_x_y in this case is 1 which would 0 out the 2nd term
+        self.grid = self._make_grid(grid_w, grid_h).to(head_output) ########################################## START HERE ##############################
+        
+        # Scale cx, cy predictions to [0, 1] then offset by cell grid
+        head_output[..., 0:2] = (head_output[..., 0:2].sigmoid() + self.grid)
+        
+        # Scale w, h predictions by e and multply by scaled anchor size
+        head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid
 
-        # Scale the w/h predictions by computing the first part of bw and bh, we will still need to multiply by anchor dimensions.
-        # Reminder, the equation is b_wh = p_wh*e^(t_wh).
-        # The e^bwh is explained in the link below; basically, this is how the authors decided to parametize the scaling because it has nice properties, it does not have to be done like this
-        # https://stats.stackexchange.com/questions/345251/coordinate-prediction-parameterization-in-object-detection-networks/345267#345267
+        head_output[..., 4:] = head_output[..., 4:].sigmoid() # conf, cls
 
-        bwh = torch.exp(bwh)
 
-        # Similarly, scale the objectness and class confidences between [0,1]
-        object_confs = torch.sigmoid(object_confs)
-        cls_confs = torch.sigmoid(cls_confs)
+        head_output.view(batch_size, -1, self.num_output) # (B, out_w * out_h * num_anchors, 5 + num_classes)
 
-        # Prepare C-x, C-y, P-w, P-h (None of them are torch related)
-
-        # grid_x, and grid_y act as the grid cells and will be used to add Cx, Cy grid offsets to the predictions; each "grid cell" is a 1x1 unit
-        # (B, 1, H, W)
-        grid_x = np.expand_dims(
-            np.expand_dims(
-                np.expand_dims(
-                    np.linspace(0, head_output.size(3) - 1, head_output.size(3)), axis=0
-                ).repeat(head_output.size(2), 0),
-                axis=0,
-            ),
-            axis=0,
-        )
-
-        # (B, 1, H, W)
-        grid_y = np.expand_dims(
-            np.expand_dims(
-                np.expand_dims(
-                    np.linspace(0, head_output.size(2) - 1, head_output.size(2)), axis=1
-                ).repeat(head_output.size(3), 1),
-                axis=0,
-            ),
-            axis=0,
-        )
-
-        anchor_w = []
-        anchor_h = []
-        for i in range(self.num_anchors):
-            anchor_w.append(anchors[i * 2])
-            anchor_h.append(anchors[i * 2 + 1])
-
-        device = None
-        cuda_check = head_output.is_cuda
-        if cuda_check:
-            device = head_output.get_device()
-
-        # Lists to store final computations for each anchor
-        bx_list = []
-        by_list = []
-        bw_list = []
-        bh_list = []
-
-        # Apply C-x, C-y, P-w, P-h; add grid offsets and multiply anchor dimensions to predictions
-        for i in range(self.num_anchors):
-            ii = i * 2
-
-            # Add x/y grid offsets to the x preds and store the result
-            # bx: (batch, 1, H, W), by: (batch, 1, H, W)
-            bx = bxy[:, ii : ii + 1] + torch.tensor(
-                grid_x, device=device, dtype=torch.float32
-            )  # grid_x.to(device=device, dtype=torch.float32)
-            by = bxy[:, ii + 1 : ii + 2] + torch.tensor(
-                grid_y, device=device, dtype=torch.float32
-            )  # grid_y.to(device=device, dtype=torch.float32)
-
-            # Multiply w/h anchor by the predictions to scale them and store result (batch, 1, H, W)
-            # bw: (batch, 1, H, W), bh: (batch, 1, H, W)
-            bw = bwh[:, ii : ii + 1] * anchor_w[i]
-            # Shape: [batch, 1, H, W]
-            bh = bwh[:, ii + 1 : ii + 2] * anchor_h[i]
-
-            bx_list.append(bx)
-            by_list.append(by)
-            bw_list.append(bw)
-            bh_list.append(bh)
-
-        # Concat list of final computed predictions along anchor dimension
-        # bx, by, bw, bh: (batch_size, num_anchors, H, W)
-        bx = torch.cat(bx_list, dim=1)
-        by = torch.cat(by_list, dim=1)
-        bw = torch.cat(bw_list, dim=1)
-        bh = torch.cat(bh_list, dim=1)
-
-        # Concat [final x coord, final width] and [final y coord, final height]
-        # bx_bw, by_bh (B, 2 * num_anchors, H, W)
-        bx_bw = torch.cat((bx, bw), dim=1)
-        by_bh = torch.cat((by, bh), dim=1)
+ 
 
         # Normalize coordinates to [0, 1];
         # reminder output shape is (B, C, H, W) where H/W are downsampled by the stride
-        bx_bw /= head_output.size(3)
-        by_bh /= head_output.size(2)
+        # bx_bw /= head_output.size(3)
+        # by_bh /= head_output.size(2)
 
-        # Extract each component and reshape to (batch, num_anchors * H * W, 1)
-        bx = bx_bw[:, : self.num_anchors].view(
-            head_output.size(0),
-            self.num_anchors * head_output.size(2) * head_output.size(3),
-            1,
-        )
-        by = by_bh[:, : self.num_anchors].view(
-            head_output.size(0),
-            self.num_anchors * head_output.size(2) * head_output.size(3),
-            1,
-        )
-        bw = bx_bw[:, self.num_anchors :].view(
-            head_output.size(0),
-            self.num_anchors * head_output.size(2) * head_output.size(3),
-            1,
-        )
-        bh = by_bh[:, self.num_anchors :].view(
-            head_output.size(0),
-            self.num_anchors * head_output.size(2) * head_output.size(3),
-            1,
-        )
 
-        # Get the x and y coordinates of the upper left and lower right of the bounding box prediction;
-        # Currently, bx/by are the center coordinate predictions;
-        # The coordinates are still normalized at this point and may contain negatives
-        bx1 = bx - bw * 0.5
-        by1 = by - bh * 0.5
-        bx2 = bx1 + bw
-        by2 = by1 + bh
-
-        # Group upper left and low right coordinates to form num_anchors prediction for each grid_cell
-        # Shape: [batch, num_anchors * h * w, 4] -> [batch, num_anchors * h * w, 1, 4] ** Not sure why the 1 dim is needed **
-        boxes = torch.cat((bx1, by1, bx2, by2), dim=2).view(
-            head_output.size(0),
-            self.num_anchors * head_output.size(2) * head_output.size(3),
-            1,
-            4,
-        )
-        # boxes = boxes.repeat(1, 1, num_classes, 1)
-
-        # Final prediction shapes
-        # boxes:     [batch, num_anchors * H * W, 1, 4]
-        # cls_confs: [batch, num_anchors * H * W, num_classes]
-        # det_confs: [batch, num_anchors * H * W]
-
-        # (B, num_anchors * H * W, 1)
-        object_confs = object_confs.view(
-            head_output.size(0),
-            self.num_anchors * head_output.size(2) * head_output.size(3),
-            1,
-        )
-
-        # Get final confidence scores by multiplying objectness by the class confidences
-        confs = cls_confs * object_confs
-
-        # Final prediction shapes
-        # boxes: [batch, num_anchors * H * W, 1, 4]
-        # confs: [batch, num_anchors * H * W, num_classes]
     
     @staticmethod
     def _make_grid(grid_w: int = 20 , grid_h: int = 20):

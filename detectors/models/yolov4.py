@@ -392,6 +392,7 @@ class Yolov4Head(nn.Module):
             y1 = self.yolo1(predictions_scale1)
             y2 = self.yolo2(predictions_scale2)
             y3 = self.yolo3(predictions_scale3)
+            # Shoudl remove this i think
             return get_region_boxes([y1, y2, y3])
 
         else:
