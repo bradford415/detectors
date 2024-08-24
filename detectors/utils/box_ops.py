@@ -9,6 +9,16 @@ import torch
 from torchvision.ops.boxes import box_area
 
 
+def cxcywh_to_xyxy(x):
+    """Convert boxes in yolo format [cw, cy, w, h] to [tl_x, tl_y, br_x, br,y]"""
+    y = x.new(x.shape)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
+
+
 def box_cxcywh_to_xyxy(x):
     x_c, y_c, w, h = x.unbind(-1)
     b = [(x_c - 0.5 * w), (y_c - 0.5 * h), (x_c + 0.5 * w), (y_c + 0.5 * h)]

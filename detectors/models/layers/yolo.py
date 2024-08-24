@@ -274,10 +274,10 @@ class YoloLayer(nn.Module):
         """
         super().__init__()
         self.num_classes = num_classes
-        
+
         # The number of outputs for a single prediction
         self.num_output = num_classes + 5
-        
+
         self.anchors = anchors
         self.num_anchors = num_anchors
         self.coord_scale = 1
@@ -288,16 +288,17 @@ class YoloLayer(nn.Module):
         self.stride = stride
         self.seen = 0
         self.scale_x_y = 1
-        
+
         # Flatten anchors to 1d python list then convert to tensor (anchor_pairs, 2)
-        #anchors = [pair for anchor_pair in anchors for pair in anchor_pair] # commenting out for now since 1d lists are easiest to store in .yamls (should consider making the anchors a config.py)
+        # anchors = [pair for anchor_pair in anchors for pair in anchor_pair] # commenting out for now since 1d lists are easiest to store in .yamls (should consider making the anchors a config.py)
         anchors = torch.tensor(anchors).float().view(-1, 2)
-        
+
         # Assign parameters to be saved/restored by the state_dict but no trained by the optimizer;
         # these also become attributes of the class
-        self.register_buffer('anchors', anchors)
+        self.register_buffer("anchors", anchors)
         self.register_buffer(
-            'anchor_grid', anchors.clone().view(1, -1, 1, 1, 2)) # (1, anchor_pairs, 1, 1, 2)
+            "anchor_grid", anchors.clone().view(1, -1, 1, 1, 2)
+        )  # (1, anchor_pairs, 1, 1, 2)
 
     def forward(self, head_output) -> Tuple[torch.tensor, torch.tensor]:
         """TODO
@@ -354,46 +355,50 @@ class YoloLayer(nn.Module):
         # W = output.size(3)
 
         batch_size, _, grid_h, grid_w = head_output.shape
-        
+
         # (B, num_anchors*(num_classes+5), out_h, out_w) -> (B, num_anchors, (num_classes+5), out_h, out_w) -> (B, num_anchors, out_h, out_w, (num_classes+5))
-        head_output = head_output.view(batch_size, self.num_anchors, self.num_output, grid_h, grid_w).permute(0, 1, 3, 4, 2)
+        head_output = head_output.view(
+            batch_size, self.num_anchors, self.num_output, grid_h, grid_w
+        ).permute(0, 1, 3, 4, 2)
 
         breakpoint()
-        self.grid = self._make_grid(grid_w, grid_h).to(head_output) ########################################## START HERE ##############################
-        
+        self.grid = self._make_grid(grid_w, grid_h).to(
+            head_output
+        )  ########################################## START HERE ##############################
+
         # Scale cx, cy predictions to [0, 1] then offset by cell grid
-        head_output[..., 0:2] = (head_output[..., 0:2].sigmoid() + self.grid)
-        
+        head_output[..., 0:2] = head_output[..., 0:2].sigmoid() + self.grid
+
         # Scale w, h predictions by e and multply by scaled anchor size
         head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid
 
-        head_output[..., 4:] = head_output[..., 4:].sigmoid() # conf, cls
+        head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
 
-
-        head_output.view(batch_size, -1, self.num_output) # (B, out_w * out_h * num_anchors, 5 + num_classes)
-
- 
+        head_output.view(
+            batch_size, -1, self.num_output
+        )  # (B, out_w * out_h * num_anchors, 5 + num_classes)
 
         # Normalize coordinates to [0, 1];
         # reminder output shape is (B, C, H, W) where H/W are downsampled by the stride
         # bx_bw /= head_output.size(3)
         # by_bh /= head_output.size(2)
 
+        return head_output
 
-    
     @staticmethod
-    def _make_grid(grid_w: int = 20 , grid_h: int = 20):
+    def _make_grid(grid_w: int = 20, grid_h: int = 20):
         """Create grid of (x, y) coordinates used for the cell offsets
-        
+
         Args:
             grid_w: Width of the grid
             grid_h: Height of the grid
-            
+
         Returns:
             Tensor of x/y coords of the cell grid (1, 1, grid_h, grid_w, 2)
         """
-        yv, xv = torch.meshgrid([torch.arange(grid_h), torch.arange(grid_w)], indexing='ij')
-        
+        yv, xv = torch.meshgrid(
+            [torch.arange(grid_h), torch.arange(grid_w)], indexing="ij"
+        )
+
         # Stack so [:, :, 0] is the x coord grid and [:, :, 1] is the y coord grid
         return torch.stack((xv, yv), dim=2).view((1, 1, grid_h, grid_w, 2)).float()
-        
