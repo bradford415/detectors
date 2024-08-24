@@ -278,7 +278,6 @@ class YoloLayer(nn.Module):
         # The number of outputs for a single prediction
         self.num_output = num_classes + 5
 
-        self.anchors = anchors
         self.num_anchors = num_anchors
         self.coord_scale = 1
         self.noobject_scale = 1
@@ -361,10 +360,9 @@ class YoloLayer(nn.Module):
             batch_size, self.num_anchors, self.num_output, grid_h, grid_w
         ).permute(0, 1, 3, 4, 2)
 
-        breakpoint()
         self.grid = self._make_grid(grid_w, grid_h).to(
             head_output
-        )  ########################################## START HERE ##############################
+        )
 
         # Scale cx, cy predictions to [0, 1] then offset by cell grid
         head_output[..., 0:2] = head_output[..., 0:2].sigmoid() + self.grid
@@ -373,8 +371,12 @@ class YoloLayer(nn.Module):
         head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid
 
         head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
+        
 
-        head_output.view(
+        # Reshape to (B, out_w*out_h*num_anchors, num_classes+5);
+        # this allows us to concatenate all the yolo layers along dim=1 since
+        # each layer returns a different scale
+        head_output = head_output.reshape(
             batch_size, -1, self.num_output
         )  # (B, out_w * out_h * num_anchors, 5 + num_classes)
 

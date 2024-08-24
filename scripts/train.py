@@ -16,7 +16,7 @@ from detectors.data.collate_functions import collate_fn
 from detectors.models.backbones import backbone_map
 from detectors.models.darknet import Darknet
 from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
-from detectors.models.yolov4 import YoloV4, Yolov4_pytorch
+from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import misc, schedulers
 

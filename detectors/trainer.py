@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
+from detectors.evaluate import get_batch_statistics
 from detectors.postprocessing.nms import non_max_suppression
 from detectors.utils import misc, plots
 from detectors.utils.box_ops import val_preds_to_img_size
@@ -269,12 +270,14 @@ class Trainer:
 
             # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
             # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
-            bbox_preds, class_conf, objectness = model(samples, inference=True)
+            predictions = model(samples, inference=True)
 
-            ########################### START HERE ######################## implement non max suppression
-            non_max_suppression(
-                bbox_preds, class_conf, objectness, conf_thres=0.1, iou_thres=0.5
+            # TODO: define these thresholds in the config file under postprocessing maybe?
+            nms_preds = non_max_suppression(
+                predictions, conf_thres=0.1, iou_thres=0.5 # nms thresh
             )
+
+            get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
             # TODO, might have to change the output of the bboxes
 

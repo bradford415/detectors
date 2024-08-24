@@ -392,9 +392,8 @@ class Yolov4Head(nn.Module):
             y1 = self.yolo1(predictions_scale1)
             y2 = self.yolo2(predictions_scale2)
             y3 = self.yolo3(predictions_scale3)
-            # Shoudl remove this i think
-            # return get_region_boxes([y1, y2, y3])
-            breakpoint()
+
+            # (B, num_preds_all_layers, num_classes+5)
             return torch.cat([y1, y2, y3], dim=1)
 
         else:

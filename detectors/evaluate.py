@@ -1,22 +1,42 @@
+from typing import List
+
 import numpy as np
 import torch
 
 
-def get_batch_statistics(outputs, targets, iou_threshold):
-    """Compute true positives, predicted scores and predicted labels per sample"""
+def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
+    """Compute true positives, predicted scores and predicted labels per sample.
+    This function must be used after non_max_suppression
+    
+    Args:
+        outputs: Model predictions after non_max_suppression has been applied
+                 shape of each list element (max_preds, 6) where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
+        targets:
+        iou_threshold: IoU threshold required to qualify as detected
+    """
     batch_metrics = []
+
+    # Loop through each batch
     for sample_i in range(len(outputs)):
         if outputs[sample_i] is None:
             continue
-
+        
+        # Extract a single sample prediction
         output = outputs[sample_i]
+
+        # Extract the labels for the sample
+        target = targets[sample_i]
+
+        # Extract box preds (xyxy, objectness, class score)
         pred_boxes = output[:, :4]
         pred_scores = output[:, 4]
         pred_labels = output[:, -1]
 
+        # (max_nms_preds,); this is defined by max_nms in non_max_suppression()
+        breakpoint()
         true_positives = np.zeros(pred_boxes.shape[0])
 
-        annotations = targets[targets[:, 0] == sample_i][:, 1:]
+        annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
         target_labels = annotations[:, 0] if len(annotations) else []
         if len(annotations):
             detected_boxes = []

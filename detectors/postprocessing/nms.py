@@ -1,15 +1,19 @@
 import time
+from typing import List
 
 import torch
 import torchvision
 
-from detectors.utils.box_ops import cxcywh2xyxy
+from detectors.utils.box_ops import cxcywh_to_xyxy
 
 
-def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=None):
+def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=None) -> List[torch.tensor]:
     """Performs Non-Maximum Suppression (NMS) on inference results
+
     Returns:
-         detections with shape: nx6 (x1, y1, x2, y2, conf, cls)
+        A list of tensors where each element is the nms predictions for an image;
+        the length of the output is the batch_size and each element has shape (max_nms, 6)
+        where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
     """
 
     nc = predictions.shape[2] - 5  # number of classes
@@ -42,7 +46,7 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
         box_pred[:, 5:] *= box_pred[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
-        box = cxcywh2xyxy(box_pred[:, :4])
+        box = cxcywh_to_xyxy(box_pred[:, :4])
 
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
@@ -79,13 +83,17 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
 
         # boxes (offset by class), scores; offset explained here https://github.com/ultralytics/yolov5/discussions/5825#discussioncomment-1720852
         boxes, scores = box_pred[:, :4] + c, box_pred[:, 4]
-        i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
-        if i.shape[0] > max_det:  # limit detections
-            i = i[:max_det]
+
+        # ops.nms returns indices of the elements that have been kept by NMS, sorted in decreasing order of scores
+        nms_indices = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+        
+        # Limit detections if there are more than max_det detection
+        if nms_indices.shape[0] > max_det:  
+            nms_indices = nms_indices[:max_det]
 
         ########### TODO: Should probably change the yolo layer to not chagne bbox format and return the full tensor, not objectness*cls_conf separately
 
-        output[image_index] = box_pred[i].detach().cpu()
+        output[image_index] = box_pred[nms_indices].detach().cpu()
 
         if (time.time() - t) > time_limit:
             print(f"WARNING: NMS time limit {time_limit}s exceeded")

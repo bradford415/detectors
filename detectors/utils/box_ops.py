@@ -9,8 +9,15 @@ import torch
 from torchvision.ops.boxes import box_area
 
 
-def cxcywh_to_xyxy(x):
-    """Convert boxes in yolo format [cw, cy, w, h] to [tl_x, tl_y, br_x, br,y]"""
+def cxcywh_to_xyxy(x: torch.Tensor):
+    """Convert boxes in yolo format [cw, cy, w, h] to [tl_x, tl_y, br_x, br,y]
+    
+    Args:
+        x: TODO
+
+    Returns:
+        A new tensor of the same shape as the the input tensor
+    """
     y = x.new(x.shape)
     y[..., 0] = x[..., 0] - x[..., 2] / 2
     y[..., 1] = x[..., 1] - x[..., 3] / 2
