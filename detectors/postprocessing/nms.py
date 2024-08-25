@@ -10,12 +10,19 @@ from detectors.utils.box_ops import cxcywh_to_xyxy
 def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=None) -> List[torch.tensor]:
     """Performs Non-Maximum Suppression (NMS) on inference results
 
+    Args:
+        predictions: Model output predictions (B, num_preds, num_class+5); num_preds is the number of 
+                     predictions across across all output scales; predictions from yolo are (cx, cy, w, h)
+                     and are converted to (tl_x, tl_y, br_x, br_y) in this function
+
     Returns:
         A list of tensors where each element is the nms predictions for an image;
         the length of the output is the batch_size and each element has shape (max_nms, 6)
         where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
     """
 
+    assert len(predictions.shape) == 3
+ 
     nc = predictions.shape[2] - 5  # number of classes
 
     # Settings
@@ -47,11 +54,13 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = cxcywh_to_xyxy(box_pred[:, :4])
 
-        # Detections matrix nx6 (xyxy, conf, cls)
+        # Filter out predictions by conf_threshold in the multi_label case and by the maximum class confidence in the single label case
         if multi_label:
-            i, j = (box_pred[:, 5:] > conf_thres).nonzero(as_tuple=False).T
+            # Indices where the class_conf > conf_threshold (2, num_preds*(num_confs>0));
+            # pred_index is the index of the pred corresponding to the class and class_index, each have shape (num_preds*(num_confs>0),)
+            pred_index, class_index = (box_pred[:, 5:] > conf_thres).nonzero(as_tuple=False).T
             box_pred = torch.cat(
-                (box[i], box_pred[i, j + 5, None], j[:, None].float()), 1
+                (box[pred_index], box_pred[pred_index, class_index + 5, None], class_index[:, None].float()), 1
             )
         else:  # best class only
             # Extract the maximum class confidence and index
@@ -59,6 +68,8 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
             box_pred = torch.cat((box, max_conf, max_indices.float()), 1)[
                 max_conf.view(-1) > conf_thres
             ]
+        # box_pred shape if multi_label (num_preds*(num_confs>0), 6) where 6 is (box_coords, class_confidence, class_label)
+        # box_pred shape if single label (num_preds, 6)
 
         # Filter by class
         if classes is not None:
@@ -77,7 +88,6 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
             box_pred = box_pred[box_pred[:, 4].argsort(descending=True)[:max_nms]]
 
         # Batched NMS
-        breakpoint()
         c = box_pred[:, 5:6] * max_wh  # classes
 
         # boxes (offset by class), scores; offset explained here https://github.com/ultralytics/yolov5/discussions/5825#discussioncomment-1720852

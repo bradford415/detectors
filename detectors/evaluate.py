@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -6,19 +6,26 @@ import torch
 from detectors.utils.box_ops import box_iou_modified, bbox_iou_git
 
 
-def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
+def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_threshold) -> List:
     """Compute true positives, predicted scores and predicted labels per sample.
     This function must be used after non_max_suppression
     
     Args:
         outputs: Model predictions after non_max_suppression has been applied
                  shape of each list element (max_preds, 6) where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
-        targets:
+        targets: Ground truth labels for the image; at minimum this must contain bbox coords [tl_x, tl_y, br_x, br_y] for
+                 each object and a corresponding class label
         iou_threshold: IoU threshold required to qualify as detected; IoU must be greater than or equal
                        to this value
+
+    Returns:
+        A list of len(batch_size) where each element has a list containing:
+            1. a numpy array of true_postives (num_preds,); 1 for true positive and 0 for false positive; num_preds is limited to 300 in nms
+            2. a tensor of class confidences (num_preds,)
+            3. a tensor of the pred labels (num_preds,)
     """
     batch_metrics = []
-
+    
     # Loop through each batch
     for sample_i in range(len(outputs)):
         if outputs[sample_i] is None:
@@ -36,7 +43,6 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
         pred_labels = output[:, -1]
 
         # (max_nms_preds,); this is defined by max_nms in non_max_suppression()
-        breakpoint()
         true_positives = np.zeros(pred_boxes.shape[0])
 
         #annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
@@ -72,7 +78,7 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
                 # Find the best matching target for our predicted box; 
                 # filtered_targets contains only the targets where the label matches the predicted label;
                 # filtered_target_positions is the indices of the coords in target_boxes for the pred_label
-                breakpoint()
+
                 # iou, box_filtered_index = box_iou_modified(
                 #     pred_box.unsqueeze(0), torch.stack(filtered_targets), return_union=False
                 # ).max(0)

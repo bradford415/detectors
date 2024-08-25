@@ -253,6 +253,8 @@ class Trainer:
         # for stat in top_stats[:10]:
         #     print(stat)
 
+
+        sample_metrics = [] # List of true positives, confidences, and class labels
         for steps, (samples, targets) in enumerate(dataloader_val):
             samples = samples.to(self.device)
             targets = [
@@ -270,9 +272,7 @@ class Trainer:
 
             for target in targets:
                 target["boxes"] = cxcywh_to_xyxy(target["boxes"])
-            breakpoint()
-            # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
-            # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
+
             predictions = model(samples, inference=True)
 
             # TODO: define these thresholds in the config file under postprocessing maybe?
@@ -280,39 +280,53 @@ class Trainer:
                 predictions, conf_thres=0.1, iou_thres=0.5 # nms thresh
             )
 
-            get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
+            sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
-            # TODO, might have to change the output of the bboxes
+        # No detections over whole validation set
+        if len(sample_metrics) == 0:  
+            log.info("---- No detections over whole validation set ----")
+            return None
+        
+        # Concatenate sample statistics
+        breakpoint()
+        true_positives, pred_scores, pred_labels = [
+            np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
+        metrics_output = ap_per_class(
+            true_positives, pred_scores, pred_labels, labels)
 
-            # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-            #    bbox_predictions, targets
-            # )
+        print_eval_stats(metrics_output, class_names, verbose)
 
-            ## TODO: Turn this into the PostProcess() like in DETR
-            ## TODO: Comment this
-            results = val_preds_to_img_size(targets, bbox_preds, class_conf)
+        return metrics_output
+        # TODO, might have to change the output of the bboxes
 
-            evaluator_time = time.time()
+        # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+        #    bbox_predictions, targets
+        # )
 
-            # results is a dict containing:
-            #   "img_id": {boxes: [], "scores": [], "labels", []}
-            # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
-            # and labels is the index of the maximum class probability; reminder
-            coco_evaluator.update(results)
-            evaluator_time = time.time() - evaluator_time
+        ## TODO: Turn this into the PostProcess() like in DETR
+        ## TODO: Comment this
+        #results = val_preds_to_img_size(targets, bbox_preds, class_conf)
+        evaluator_time = time.time()
 
-            if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
-                log.info(
-                    "val steps:%d/%-10d ",
-                    steps + 1,
-                    len(dataloader_val),
-                )
-                log.info("cpu utilization: %s", psutil.virtual_memory().percent)
+        # results is a dict containing:
+        #   "img_id": {boxes: [], "scores": [], "labels", []}
+        # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
+        # and labels is the index of the maximum class probability; reminder
+        coco_evaluator.update(results)
+        evaluator_time = time.time() - evaluator_time
 
-                # snapshot = tracemalloc.take_snapshot()
-                # top_stats = snapshot.statistics('lineno')
-                # for stat in top_stats[:10]:
-                #     print(stat)
+        if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
+            log.info(
+                "val steps:%d/%-10d ",
+                steps + 1,
+                len(dataloader_val),
+            )
+            log.info("cpu utilization: %s", psutil.virtual_memory().percent)
+
+            # snapshot = tracemalloc.take_snapshot()
+            # top_stats = snapshot.statistics('lineno')
+            # for stat in top_stats[:10]:
+            #     print(stat)
 
         coco_evaluator.synchronize_between_processes()
 
