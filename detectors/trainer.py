@@ -20,7 +20,7 @@ from detectors.data.coco_utils import convert_to_coco_api
 from detectors.evaluate import get_batch_statistics
 from detectors.postprocessing.nms import non_max_suppression
 from detectors.utils import misc, plots
-from detectors.utils.box_ops import val_preds_to_img_size
+from detectors.utils.box_ops import val_preds_to_img_size, cxcywh_to_xyxy
 
 log = logging.getLogger(__name__)
 
@@ -268,6 +268,9 @@ class Trainer:
 
             # samples = F.resize(samples, [512, 512], antialias=None)
 
+            for target in targets:
+                target["boxes"] = cxcywh_to_xyxy(target["boxes"])
+            breakpoint()
             # Inference outputs bbox_preds (tl_x, tl_y, br_x, br_y) and class confidences (num_classes);
             # TODO: This might be wrong comment: these should all be between 0-1 but some look greater than 1, need to investigate
             predictions = model(samples, inference=True)

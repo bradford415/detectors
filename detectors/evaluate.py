@@ -3,6 +3,8 @@ from typing import List
 import numpy as np
 import torch
 
+from detectors.utils.box_ops import box_iou_modified, bbox_iou_git
+
 
 def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
     """Compute true positives, predicted scores and predicted labels per sample.
@@ -12,7 +14,8 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
         outputs: Model predictions after non_max_suppression has been applied
                  shape of each list element (max_preds, 6) where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
         targets:
-        iou_threshold: IoU threshold required to qualify as detected
+        iou_threshold: IoU threshold required to qualify as detected; IoU must be greater than or equal
+                       to this value
     """
     batch_metrics = []
 
@@ -36,16 +39,18 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
         breakpoint()
         true_positives = np.zeros(pred_boxes.shape[0])
 
-        annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
-        target_labels = annotations[:, 0] if len(annotations) else []
+        #annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
+        annotations = torch.cat([torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1)
+        target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
         if len(annotations):
             detected_boxes = []
             target_boxes = annotations[:, 1:]
 
+            # Loop through each box prediction
             for pred_i, (pred_box, pred_label) in enumerate(
                 zip(pred_boxes, pred_labels)
             ):
-                # If targets are found break
+                # If all the targets are found break
                 if len(detected_boxes) == len(annotations):
                     break
 
@@ -54,23 +59,33 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets, iou_threshold):
                     continue
 
                 # Filter target_boxes by pred_label so that we only match against boxes of our own label
+                # Explanation: I think x is a tuple of (index, tensor), where tensor is a single box coord
+                #              from target_boxes; x[0] is the index and target_labels at that index equals
+                #              the pred_label then it will return the index and the target_box coord
                 filtered_target_position, filtered_targets = zip(
                     *filter(
-                        lambda x: target_labels[x[0]] == pred_label,
+                        lambda x: target_labels[x[0]] == pred_label, 
                         enumerate(target_boxes),
                     )
                 )
 
-                # Find the best matching target for our predicted box
-                iou, box_filtered_index = bbox_iou(
+                # Find the best matching target for our predicted box; 
+                # filtered_targets contains only the targets where the label matches the predicted label;
+                # filtered_target_positions is the indices of the coords in target_boxes for the pred_label
+                breakpoint()
+                # iou, box_filtered_index = box_iou_modified(
+                #     pred_box.unsqueeze(0), torch.stack(filtered_targets), return_union=False
+                # ).max(0)
+                iou, box_filtered_index = bbox_iou_git(
                     pred_box.unsqueeze(0), torch.stack(filtered_targets)
                 ).max(0)
 
                 # Remap the index in the list of filtered targets for that label to the index in the list with all targets.
                 box_index = filtered_target_position[box_filtered_index]
 
-                # Check if the iou is above the min treshold and i
+                # Check if the iou is above the min threshold and i
                 if iou >= iou_threshold and box_index not in detected_boxes:
+                    # if detected, set the true_positives tensor to 1 for that prediction
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
         batch_metrics.append([true_positives, pred_scores, pred_labels])
