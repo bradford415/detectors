@@ -21,6 +21,7 @@ from detectors.evaluate import get_batch_statistics
 from detectors.postprocessing.nms import non_max_suppression
 from detectors.utils import misc, plots
 from detectors.utils.box_ops import val_preds_to_img_size, cxcywh_to_xyxy
+from detectors.utils.eval import ap_per_class
 
 log = logging.getLogger(__name__)
 
@@ -253,14 +254,18 @@ class Trainer:
         # for stat in top_stats[:10]:
         #     print(stat)
 
-
-        sample_metrics = [] # List of true positives, confidences, and class labels
+        labels = []
+        sample_metrics = [] # List of tuples (true positives, cls_confs, cls_labels)
         for steps, (samples, targets) in enumerate(dataloader_val):
             samples = samples.to(self.device)
-            targets = [
-                {key: value.to(self.device) for key, value in t.items()}
-                for t in targets
-            ]
+            # targets = [
+            #     {key: value.to(self.device) for key, value in t.items()}
+            #     for t in targets
+            # ]
+            
+            # Extract labels from all samples in the batch into a 1d list
+            for target in targets:
+                labels += target["labels"].tolist()
 
             # Visualize the first batch of val images
             if steps == 0:
@@ -274,6 +279,9 @@ class Trainer:
                 target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
             predictions = model(samples, inference=True)
+            
+            # Transfer preds to CPU for post processing
+            predictions = predictions.to("cpu")
 
             # TODO: define these thresholds in the config file under postprocessing maybe?
             nms_preds = non_max_suppression(
@@ -287,10 +295,10 @@ class Trainer:
             log.info("---- No detections over whole validation set ----")
             return None
         
-        # Concatenate sample statistics
-        breakpoint()
+        # Concatenate sample statistics (batch_size*num_preds,)
         true_positives, pred_scores, pred_labels = [
             np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
+        
         metrics_output = ap_per_class(
             true_positives, pred_scores, pred_labels, labels)
 
