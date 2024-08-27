@@ -66,7 +66,7 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
 
                 # Filter target_boxes by pred_label so that we only match against boxes of our own label
                 # Explanation: I think x is a tuple of (index, tensor), where tensor is a single box coord
-                #              from target_boxes; x[0] is the index and target_labels at that index equals
+                #              from target_boxes; x[0] is the index; when target_labels at that index equals
                 #              the pred_label then it will return the index and the target_box coord
                 filtered_target_position, filtered_targets = zip(
                     *filter(
@@ -74,14 +74,16 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
                         enumerate(target_boxes),
                     )
                 )
+                # filtered_targets contains only the target boxes where the label matches the predicted label;
+                # filtered_target_positions is the indices of the rows in target_boxes for the pred_label
 
-                # Find the best matching target for our predicted box; 
-                # filtered_targets contains only the targets where the label matches the predicted label;
-                # filtered_target_positions is the indices of the coords in target_boxes for the pred_label
 
                 # iou, box_filtered_index = box_iou_modified(
                 #     pred_box.unsqueeze(0), torch.stack(filtered_targets), return_union=False
                 # ).max(0)
+                # Find the best matching target for our predicted box;
+                # predicted box is a single box prediction and filtered targets is 1 or more box labels
+                # which allows us to try and match the predicted box with the best overlapping target
                 iou, box_filtered_index = bbox_iou_git(
                     pred_box.unsqueeze(0), torch.stack(filtered_targets)
                 ).max(0)
@@ -95,4 +97,5 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
         batch_metrics.append([true_positives, pred_scores, pred_labels])
+        
     return batch_metrics
