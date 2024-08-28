@@ -70,7 +70,7 @@ def yolo_forward_dynamic_old(
 
         # (batch_size, num_classes, output_w, output_h)
         cls_confs_list.append(output[:, begin + 5 : end])
-    breakpoint()
+
     # Combine the list of tensors along channel dimension
     bxy = torch.cat(bxy_list, dim=1)  # (batch_size, num_anchors * 2, H, W)
     bwh = torch.cat(bwh_list, dim=1)  # (batch_size, num_anchors * 2, H, W)
@@ -360,9 +360,7 @@ class YoloLayer(nn.Module):
             batch_size, self.num_anchors, self.num_output, grid_h, grid_w
         ).permute(0, 1, 3, 4, 2)
 
-        self.grid = self._make_grid(grid_w, grid_h).to(
-            head_output
-        )
+        self.grid = self._make_grid(grid_w, grid_h).to(head_output)
 
         # Scale cx, cy predictions to [0, 1] then offset by cell grid
         head_output[..., 0:2] = head_output[..., 0:2].sigmoid() + self.grid
@@ -371,7 +369,6 @@ class YoloLayer(nn.Module):
         head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid
 
         head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
-        
 
         # Reshape to (B, out_w*out_h*num_anchors, num_classes+5);
         # this allows us to concatenate all the yolo layers along dim=1 since

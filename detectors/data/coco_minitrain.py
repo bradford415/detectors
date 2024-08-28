@@ -56,6 +56,10 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         self.prepare = PreprocessCoco()
 
+        # Extract dataset ontology
+        categories_list = self.coco.loadCats(self.coco.getCatIds())
+        self.class_names = [category["name"] for category in categories_list]
+
         # Substantially reduces the dataset size to quickly test code
         if debug_mode:
             self.ids = self.ids[:5]

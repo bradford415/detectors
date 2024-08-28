@@ -186,6 +186,7 @@ def main(base_config_path: str, model_config_path):
         "dataloader_val": dataloader_val,
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
+        "class_names": dataset_train.class_names,
         **train_args["epochs"],
     }
     trainer.train(**trainer_args)

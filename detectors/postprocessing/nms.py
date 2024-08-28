@@ -7,11 +7,13 @@ import torchvision
 from detectors.utils.box_ops import cxcywh_to_xyxy
 
 
-def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=None) -> List[torch.tensor]:
+def non_max_suppression(
+    predictions, conf_thres=0.25, iou_thres=0.45, classes=None
+) -> List[torch.tensor]:
     """Performs Non-Maximum Suppression (NMS) on inference results
 
     Args:
-        predictions: Model output predictions (B, num_preds, num_class+5); num_preds is the number of 
+        predictions: Model output predictions (B, num_preds, num_class+5); num_preds is the number of
                      predictions across across all output scales; predictions from yolo are (cx, cy, w, h)
                      and are converted to (tl_x, tl_y, br_x, br_y) in this function
 
@@ -22,7 +24,7 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
     """
 
     assert len(predictions.shape) == 3
- 
+
     nc = predictions.shape[2] - 5  # number of classes
 
     # Settings
@@ -58,9 +60,16 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
         if multi_label:
             # Indices where the class_conf > conf_threshold (2, num_preds*(num_confs>0));
             # pred_index is the index of the pred corresponding to the class and class_index, each have shape (num_preds*(num_confs>0),)
-            pred_index, class_index = (box_pred[:, 5:] > conf_thres).nonzero(as_tuple=False).T
+            pred_index, class_index = (
+                (box_pred[:, 5:] > conf_thres).nonzero(as_tuple=False).T
+            )
             box_pred = torch.cat(
-                (box[pred_index], box_pred[pred_index, class_index + 5, None], class_index[:, None].float()), 1
+                (
+                    box[pred_index],
+                    box_pred[pred_index, class_index + 5, None],
+                    class_index[:, None].float(),
+                ),
+                1,
             )
         else:  # best class only
             # Extract the maximum class confidence and index
@@ -95,14 +104,14 @@ def non_max_suppression(predictions, conf_thres=0.25, iou_thres=0.45, classes=No
 
         # ops.nms returns indices of the elements that have been kept by NMS, sorted in decreasing order of scores
         nms_indices = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
-        
+
         # Limit detections if there are more than max_det detection
-        if nms_indices.shape[0] > max_det:  
+        if nms_indices.shape[0] > max_det:
             nms_indices = nms_indices[:max_det]
 
         ########### TODO: Should probably change the yolo layer to not chagne bbox format and return the full tensor, not objectness*cls_conf separately
 
-        output[image_index] = box_pred[nms_indices]#.detach().cpu()
+        output[image_index] = box_pred[nms_indices]  # .detach().cpu()
 
         if (time.time() - t) > time_limit:
             print(f"WARNING: NMS time limit {time_limit}s exceeded")

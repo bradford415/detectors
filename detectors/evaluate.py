@@ -3,13 +3,15 @@ from typing import Dict, List
 import numpy as np
 import torch
 
-from detectors.utils.box_ops import box_iou_modified, bbox_iou_git
+from detectors.utils.box_ops import bbox_iou_git, box_iou_modified
 
 
-def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_threshold) -> List:
+def get_batch_statistics(
+    outputs: List[torch.Tensor], targets: List[Dict], iou_threshold
+) -> List:
     """Compute true positives, predicted scores and predicted labels per sample.
     This function must be used after non_max_suppression
-    
+
     Args:
         outputs: Model predictions after non_max_suppression has been applied
                  shape of each list element (max_preds, 6) where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
@@ -25,12 +27,12 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
             3. a tensor of the pred labels (num_preds,)
     """
     batch_metrics = []
-    
+
     # Loop through each batch
     for sample_i in range(len(outputs)):
         if outputs[sample_i] is None:
             continue
-        
+
         # Extract a single sample prediction
         output = outputs[sample_i]
 
@@ -45,8 +47,10 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
         # (max_nms_preds,); this is defined by max_nms in non_max_suppression()
         true_positives = np.zeros(pred_boxes.shape[0])
 
-        #annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
-        annotations = torch.cat([torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1)
+        # annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
+        annotations = torch.cat(
+            [torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1
+        )
         target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
         if len(annotations):
             detected_boxes = []
@@ -70,13 +74,12 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
                 #              the pred_label then it will return the index and the target_box coord
                 filtered_target_position, filtered_targets = zip(
                     *filter(
-                        lambda x: target_labels[x[0]] == pred_label, 
+                        lambda x: target_labels[x[0]] == pred_label,
                         enumerate(target_boxes),
                     )
                 )
                 # filtered_targets contains only the target boxes where the label matches the predicted label;
                 # filtered_target_positions is the indices of the rows in target_boxes for the pred_label
-
 
                 # iou, box_filtered_index = box_iou_modified(
                 #     pred_box.unsqueeze(0), torch.stack(filtered_targets), return_union=False
@@ -97,5 +100,5 @@ def get_batch_statistics(outputs: List[torch.Tensor], targets: List[Dict], iou_t
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
         batch_metrics.append([true_positives, pred_scores, pred_labels])
-        
+
     return batch_metrics

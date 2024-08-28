@@ -4,7 +4,7 @@ import logging
 import time
 import tracemalloc
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, List
 
 import numpy as np
 import psutil
@@ -20,8 +20,8 @@ from detectors.data.coco_utils import convert_to_coco_api
 from detectors.evaluate import get_batch_statistics
 from detectors.postprocessing.nms import non_max_suppression
 from detectors.utils import misc, plots
-from detectors.utils.box_ops import val_preds_to_img_size, cxcywh_to_xyxy
-from detectors.utils.eval import ap_per_class
+from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
+from detectors.utils.eval import ap_per_class, print_eval_stats
 
 log = logging.getLogger(__name__)
 
@@ -64,9 +64,10 @@ class Trainer:
         dataloader_val: data.DataLoader,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
+        class_names: List,
         start_epoch: int = 1,
         epochs: int = 100,
-        ckpt_every: int = None,
+        ckpt_epochs: int = 10,
     ):
         """Trains a model
 
@@ -102,37 +103,38 @@ class Trainer:
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
-            coco_evaluator = self._evaluate(model, criterion, dataloader_val)
-            # self._evaluate(model, criterion, dataloader_val)
+            metrics_output = self._evaluate(
+                model, criterion, dataloader_val, class_names=class_names
+            )
 
-            # Save the model every ckpt_every
-            if ckpt_every is not None and (epoch) % ckpt_every == 0:
+            # Save the model every ckpt_epochs
+            if (epoch) % ckpt_epochs == 0:
                 ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
                 self._save_model(
                     model,
                     optimizer,
                     scheduler,
                     epoch,
-                    ckpt_every,
+                    ckpt_epochs,
                     save_path=ckpt_path,
                 )
 
             # # Extracts list of the final AP and AR valus reported
-            bbox_stats = coco_evaluator.coco_eval["bbox"].stats
+            # bbox_stats = coco_evaluator.coco_eval["bbox"].stats
             # bbox_stats = coco_evaluator.coco_eval["bbox"].eval
 
-            log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
-            log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
-            log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
-            log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
-            log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
-            log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
-            log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
-            log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
-            log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
-            log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
-            log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
-            log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
+            # log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
+            # log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
+            # log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
+            # log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
+            # log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
+            # log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
+            # log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
+            # log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
+            # log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
+            # log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
+            # log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
+            # log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -148,7 +150,7 @@ class Trainer:
             total_time_str,
         )
 
-        del coco_evaluator
+        # del coco_evaluator
 
     def _train_one_epoch(
         self,
@@ -224,6 +226,7 @@ class Trainer:
         model: nn.Module,
         criterion: nn.Module,
         dataloader_val: Iterable,
+        class_names: List,
     ) -> CocoEvaluator:
         """A single forward pass to evluate the val set after training an epoch
 
@@ -255,14 +258,14 @@ class Trainer:
         #     print(stat)
 
         labels = []
-        sample_metrics = [] # List of tuples (true positives, cls_confs, cls_labels)
+        sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
         for steps, (samples, targets) in enumerate(dataloader_val):
             samples = samples.to(self.device)
             # targets = [
             #     {key: value.to(self.device) for key, value in t.items()}
             #     for t in targets
             # ]
-            
+
             # Extract labels from all samples in the batch into a 1d list
             for target in targets:
                 labels += target["labels"].tolist()
@@ -279,30 +282,32 @@ class Trainer:
                 target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
             predictions = model(samples, inference=True)
-            
+
             # Transfer preds to CPU for post processing
             predictions = predictions.to("cpu")
 
             # TODO: define these thresholds in the config file under postprocessing maybe?
             nms_preds = non_max_suppression(
-                predictions, conf_thres=0.1, iou_thres=0.5 # nms thresh
+                predictions, conf_thres=0.1, iou_thres=0.5  # nms thresh
             )
 
-            sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
+            sample_metrics += get_batch_statistics(
+                nms_preds, targets, iou_threshold=0.5
+            )
 
         # No detections over whole validation set
-        if len(sample_metrics) == 0:  
+        if len(sample_metrics) == 0:
             log.info("---- No detections over whole validation set ----")
             return None
-        
+
         # Concatenate sample statistics (batch_size*num_preds,)
         true_positives, pred_scores, pred_labels = [
-            np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
-        
-        metrics_output = ap_per_class(
-            true_positives, pred_scores, pred_labels, labels)
+            np.concatenate(x, 0) for x in list(zip(*sample_metrics))
+        ]
 
-        print_eval_stats(metrics_output, class_names, verbose)
+        metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
+
+        print_eval_stats(metrics_output, class_names, verbose=True)
 
         return metrics_output
         # TODO, might have to change the output of the bboxes
@@ -313,7 +318,7 @@ class Trainer:
 
         ## TODO: Turn this into the PostProcess() like in DETR
         ## TODO: Comment this
-        #results = val_preds_to_img_size(targets, bbox_preds, class_conf)
+        # results = val_preds_to_img_size(targets, bbox_preds, class_conf)
         evaluator_time = time.time()
 
         # results is a dict containing:

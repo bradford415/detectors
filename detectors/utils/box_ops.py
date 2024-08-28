@@ -11,7 +11,7 @@ from torchvision.ops.boxes import box_area
 
 def cxcywh_to_xyxy(x: torch.Tensor):
     """Convert boxes in yolo format [cw, cy, w, h] to [tl_x, tl_y, br_x, br,y]
-    
+
     Args:
         x: TODO
 
@@ -50,10 +50,8 @@ def bbox_iou_git(box1, box2, x1y1x2y2=True):
         b2_y1, b2_y2 = box2[:, 1] - box2[:, 3] / 2, box2[:, 1] + box2[:, 3] / 2
     else:
         # Get the coordinates of bounding boxes
-        b1_x1, b1_y1, b1_x2, b1_y2 = \
-            box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
-        b2_x1, b2_y1, b2_x2, b2_y2 = \
-            box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
+        b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
+        b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
     # get the corrdinates of the intersection rectangle
     inter_rect_x1 = torch.max(b1_x1, b2_x1)
@@ -87,10 +85,10 @@ def box_iou_modified(boxes1, boxes2, return_union=False):
     union = area1[:, None] + area2 - inter
 
     iou = inter / union
-    
+
     if return_union:
         return iou, union
-    
+
     return iou
 
 

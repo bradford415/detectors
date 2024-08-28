@@ -43,7 +43,7 @@ train:
     epochs: 200
 
     # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-    ckpt_every: 10
+    ckpt_epochs: 10
 
 validation:
   batch_size: 4
