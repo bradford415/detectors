@@ -51,6 +51,8 @@ def get_batch_statistics(
         annotations = torch.cat(
             [torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1
         )
+
+        #################### Should extract target labels with annoations[:, 0]; I don't think I need unsqueeze ##################
         target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
         if len(annotations):
             detected_boxes = []
