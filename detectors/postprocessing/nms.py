@@ -111,7 +111,7 @@ def non_max_suppression(
 
         ########### TODO: Should probably change the yolo layer to not chagne bbox format and return the full tensor, not objectness*cls_conf separately
 
-        output[image_index] = box_pred[nms_indices]  # .detach().cpu()
+        output[image_index] = box_pred[nms_indices].detach().cpu()
 
         if (time.time() - t) > time_limit:
             print(f"WARNING: NMS time limit {time_limit}s exceeded")

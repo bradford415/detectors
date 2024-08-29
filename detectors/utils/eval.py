@@ -1,7 +1,10 @@
-from typing import Tuple
+import logging
+from typing import Tuple, List, Optional
 
 import numpy as np
 import tqdm
+
+log = logging.getLogger(__name__)
 
 
 def ap_per_class(
@@ -108,20 +111,42 @@ def compute_ap(recall, precision):
     return ap
 
 
-def print_eval_stats(metrics_output, class_names, verbose=True):
+def print_eval_stats(metrics_output: Optional[Tuple[np.ndarray, ...]], class_names: List[int], verbose: bool=True):
     """TODO
 
     Args:
+        metrics_output: A tuple containing the precision, recall, AP, f1, and class index;
+                        each element is a numpy array of length (num_unique_targets,) for the batch
+                        of images; ap_class is used to index these numpy arrays thus 
+                        they all have the same length
+        class_names: List of class names of the dataset; list order should match the dataset index label 
+        verbose: Whether to print the AP for each class
 
     """
     if metrics_output is not None:
         precision, recall, AP, f1, ap_class = metrics_output
+        #breakpoint()
         if verbose:
             # Prints class AP and mean AP
-            ap_table = [["Index", "Class", "AP"]]
-            for i, c in enumerate(ap_class):
-                ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
-            print((ap_table).table)
-        print(f"---- mAP {AP.mean():.5f} ----")
+            for index, cls_num in enumerate(ap_class):
+                log.info("%s: %-15.2d %s =  %-15s %s = %-15.4f", "index", index, "class", class_names[cls_num], "AP", AP[index])
+                #ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
+            #print(ap_table)#.table)
+        log.info("---- mAP %.5f} ----", AP.mean())
     else:
         print("---- mAP not measured (no detections found by model) ----")
+        
+        
+
+            # log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
+            # log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
+            # log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
+            # log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
+            # log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
+            # log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
+            # log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
+            # log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
+            # log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
+            # log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
+            # log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
+            # log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])

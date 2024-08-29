@@ -203,7 +203,7 @@ class Trainer:
             # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
             scheduler.step()
 
-            if (steps + 1) % 100:
+            if (steps + 1) % 100 == 0:
                 log.info(
                     "Current learning_rate: %s",
                     optimizer.state_dict()["param_groups"][0]["lr"],
@@ -247,10 +247,10 @@ class Trainer:
         # this coco object stores the raw ground truth labels such as bboxes in coco format and original image height/width;
         # this is useful because the CocoEvaluator wants the original image dimensions and bboxes in coco format;
         # the images can still be resized for validation, however, the final evaluation score should be resized to the original image height
-        val_coco_api = dataloader_val.dataset.coco
-        coco_evaluator = CocoEvaluator(
-            val_coco_api, iou_types=["bbox"], bbox_format="coco"
-        )
+        # val_coco_api = dataloader_val.dataset.coco
+        # coco_evaluator = CocoEvaluator(
+        #     val_coco_api, iou_types=["bbox"], bbox_format="coco"
+        # )
 
         # snapshot = tracemalloc.take_snapshot()
         # top_stats = snapshot.statistics('lineno')
@@ -266,6 +266,7 @@ class Trainer:
             #     for t in targets
             # ]
 
+            ########################## START HERE CHECK ORIG SIZE AND WHY IT DOESN'T MATCH, LOOK AT VAL TRANSFORMATIONS TOO ####################
             # Extract labels from all samples in the batch into a 1d list
             for target in targets:
                 labels += target["labels"].tolist()
@@ -273,8 +274,10 @@ class Trainer:
             # Visualize the first batch of val images
             if steps == 0:
                 plots.visualize_norm_img_tensors(
-                    samples, self.output_paths["output_dir"] / "val-images"
+                    samples, targets, class_names, self.output_paths["output_dir"] / "val-images"
                 )
+
+            breakpoint()
 
             # samples = F.resize(samples, [512, 512], antialias=None)
 

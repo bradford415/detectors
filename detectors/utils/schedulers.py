@@ -42,7 +42,7 @@ def burnin_schedule_modified(i):
 
     steps = [400000, 450000]
     scales = [0.1, 0.1]
-    print(f"i value {i}")
+
     if i < burn_in:
         factor = i / burn_in
     elif i < steps[0]:
