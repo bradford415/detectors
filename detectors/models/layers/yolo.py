@@ -260,9 +260,10 @@ def yolo_forward_dynamic(
 
 
 class YoloLayer(nn.Module):
-    """Yolo layer only used at inference time"""
+    """TODO: Flesh this out more; basically just a post processing step, not learned params
+    Yolo layer only used at inference time"""
 
-    def __init__(self, anchors: List[int], num_classes=80, stride=32, num_anchors=3):
+    def __init__(self, anchors: List[int], stride, num_classes=80, num_anchors=3):
         """Initalize Yolo Inference Layer
 
         Args:
@@ -360,14 +361,20 @@ class YoloLayer(nn.Module):
             batch_size, self.num_anchors, self.num_output, grid_h, grid_w
         ).permute(0, 1, 3, 4, 2)
 
+        # (1, 1, grid_h, grid_w, 2)
         self.grid = self._make_grid(grid_w, grid_h).to(head_output)
 
-        # Scale cx, cy predictions to [0, 1] then offset by cell grid
-        head_output[..., 0:2] = head_output[..., 0:2].sigmoid() + self.grid
+        # Scale cx, cy predictions to [0, 1] and offset by cell grid, 
+        # then multiply by stride to scale back to the input size range 
+        head_output[..., 0:2] = (head_output[..., 0:2].sigmoid() + self.grid) * self.stride
 
-        # Scale w, h predictions by e and multply by scaled anchor size
+        # Scale w, h predictions by e and multply by scaled anchor size; multiplying by the anchor size;
+        breakpoint()
+        # anchor_grid has 3 scaled anchors and each cell predicts 3 bboxes so multiplying by anchor_grid
+        # applies the anchor sizes, elemen-wise, to the w/h predictions 
         head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid
 
+        # Scale objectness and class confidence predictions to [0, 1]
         head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
 
         # Reshape to (B, out_w*out_h*num_anchors, num_classes+5);

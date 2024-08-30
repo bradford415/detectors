@@ -98,7 +98,7 @@ class Trainer:
 
             # Train one epoch
             self._train_one_epoch(
-                model, criterion, dataloader_train, optimizer, scheduler, epoch
+                model, criterion, dataloader_train, optimizer, scheduler, epoch, class_names
             )
 
             # Evaluate the model on the validation set
@@ -160,6 +160,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
+        class_names: List[str]
     ):
         """Train one epoch
 
@@ -172,17 +173,18 @@ class Trainer:
             epoch: Used for logging purposes
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
+
+            # Visualize the first batch of augmented images (before gpu transfer)
+            if steps == 0:
+                plots.visualize_norm_img_tensors(
+                    samples, targets, class_names, self.output_paths["output_dir"] / "train-images"
+                )
+
             samples = samples.to(self.device)
             targets = [
                 {key: value.to(self.device) for key, value in t.items()}
                 for t in targets
             ]
-
-            # Visualize the first batch of augmented images
-            if steps == 0:
-                plots.visualize_norm_img_tensors(
-                    samples, self.output_paths["output_dir"] / "train-images"
-                )
 
             optimizer.zero_grad()
 
@@ -271,19 +273,18 @@ class Trainer:
             for target in targets:
                 labels += target["labels"].tolist()
 
-            # Visualize the first batch of val images
+            # `Visualize` the first batch of val images
             if steps == 0:
                 plots.visualize_norm_img_tensors(
                     samples, targets, class_names, self.output_paths["output_dir"] / "val-images"
                 )
 
-            breakpoint()
-
             # samples = F.resize(samples, [512, 512], antialias=None)
-
+            breakpoint()
             for target in targets:
                 target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
+            # Predictions (B, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
             predictions = model(samples, inference=True)
 
             # Transfer preds to CPU for post processing

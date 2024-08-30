@@ -37,7 +37,7 @@ def visualize_norm_img_tensors(img_tensors: torch.Tensor, targets, classes, outp
         image = image.permute(1, 2, 0)
         # ax.imshow(image.to(dtype=torch.uint8), vmin=0, vmax=255)
         ax.imshow(image)
-        breakpoint()        
+       
         for label_num, (x1, y1, w, h) in zip(targets[index]["labels"], targets[index]["boxes"]):
 
             tl_x = x1 - w // 2

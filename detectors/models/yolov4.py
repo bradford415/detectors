@@ -313,9 +313,9 @@ class Yolov4Head(nn.Module):
 
         # Largest head_output dimensions
         self.yolo1 = YoloLayer(
+            stride=8,
             num_classes=n_classes,
             anchors=anchors[:6],
-            stride=8,
         )
 
         # R -4
@@ -334,9 +334,9 @@ class Yolov4Head(nn.Module):
 
         # Medium head_output dimensions
         self.yolo2 = YoloLayer(
+            stride=16,
             num_classes=n_classes,
             anchors=anchors[6 : 6 * 2],
-            stride=16,
         )
 
         # R -4
@@ -355,9 +355,9 @@ class Yolov4Head(nn.Module):
 
         # Smallest head_output dimensions
         self.yolo3 = YoloLayer(
+            stride=32,  # 512 input_dim / 16 head_output = 32
             num_classes=n_classes,
             anchors=anchors[6 * 2 : 6 * 3],
-            stride=32,  # 512 input_dim / 16 head_output = 32
         )
 
     def forward(self, input1, input2, input3, inference=False):

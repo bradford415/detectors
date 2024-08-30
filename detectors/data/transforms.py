@@ -7,7 +7,7 @@ Transforms and data augmentation for both image + bbox.
 """
 import random
 import sys
-from typing import Optional
+from typing import Optional, List, Union, Tuple
 
 import numpy as np
 import PIL
@@ -82,9 +82,17 @@ def hflip(image, target):
     return flipped_image, target
 
 
-def resize(image, target, size, max_size=None):
+def resize(image: torch.Tensor, target, size: Union[int, Tuple], max_size=None):
+    """Auxillary function to resize an image given a size
+
+    Args:
+        image: 
+        target: Boxes to resize
+        size: Size to resize the image by; can be a scalar or tuple (w, h)
+    """
     # size can be min_size (scalar) or (w, h) tuple
 
+    # Get the aspect ratio
     def get_size_with_aspect_ratio(image_size, size, max_size=None):
         w, h = image_size
         if max_size is not None:
@@ -92,10 +100,12 @@ def resize(image, target, size, max_size=None):
             max_original_size = float(max((w, h)))
             if max_original_size / min_original_size * size > max_size:
                 size = int(round(max_size * min_original_size / max_original_size))
-
+        
+        # return if the shorter image side already equals the desired size
         if (w <= h and w == size) or (h <= w and h == size):
             return (h, w)
 
+        # Compute the size of the longer side; the shoter side will be the desired size
         if w < h:
             ow = size
             oh = int(size * h / w)
@@ -206,7 +216,21 @@ class RandomHorizontalFlip(object):
 
 
 class RandomResize(object):
-    def __init__(self, sizes, max_size=None):
+    """Resize an image and its bounding box by randomly selecting a length from `sizes`
+
+    If the size is a scalar, the shorter image side will take the value of size and the
+    longer image side will be calculated so that the aspect ratio is maintained.
+
+    If the size is a tuple (h, w), the resized image will match these dimensions and
+    ignores the aspect ratio.
+    
+    """
+    
+    def __init__(self, sizes: List[int], max_size=None):
+        """
+        Args:
+            sizes: list of sizes to randomly resize from (e.g., [512, 608, 1024])
+        """
         assert isinstance(sizes, (list, tuple))
         self.sizes = sizes
         self.max_size = max_size
