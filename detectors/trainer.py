@@ -17,11 +17,11 @@ from tqdm import tqdm
 
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
-from detectors.evaluate import get_batch_statistics
+from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
+                                           print_eval_stats)
 from detectors.postprocessing.nms import non_max_suppression
-from detectors.utils import misc, plots
+from detectors.utils import misc, plots, to_cpu
 from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
-from detectors.utils.eval import ap_per_class, print_eval_stats
 
 log = logging.getLogger(__name__)
 
@@ -89,8 +89,12 @@ class Trainer:
         log.info("\nTraining started\n")
         total_train_start_time = time.time()
 
+        # Visualize the first batch for each dataloader; manually verifies data augmentation correctness
+        self._visualize_batch(dataloader_train, "train", class_names)
+        self._visualize_batch(dataloader_val, "val", class_names)
+
         # Starting the epoch at 1 makes calculations more intuitive
-        for epoch in range(start_epoch, epochs):
+        for epoch in range(start_epoch, epochs+1):
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
 
             # Track the time it takes for one epoch (train and val)
@@ -98,7 +102,13 @@ class Trainer:
 
             # Train one epoch
             self._train_one_epoch(
-                model, criterion, dataloader_train, optimizer, scheduler, epoch, class_names
+                model,
+                criterion,
+                dataloader_train,
+                optimizer,
+                scheduler,
+                epoch,
+                class_names,
             )
 
             # Evaluate the model on the validation set
@@ -118,23 +128,6 @@ class Trainer:
                     ckpt_epochs,
                     save_path=ckpt_path,
                 )
-
-            # # Extracts list of the final AP and AR valus reported
-            # bbox_stats = coco_evaluator.coco_eval["bbox"].stats
-            # bbox_stats = coco_evaluator.coco_eval["bbox"].eval
-
-            # log.info("\ntrain\t%-10s =  %-15.4f", "AP", bbox_stats[0])
-            # log.info("train\t%-10s =  %-15.4f", "AP50", bbox_stats[1])
-            # log.info("train\t%-10s =  %-15.4f", "AP75", bbox_stats[2])
-            # log.info("train\t%-10s =  %-15.4f", "AP_small", bbox_stats[3])
-            # log.info("train\t%-10s =  %-15.4f", "AP_medium", bbox_stats[4])
-            # log.info("train\t%-10s =  %-15.4f", "AP_large", bbox_stats[5])
-            # log.info("train\t%-10s =  %-15.4f", "AR1", bbox_stats[6])
-            # log.info("train\t%-10s =  %-15.4f", "AR10", bbox_stats[7])
-            # log.info("train\t%-10s =  %-15.4f", "AR100", bbox_stats[8])
-            # log.info("train\t%-10s =  %-15.4f", "AR_small", bbox_stats[9])
-            # log.info("train\t%-10s =  %-15.4f", "AR_medium", bbox_stats[10])
-            # log.info("train\t%-10s =  %-15.4f", "AR_large", bbox_stats[11])
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -160,7 +153,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
-        class_names: List[str]
+        class_names: List[str],
     ):
         """Train one epoch
 
@@ -170,16 +163,9 @@ class Trainer:
             dataloader_train: Dataloader for the training set
             optimizer: Optimizer to update the models weights
             scheduler: Learning rate scheduler to update the learning rate
-            epoch: Used for logging purposes
+            epoch: Current epoch; used for logging purposes
         """
         for steps, (samples, targets) in enumerate(dataloader_train):
-
-            # Visualize the first batch of augmented images (before gpu transfer)
-            if steps == 0:
-                plots.visualize_norm_img_tensors(
-                    samples, targets, class_names, self.output_paths["output_dir"] / "train-images"
-                )
-
             samples = samples.to(self.device)
             targets = [
                 {key: value.to(self.device) for key, value in t.items()}
@@ -195,6 +181,8 @@ class Trainer:
                 bbox_predictions, targets
             )
 
+            loss_components = to_cpu(torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2]))
+
             # Calculate gradients and updates weights
             final_loss.backward()
             optimizer.step()
@@ -207,7 +195,7 @@ class Trainer:
 
             if (steps + 1) % 100 == 0:
                 log.info(
-                    "Current learning_rate: %s",
+                    "Current learning_rate: %s\n",
                     optimizer.state_dict()["param_groups"][0]["lr"],
                 )
 
@@ -220,7 +208,7 @@ class Trainer:
                     final_loss.item(),
                 )
 
-                log.info("cpu utilization: %s", psutil.virtual_memory().percent)
+                log.info("cpu utilization: %s\n", psutil.virtual_memory().percent)
 
     @torch.no_grad()
     def _evaluate(
@@ -268,18 +256,10 @@ class Trainer:
             #     for t in targets
             # ]
 
-            ########################## START HERE CHECK ORIG SIZE AND WHY IT DOESN'T MATCH, LOOK AT VAL TRANSFORMATIONS TOO ####################
             # Extract labels from all samples in the batch into a 1d list
             for target in targets:
                 labels += target["labels"].tolist()
 
-            # `Visualize` the first batch of val images
-            if steps == 0:
-                plots.visualize_norm_img_tensors(
-                    samples, targets, class_names, self.output_paths["output_dir"] / "val-images"
-                )
-
-            # samples = F.resize(samples, [512, 512], antialias=None)
             for target in targets:
                 target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
@@ -313,48 +293,6 @@ class Trainer:
         print_eval_stats(metrics_output, class_names, verbose=True)
 
         return metrics_output
-        # TODO, might have to change the output of the bboxes
-
-        # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-        #    bbox_predictions, targets
-        # )
-
-        ## TODO: Turn this into the PostProcess() like in DETR
-        ## TODO: Comment this
-        # results = val_preds_to_img_size(targets, bbox_preds, class_conf)
-        evaluator_time = time.time()
-
-        # results is a dict containing:
-        #   "img_id": {boxes: [], "scores": [], "labels", []}
-        # where scores is the maximum probability for the class (class probs are mulitplied by objectness probs in an earlier step)
-        # and labels is the index of the maximum class probability; reminder
-        coco_evaluator.update(results)
-        evaluator_time = time.time() - evaluator_time
-
-        if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
-            log.info(
-                "val steps:%d/%-10d ",
-                steps + 1,
-                len(dataloader_val),
-            )
-            log.info("cpu utilization: %s", psutil.virtual_memory().percent)
-
-            # snapshot = tracemalloc.take_snapshot()
-            # top_stats = snapshot.statistics('lineno')
-            # for stat in top_stats[:10]:
-            #     print(stat)
-
-        coco_evaluator.synchronize_between_processes()
-
-        # Accumulate predictions from all processes
-        coco_evaluator.accumulate()
-        coco_evaluator.summarize()
-        # snapshot = tracemalloc.take_snapshot()
-        # top_stats = snapshot.statistics('lineno')
-        # for stat in top_stats[:10]:
-        #     print(stat)
-
-        return coco_evaluator
 
     def _save_model(
         self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
@@ -367,4 +305,27 @@ class Trainer:
                 "epoch": current_epoch,
             },
             save_path,
+        )
+
+    def _visualize_batch(
+        self, dataloader: data.DataLoader, split: str, class_names: List[str]
+    ):
+        """Visualize a batch of images after data augmentation; sthis helps manually verify
+        the data augmentations are working as intended on the images and boxes
+
+        Args:
+            dataloader: Train or val dataloader
+            split: "train" or "val"
+            class_names: List of class names in the ontology
+        """
+        valid_splits = {"train", "val"}
+        if split not in valid_splits:
+            raise ValueError("split must either be in valid_splits")
+
+        samples, targets = next(iter(dataloader))
+        plots.visualize_norm_img_tensors(
+            samples,
+            targets,
+            class_names,
+            self.output_paths["output_dir"] / f"{split}-images",
         )

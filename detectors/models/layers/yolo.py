@@ -313,7 +313,7 @@ class YoloLayer(nn.Module):
 
         # Divide each anchor point by stride; this normalizes the anchor coordinates from
         # the input size to the head_output size
-        #anchors = [anchor / self.stride for anchor in self.anchors]
+        # anchors = [anchor / self.stride for anchor in self.anchors]
 
         # return yolo_forward_dynamic_old(
         #     head_output,
@@ -364,9 +364,11 @@ class YoloLayer(nn.Module):
         # (1, 1, grid_h, grid_w, 2)
         self.grid = self._make_grid(grid_w, grid_h).to(head_output)
 
-        # Scale cx, cy predictions to [0, 1] and offset by cell grid, 
-        # then multiply by stride to scale back to the input size range 
-        head_output[..., 0:2] = (head_output[..., 0:2].sigmoid() + self.grid) * self.stride
+        # Scale cx, cy predictions to [0, 1] and offset by cell grid,
+        # then multiply by stride to scale back to the input size range
+        head_output[..., 0:2] = (
+            head_output[..., 0:2].sigmoid() + self.grid
+        ) * self.stride
 
         # Scale w, h predictions by e and multply by scaled anchor size; multiplying by the anchor size;
 

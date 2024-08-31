@@ -1,106 +1,109 @@
-from typing import Dict, List
+import cProfile
+import datetime
+import logging
+import time
+import tracemalloc
+from pathlib import Path
+from typing import Any, Dict, Iterable, List
 
 import numpy as np
+import psutil
 import torch
+from pycocotools.coco import COCO
+from torch import nn
+from torch.utils import data
+from torchvision.transforms import functional as F
+from tqdm import tqdm
 
-from detectors.utils.box_ops import bbox_iou_git, box_iou_modified
+from detectors.data.coco_eval import CocoEvaluator
+from detectors.data.coco_utils import convert_to_coco_api
+from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
+                                           print_eval_stats)
+from detectors.postprocessing.nms import non_max_suppression
+from detectors.utils import misc, plots, to_cpu
+from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
 
+log = logging.getLogger(__name__)
 
-def get_batch_statistics(
-    outputs: List[torch.Tensor], targets: List[Dict], iou_threshold
-) -> List:
-    """Compute true positives, predicted scores and predicted labels per sample.
-    This function must be used after non_max_suppression
+@torch.no_grad()
+def evaluate(
+    self,
+    model: nn.Module,
+    criterion: nn.Module,
+    dataloader_val: Iterable,
+    class_names: List,
+) -> CocoEvaluator:
+    """A single forward pass to evluate the val set after training an epoch
 
     Args:
-        outputs: Model predictions after non_max_suppression has been applied
-                 shape of each list element (max_preds, 6) where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
-        targets: Ground truth labels for the image; at minimum this must contain bbox coords [tl_x, tl_y, br_x, br_y] for
-                 each object and a corresponding class label
-        iou_threshold: IoU threshold required to qualify as detected; IoU must be greater than or equal
-                       to this value
-
-    Returns:
-        A list of len(batch_size) where each element has a list containing:
-            1. a numpy array of true_postives (num_preds,); 1 for true positive and 0 for false positive; num_preds is limited to 300 in nms
-            2. a tensor of class confidences (num_preds,)
-            3. a tensor of the pred labels (num_preds,)
+        model: Model to train
+        criterion: Loss function; only used to inspect the loss on the val set,
+                    not used for backpropagation
+        dataloader_val: Dataloader for the validation set
+        device: Device to run the model on
     """
-    batch_metrics = []
+    model.eval()
 
-    # Loop through each batch
-    for sample_i in range(len(outputs)):
-        if outputs[sample_i] is None:
-            continue
+    labels = []
+    sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
+    for steps, (samples, targets) in enumerate(dataloader_val):
+        samples = samples.to(self.device)
+        # targets = [
+        #     {key: value.to(self.device) for key, value in t.items()}
+        #     for t in targets
+        # ]
 
-        # Extract a single sample prediction
-        output = outputs[sample_i]
+        # Extract labels from all samples in the batch into a 1d list
+        for target in targets:
+            labels += target["labels"].tolist()
 
-        # Extract the labels for the sample
-        target = targets[sample_i]
+        for target in targets:
+            target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
-        # Extract box preds (xyxy, objectness, class score)
-        pred_boxes = output[:, :4]
-        pred_scores = output[:, 4]
-        pred_labels = output[:, -1]
+        # Predictions (B, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
+        predictions = model(samples, inference=True)
 
-        # (max_nms_preds,); this is defined by max_nms in non_max_suppression()
-        true_positives = np.zeros(pred_boxes.shape[0])
+        # Transfer preds to CPU for post processing
+        predictions = predictions.to("cpu")
 
-        # annotations = targets[targets[:, 0] == sample_i][:, 1:] # I think the code has its targets as [image_index, class_index, cx, cy, w, h], need to figure out if this is changed to xyxy and if i need to == sample
-        annotations = torch.cat(
-            [torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1
+        # TODO: define these thresholds in the config file under postprocessing maybe?
+        nms_preds = non_max_suppression(
+            predictions, conf_thres=0.1, iou_thres=0.5  # nms thresh
         )
 
-        #target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
-        target_labels = annotations[:, 0] if len(annotations) else []
-        if len(annotations):
-            detected_boxes = []
-            target_boxes = annotations[:, 1:]
+        sample_metrics += get_batch_statistics(
+            nms_preds, targets, iou_threshold=0.5
+        )
 
-            # Loop through each box prediction
-            for pred_i, (pred_box, pred_label) in enumerate(
-                zip(pred_boxes, pred_labels)
-            ):
-                # If all the targets are found break
-                if len(detected_boxes) == len(annotations):
-                    break
+    # No detections over whole validation set
+    if len(sample_metrics) == 0:
+        log.info("---- No detections over whole validation set ----")
+        return None
 
-                # Ignore if label is not one of the target labels
-                if pred_label not in target_labels:
-                    continue
+    # Concatenate sample statistics (batch_size*num_preds,)
+    true_positives, pred_scores, pred_labels = [
+        np.concatenate(x, 0) for x in list(zip(*sample_metrics))
+    ]
 
-                # Filter target_boxes by pred_label so that we only match against boxes of our own label
-                # Explanation: I think x is a tuple of (index, tensor), where tensor is a single box coord
-                #              from target_boxes; x[0] is the index; when target_labels at that index equals
-                #              the pred_label then it will return the index and the target_box coord
-                filtered_target_position, filtered_targets = zip(
-                    *filter(
-                        lambda x: target_labels[x[0]] == pred_label,
-                        enumerate(target_boxes),
-                    )
-                )
-                # filtered_targets contains only the target boxes where the label matches the predicted label;
-                # filtered_target_positions is the indices of the rows in target_boxes for the pred_label
+    metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
-                # iou, box_filtered_index = box_iou_modified(
-                #     pred_box.unsqueeze(0), torch.stack(filtered_targets), return_union=False
-                # ).max(0)
-                # Find the best matching target for our predicted box;
-                # predicted box is a single box prediction and filtered targets is 1 or more box labels
-                # which allows us to try and match the predicted box with the best overlapping target
-                iou, box_filtered_index = bbox_iou_git(
-                    pred_box.unsqueeze(0), torch.stack(filtered_targets)
-                ).max(0)
+    print_eval_stats(metrics_output, class_names, verbose=True)
 
-                # Remap the index in the list of filtered targets for that label to the index in the list with all targets.
-                box_index = filtered_target_position[box_filtered_index]
+    return metrics_output
 
-                # Check if the iou is above the min threshold and i
-                if iou >= iou_threshold and box_index not in detected_boxes:
-                    # if detected, set the true_positives tensor to 1 for that prediction
-                    true_positives[pred_i] = 1
-                    detected_boxes += [box_index]
-        batch_metrics.append([true_positives, pred_scores, pred_labels])
 
-    return batch_metrics
+def load_model_weights(model: nn.Module, weights_path: str):
+    """Load the weights of a trained or pretrained model from the state_dict file;
+    this could be from a fully trained model or a partially trained model that you want
+    to resume training from.
+    
+    Args:
+    TODO
+    """
+
+    ############ START HERE ############
+
+    if weights_path:
+            # Load checkpoint weights
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"))
+    return model

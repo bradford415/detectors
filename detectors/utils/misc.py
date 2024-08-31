@@ -17,6 +17,17 @@ def reproducibility(seed: int) -> None:
     random.seed(seed)
 
 
+def to_cpu(tensor):
+    """Detaches a tensor from the computational graph and transfers it to the CPU.
+
+    detach() works by returning a new tensor that doesn't require a gradient.
+    This is very important because PyTorch will continue to try and optimize this tensor, even
+    though it is most likely no longer in use; this could cause memory leaks.
+    I believe detach() does not have to be callled within torch.no_grad() conext.
+    """
+    return tensor.detach().cpu()
+
+
 def convert2cpu(gpu_matrix):
     return torch.FloatTensor(gpu_matrix.size()).copy_(gpu_matrix)
 

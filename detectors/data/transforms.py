@@ -7,7 +7,7 @@ Transforms and data augmentation for both image + bbox.
 """
 import random
 import sys
-from typing import Optional, List, Union, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import PIL
@@ -86,7 +86,7 @@ def resize(image: torch.Tensor, target, size: Union[int, Tuple], max_size=None):
     """Auxillary function to resize an image given a size
 
     Args:
-        image: 
+        image:
         target: Boxes to resize
         size: Size to resize the image by; can be a scalar or tuple (w, h)
     """
@@ -100,7 +100,7 @@ def resize(image: torch.Tensor, target, size: Union[int, Tuple], max_size=None):
             max_original_size = float(max((w, h)))
             if max_original_size / min_original_size * size > max_size:
                 size = int(round(max_size * min_original_size / max_original_size))
-        
+
         # return if the shorter image side already equals the desired size
         if (w <= h and w == size) or (h <= w and h == size):
             return (h, w)
@@ -223,9 +223,9 @@ class RandomResize(object):
 
     If the size is a tuple (h, w), the resized image will match these dimensions and
     ignores the aspect ratio.
-    
+
     """
-    
+
     def __init__(self, sizes: List[int], max_size=None):
         """
         Args:

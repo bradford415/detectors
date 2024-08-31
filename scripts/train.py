@@ -147,6 +147,8 @@ def main(base_config_path: str, model_config_path):
     # model = Yolov4_pytorch(n_classes=80,inference=False)
     model.to(device)
 
+    ## TODO: Apply weights init
+
     # For the YoloV4Loss function, if the batch size is different than the
     criterion = YoloV4Loss(
         anchors=model_config["priors"]["anchors"],
