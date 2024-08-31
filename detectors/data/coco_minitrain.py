@@ -62,7 +62,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
 
         # Substantially reduces the dataset size to quickly test code
         if debug_mode:
-            self.ids = self.ids[:5]
+            self.ids = self.ids[:32]
 
         # Display coco information of the current dataset; this should be placed at the end of the __init__()
         explore_coco(self)

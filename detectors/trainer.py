@@ -280,7 +280,6 @@ class Trainer:
                 )
 
             # samples = F.resize(samples, [512, 512], antialias=None)
-            breakpoint()
             for target in targets:
                 target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 

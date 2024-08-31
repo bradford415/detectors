@@ -313,7 +313,7 @@ class YoloLayer(nn.Module):
 
         # Divide each anchor point by stride; this normalizes the anchor coordinates from
         # the input size to the head_output size
-        anchors = [anchor / self.stride for anchor in self.anchors]
+        #anchors = [anchor / self.stride for anchor in self.anchors]
 
         # return yolo_forward_dynamic_old(
         #     head_output,
@@ -369,9 +369,10 @@ class YoloLayer(nn.Module):
         head_output[..., 0:2] = (head_output[..., 0:2].sigmoid() + self.grid) * self.stride
 
         # Scale w, h predictions by e and multply by scaled anchor size; multiplying by the anchor size;
-        breakpoint()
+
         # anchor_grid has 3 scaled anchors and each cell predicts 3 bboxes so multiplying by anchor_grid
-        # applies the anchor sizes, elemen-wise, to the w/h predictions 
+        # applies the anchor sizes, element-wise, to the w/h predictions;
+        # anchors are not divided by stride during inference (only divided by stride when computing the loss)
         head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid
 
         # Scale objectness and class confidence predictions to [0, 1]
