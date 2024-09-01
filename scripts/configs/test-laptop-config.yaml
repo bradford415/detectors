@@ -9,7 +9,7 @@ debug_mode: False
 root_dir: "/home/bselee/programming/detectors"
 
 # Path to the trained models state dict;
-state_dict_path: ""
+state_dict_path: "/home/bselee/programming/detectors/output/development/2024_09_01-10_39_10_AM/checkpoint0010"
 
 # Base directory for output files; do not change this 
 output_path: "output/test"
@@ -28,8 +28,6 @@ dataset:
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
-
-#test:
 
 # GPU parameters
 cuda:

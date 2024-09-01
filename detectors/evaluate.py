@@ -20,17 +20,18 @@ from detectors.data.coco_utils import convert_to_coco_api
 from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
                                            print_eval_stats)
 from detectors.postprocessing.nms import non_max_suppression
-from detectors.utils import misc, plots, to_cpu
+from detectors.utils import misc, plots
 from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
 
 log = logging.getLogger(__name__)
 
+
 @torch.no_grad()
 def evaluate(
     self,
-    model: nn.Module,
     output_path: str,
-    dataloader_val: Iterable,
+    model: nn.Module,
+    dataloader_test: Iterable,
     class_names: List,
 ) -> None:
     """A single forward pass to evluate the val set after training an epoch
@@ -46,7 +47,7 @@ def evaluate(
 
     labels = []
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
-    for steps, (samples, targets) in enumerate(dataloader_val):
+    for steps, (samples, targets) in enumerate(dataloader_test):
         samples = samples.to(self.device)
 
         # Extract labels from all samples in the batch into a 1d list
@@ -60,16 +61,14 @@ def evaluate(
         predictions = model(samples, inference=True)
 
         # Transfer preds to CPU for post processing
-        predictions = predictions.to("cpu")
+        predictions = misc.to_cpu(predictions)
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
         nms_preds = non_max_suppression(
             predictions, conf_thres=0.1, iou_thres=0.5  # nms thresh
         )
 
-        sample_metrics += get_batch_statistics(
-            nms_preds, targets, iou_threshold=0.5
-        )
+        sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
     # No detections over whole validation set
     if len(sample_metrics) == 0:
@@ -88,17 +87,18 @@ def evaluate(
     return metrics_output
 
 
-def load_model_weights(model: nn.Module, weights_path: str):
+def load_model_state_dict(model: nn.Module, weights_path: str):
     """Load the weights of a trained or pretrained model from the state_dict file;
     this could be from a fully trained model or a partially trained model that you want
     to resume training from.
-    
+
     Args:
         model: The torch model to load the weights into
-        weights_path: 
+        weights_path:
     """
-    device = torch.device("cuda" if torch.cuda.is_available()
-                          else "cpu")  # Select device for inference
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )  # Select device for inference
 
     model.load_state_dict(torch.load(weights_path, map_location=device))
 

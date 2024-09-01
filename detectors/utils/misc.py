@@ -9,14 +9,6 @@ import torch.distributed as dist
 import torchvision
 
 
-def reproducibility(seed: int) -> None:
-    """Set the seed for the sources of randomization. This allows for more reproducible results"""
-
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-
 def to_cpu(tensor):
     """Detaches a tensor from the computational graph and transfers it to the CPU.
 

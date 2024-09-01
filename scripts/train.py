@@ -18,7 +18,7 @@ from detectors.models.darknet import Darknet
 from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
-from detectors.utils import misc, schedulers
+from detectors.utils import reproduce, schedulers
 
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
@@ -80,7 +80,7 @@ def main(base_config_path: str, model_config_path):
     log.info("Initializing...\n")
 
     # Apply reproducibility seeds
-    misc.reproducibility(**base_config["reproducibility"])
+    reproduce.reproducibility(**base_config["reproducibility"])
 
     # Set cuda parameters
     use_cuda = torch.cuda.is_available()
@@ -179,6 +179,13 @@ def main(base_config_path: str, model_config_path):
     )
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
+
+    # Save configuration files
+    reproduce.save_configs(
+        config_dicts=[base_config, model_config],
+        save_names=["base_config.json", "model_config.json"],
+        output_path=output_path / "reproduce",
+    )
 
     # Build trainer args used for the training
     trainer_args = {

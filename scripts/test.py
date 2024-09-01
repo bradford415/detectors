@@ -11,11 +11,11 @@ from torch.utils.data import DataLoader
 
 from detectors.data.coco_minitrain import build_coco_mini
 from detectors.data.collate_functions import collate_fn_test
-from detectors.evaluate import evaluate
+from detectors.evaluate import evaluate, load_model_state_dict
 from detectors.models.backbones import backbone_map
 from detectors.models.darknet import Darknet
 from detectors.models.yolov4 import YoloV4
-from detectors.utils import misc
+from detectors.utils import reproduce
 
 # TODO: should move this to its own file
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
@@ -60,7 +60,7 @@ def main(base_config_path: str, model_config_path):
     log.info("Initializing...\n")
 
     # Apply reproducibility seeds
-    misc.reproducibility(**base_config["reproducibility"])
+    reproduce.reproducibility(**base_config["reproducibility"])
 
     # Set cuda parameters
     use_cuda = torch.cuda.is_available()
@@ -85,13 +85,13 @@ def main(base_config_path: str, model_config_path):
         log.info("Using CPU")
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
-    dataset_val = dataset_map[base_config["dataset_name"]](
+    dataset_test = dataset_map[base_config["dataset_name"]](
         dataset_split="val", debug_mode=base_config["debug_mode"], **dataset_kwargs
     )
 
-    dataloader_val = DataLoader(
-        dataset_val,
-        collate_fn=collate_fn,
+    dataloader_test = DataLoader(
+        dataset_test,
+        collate_fn=collate_fn_test,
         drop_last=True,
     )
 
@@ -107,33 +107,24 @@ def main(base_config_path: str, model_config_path):
         **model_config["priors"],
     }
 
-    # Initialize detection model and transfer to GPU
+    # Initialize detection model and load its state_dict
     model = detectors_map[model_config["detector"]](**model_components)
-    # model = Darknet("scripts/configs/yolov4.cfg")
-    # model = Yolov4_pytorch(n_classes=80,inference=False)
+    model = load_model_state_dict(model, base_config["state_dict_path"])
     model.to(device)
 
-
-    evaluate()    
-
-    trainer = Trainer(
-        output_path=str(output_path), device=device, logging_intervals=logging_intervals
+    reproduce.save_configs(
+        config_dicts=[base_config, model_config],
+        save_names=["base_config.json", "model_config.json"],
+        output_path=output_path / "reproduce",
     )
-
-    ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
-
     # Build trainer args used for the training
-    trainer_args = {
+    evaluation_args = {
+        "output_path": output_path,
         "model": model,
-        "criterion": criterion,
-        "dataloader_train": dataloader_train,
-        "dataloader_val": dataloader_val,
-        "optimizer": optimizer,
-        "scheduler": lr_scheduler,
-        "class_names": dataset_train.class_names,
-        **train_args["epochs"],
+        "dataloader_test": dataloader_test,
+        "class_names": dataset_test.class_names,
     }
-    trainer.train(**trainer_args)
+    evaluate(**evaluation_args)
 
 
 if __name__ == "__main__":

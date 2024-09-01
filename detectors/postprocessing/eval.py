@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import tqdm
 
+from detectors.utils.box_ops import bbox_iou
+
 log = logging.getLogger(__name__)
 
 
@@ -22,8 +24,7 @@ def ap_per_class(
         target_cls: True object classes (list).
 
     Returns:
-        TODO
-        The average precision as computed in py-faster-rcnn.
+        A Tuple of the (prec, rec, ap, f1, and class) per class
     """
     # Sort by objectness in decreasing order (highest confidence first)
     best_conf_i = np.argsort(-conf)
@@ -233,7 +234,7 @@ def get_batch_statistics(
                 # Find the best matching target for our predicted box;
                 # predicted box is a single box prediction and filtered targets is 1 or more box labels
                 # which allows us to try and match the predicted box with the best overlapping target
-                iou, box_filtered_index = bbox_iou_git(
+                iou, box_filtered_index = bbox_iou(
                     pred_box.unsqueeze(0), torch.stack(filtered_targets)
                 ).max(0)
 

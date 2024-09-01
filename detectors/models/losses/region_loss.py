@@ -48,7 +48,10 @@ def build_targets(
             gh = target[b][t * 5 + 4] * nH
             cur_gt_boxes = torch.FloatTensor([gx, gy, gw, gh]).repeat(nAnchors, 1).t()
             cur_ious = torch.max(
-                cur_ious, bbox_ious(cur_pred_boxes, cur_gt_boxes, x1y1x2y2=False)
+                cur_ious,
+                bbox_iou(
+                    cur_pred_boxes, cur_gt_boxes, x1y1x2y2=False
+                ),  # changing this from bbox_ious to bbox_iou; hopefully this doesn't break anything
             )
         conf_mask[b][cur_ious > sil_thresh] = 0
     if seen < 12800:

@@ -4,7 +4,7 @@ import logging
 import time
 import tracemalloc
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Tuple
 
 import numpy as np
 import psutil
@@ -20,7 +20,7 @@ from detectors.data.coco_utils import convert_to_coco_api
 from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
                                            print_eval_stats)
 from detectors.postprocessing.nms import non_max_suppression
-from detectors.utils import misc, plots, to_cpu
+from detectors.utils import misc, plots
 from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
 
 log = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class Trainer:
         self._visualize_batch(dataloader_val, "val", class_names)
 
         # Starting the epoch at 1 makes calculations more intuitive
-        for epoch in range(start_epoch, epochs+1):
+        for epoch in range(start_epoch, epochs + 1):
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
 
             # Track the time it takes for one epoch (train and val)
@@ -119,7 +119,7 @@ class Trainer:
 
             # Save the model every ckpt_epochs
             if (epoch) % ckpt_epochs == 0:
-                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}"
+                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}.pt"
                 self._save_model(
                     model,
                     optimizer,
@@ -142,8 +142,6 @@ class Trainer:
             start_epoch - epochs,
             total_time_str,
         )
-
-        # del coco_evaluator
 
     def _train_one_epoch(
         self,
@@ -181,7 +179,9 @@ class Trainer:
                 bbox_predictions, targets
             )
 
-            loss_components = to_cpu(torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2]))
+            loss_components = misc.to_cpu(
+                torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
+            )
 
             # Calculate gradients and updates weights
             final_loss.backward()
@@ -217,7 +217,7 @@ class Trainer:
         criterion: nn.Module,
         dataloader_val: Iterable,
         class_names: List,
-    ) -> :
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """A single forward pass to evluate the val set after training an epoch
 
         Args:
@@ -226,26 +226,13 @@ class Trainer:
                        not used for backpropagation
             dataloader_val: Dataloader for the validation set
             device: Device to run the model on
+
+
+        Returns:
+            A Tuple of the (prec, rec, ap, f1, and class) per class
         """
 
         model.eval()
-
-        # tracemalloc.start()
-        # val_coco_api = convert_to_coco_api(dataloader_val.dataset, bbox_fmt="yolo")
-
-        # In datasets that inherit torchvision.CocoDetection a COCO object is created so we do not have to create one;
-        # this coco object stores the raw ground truth labels such as bboxes in coco format and original image height/width;
-        # this is useful because the CocoEvaluator wants the original image dimensions and bboxes in coco format;
-        # the images can still be resized for validation, however, the final evaluation score should be resized to the original image height
-        # val_coco_api = dataloader_val.dataset.coco
-        # coco_evaluator = CocoEvaluator(
-        #     val_coco_api, iou_types=["bbox"], bbox_format="coco"
-        # )
-
-        # snapshot = tracemalloc.take_snapshot()
-        # top_stats = snapshot.statistics('lineno')
-        # for stat in top_stats[:10]:
-        #     print(stat)
 
         labels = []
         sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
@@ -267,7 +254,7 @@ class Trainer:
             predictions = model(samples, inference=True)
 
             # Transfer preds to CPU for post processing
-            predictions = to_cpu(predictions)
+            predictions = misc.to_cpu(predictions)
 
             # TODO: define these thresholds in the config file under postprocessing maybe?
             nms_preds = non_max_suppression(
