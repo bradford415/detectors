@@ -4,7 +4,7 @@ import logging
 import time
 import tracemalloc
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Tuple
 
 import numpy as np
 import psutil
@@ -29,10 +29,10 @@ log = logging.getLogger(__name__)
 def evaluate(
     self,
     model: nn.Module,
-    criterion: nn.Module,
+    output_path: str,
     dataloader_val: Iterable,
     class_names: List,
-) -> CocoEvaluator:
+) -> None:
     """A single forward pass to evluate the val set after training an epoch
 
     Args:
@@ -48,10 +48,6 @@ def evaluate(
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
     for steps, (samples, targets) in enumerate(dataloader_val):
         samples = samples.to(self.device)
-        # targets = [
-        #     {key: value.to(self.device) for key, value in t.items()}
-        #     for t in targets
-        # ]
 
         # Extract labels from all samples in the batch into a 1d list
         for target in targets:
@@ -98,12 +94,12 @@ def load_model_weights(model: nn.Module, weights_path: str):
     to resume training from.
     
     Args:
-    TODO
+        model: The torch model to load the weights into
+        weights_path: 
     """
+    device = torch.device("cuda" if torch.cuda.is_available()
+                          else "cpu")  # Select device for inference
 
-    ############ START HERE ############
+    model.load_state_dict(torch.load(weights_path, map_location=device))
 
-    if weights_path:
-            # Load checkpoint weights
-            model.load_state_dict(torch.load(weights_path, map_location="cpu"))
     return model

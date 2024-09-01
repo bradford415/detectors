@@ -44,3 +44,19 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
 
     # This is what will be returned in the main train for loop (samples, targets)
     return padded_images, annotations
+
+
+def collate_fn_test(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:
+    """Pack samples for the test set; no padding is needed because the batch size is 1
+
+    Args:
+        batch: A batch of samples from the dataset. The batch is a list of
+            samples, each sample containg a tuple of (image, image_annotations).
+    """
+
+    # Convert a batch of images and annoations [(image, annoations), (image, annoations), ...]
+    # to (image, image), (annotations, annotations), ... ; this operation is called iterable unpacking
+    images, annotations = zip(*batch)  # images (C, H, W)
+
+    # This is what will be returned in the main train for loop (samples, targets)
+    return images, annotations

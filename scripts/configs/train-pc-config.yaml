@@ -11,7 +11,7 @@ root_dir: "/home/bselee/programming/detectors"
 input_data: "data/input.txt"
 
 # Base directory for output files; do not change this 
-output_path: "output"
+output_path: "output/train"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
 exp_name: "development"

@@ -124,19 +124,21 @@ def make_coco_transforms(dataset_split):
                 normalize,
             ]
         )
-
-    if dataset_split == "val":
+    elif dataset_split == "val":
         return T.Compose(
             [
-                ## TODO: Implement padding to run multiple batches
-                # T.RandomResize([800], max_size=1333),
                 T.RandomResize([512]),
-                # T.ToTensorNoNormalization(),
                 normalize,
             ]
         )
-
-    raise ValueError(f"unknown {dataset_split}")
+    elif dataset_split == "test":
+        return T.Compose(
+            [
+                normalize,
+            ]
+        )
+    else:
+        raise ValueError(f"unknown dataset split {dataset_split}")
 
 
 ## TODO: This would probably make the most since as a cls method and call it from_data_split()

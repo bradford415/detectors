@@ -217,7 +217,7 @@ class Trainer:
         criterion: nn.Module,
         dataloader_val: Iterable,
         class_names: List,
-    ) -> CocoEvaluator:
+    ) -> :
         """A single forward pass to evluate the val set after training an epoch
 
         Args:
@@ -267,7 +267,7 @@ class Trainer:
             predictions = model(samples, inference=True)
 
             # Transfer preds to CPU for post processing
-            predictions = predictions.to("cpu")
+            predictions = to_cpu(predictions)
 
             # TODO: define these thresholds in the config file under postprocessing maybe?
             nms_preds = non_max_suppression(
