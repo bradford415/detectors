@@ -123,6 +123,7 @@ def main(base_config_path: str, model_config_path):
         "model": model,
         "dataloader_test": dataloader_test,
         "class_names": dataset_test.class_names,
+        "device": device,
     }
     evaluate(**evaluation_args)
 

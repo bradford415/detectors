@@ -28,11 +28,11 @@ log = logging.getLogger(__name__)
 
 @torch.no_grad()
 def evaluate(
-    self,
     output_path: str,
     model: nn.Module,
     dataloader_test: Iterable,
     class_names: List,
+    device: torch.device = torch.device("cpu"),
 ) -> None:
     """A single forward pass to evluate the val set after training an epoch
 
@@ -48,7 +48,7 @@ def evaluate(
     labels = []
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
     for steps, (samples, targets) in enumerate(dataloader_test):
-        samples = samples.to(self.device)
+        samples = samples.to(device)
 
         # Extract labels from all samples in the batch into a 1d list
         for target in targets:
@@ -100,6 +100,7 @@ def load_model_state_dict(model: nn.Module, weights_path: str):
         "cuda" if torch.cuda.is_available() else "cpu"
     )  # Select device for inference
 
-    model.load_state_dict(torch.load(weights_path, map_location=device))
+    state_dict  = torch.load(weights_path, map_location=device)
+    model.load_state_dict(state_dict["model"])
 
     return model

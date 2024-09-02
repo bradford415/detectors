@@ -31,7 +31,9 @@ def save_configs(
                      final dir named "reproduce"
     """
     assert len(config_dicts) == len(save_names)
+    
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    for config_dict, save_name in zip(config_dict, save_names):
+    for config_dict, save_name in zip(config_dicts, save_names):
         with open(output_path / save_name, "w") as f:
             json.dump(config_dict, f)
