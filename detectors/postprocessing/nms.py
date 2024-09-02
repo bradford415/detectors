@@ -114,7 +114,7 @@ def non_max_suppression(
         output[image_index] = box_pred[nms_indices].detach().cpu()
 
         if (time.time() - t) > time_limit:
-            print(f"WARNING: NMS time limit {time_limit}s exceeded")
+            #print(f"WARNING: NMS time limit {time_limit}s exceeded")
             break  # time limit exceeded
 
     return output

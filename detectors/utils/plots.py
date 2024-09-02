@@ -1,24 +1,35 @@
 import random
 from pathlib import Path
+from typing import List
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from pil import Image
 
 from detectors.data.transforms import UnNormalize
+from detectors.utils.misc import to_cpu
 
 
 def visualize_norm_img_tensors(
-    img_tensors: torch.Tensor, targets, classes, output_dir: Path
+    img_tensors: torch.Tensor, targets, classes: List[str], output_dir: Path
 ):
-    """TODO"""
+    """Visualizes the boxes of augmented images just before the input of the model; this helps
+    manually verify the data augmentation on the images and labels is accurate
+    
+    Args:
+        img_tensors:
+        targets:
+        classes: list of unique class names by label index
+        output_dir: Path to save the outputs
+    """
 
     un_norm = UnNormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
     # assert torch.max(img_tensors) <= 1.0
 
-    img_tensors = img_tensors.to("cpu")
+    img_tensors = to_cpu("cpu")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,11 +51,11 @@ def visualize_norm_img_tensors(
         # ax.imshow(image.to(dtype=torch.uint8), vmin=0, vmax=255)
         ax.imshow(image)
 
-        for label_num, (x1, y1, w, h) in zip(
+        for label_num, (cx, cy, w, h) in zip(
             targets[index]["labels"], targets[index]["boxes"]
         ):
-            tl_x = x1 - w // 2
-            tl_y = y1 - h // 2
+            tl_x = cx - w // 2
+            tl_y = cy - h // 2
 
             color = bbox_colors[int(np.where(unique_classes == int(label_num))[0])]
             # Create a Rectangle patch
@@ -65,6 +76,70 @@ def visualize_norm_img_tensors(
         # plt.gca().xaxis.set_major_locator(NullLocator())
         # plt.gca().yaxis.set_major_locator(NullLocator())
         fig.savefig(f"{output_dir}/image_tensor_{index}.png")
+        plt.close()
+
+
+def plot_detections(
+    image_detections, classes: List[str], output_dir: Path
+):
+    """Visualizes the augmented images just before the input of the model; this helps
+    manually verify the data augmentation on the images and labels is accurate
+    
+    Args:
+        image_detections: Tuple containing the image file path and its detections after non-max suppression;
+                          detected boxes should be (tl_x, tl_y, br_x, br_y, conf, cls)
+        targets: Dictionaries containing at least the ground truth bboxes and label for each
+                 object; bboxes should be (tl_x)each element of the list is an image's labels
+        classes: list of unique class names by label index
+        output_dir: Path to save the outputs
+    """
+    img_paths, img_detections = list(zip(*image_detections))
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    breakpoint()
+    for detections in img_detections:
+        labels += detections[:, -1].astype(np.uint8)
+    unique_classes = np.unique(np.array(labels))
+    num_unique_classes = len(unique_classes)
+
+    cmap = plt.get_cmap("tab20b")
+    colors = [cmap(i) for i in np.linspace(0, 1, num_unique_classes)]
+    bbox_colors = random.sample(colors, num_unique_classes)
+
+    for index, (img_path, detections) in enumerate(zip(img_paths, img_detections)):
+        fig, ax = plt.subplots(1, 1)
+
+        pil_image = Image.open(img_path).convert("RGB")
+        # ax.imshow(image.to(dtype=torch.uint8), vmin=0, vmax=255)
+        ax.imshow(pil_image)
+
+        for detection in detections:
+            
+            cx, cy, w, h, conf, label_num = detection
+
+            tl_x = cx - w // 2
+            tl_y = cy - h // 2
+
+            color = bbox_colors[int(np.where(unique_classes == int(label_num))[0])]
+            # Create a Rectangle patch
+            bbox = patches.Rectangle(
+                (tl_x, tl_y), w, h, linewidth=2, edgecolor=color, facecolor="none"
+            )
+            # Add the bbox to the plot
+            ax.add_patch(bbox)
+            plt.text(
+                tl_x,
+                tl_y,
+                s=f"{classes[int(label_num)]}",
+                color="white",
+                verticalalignment="top",
+                bbox={"color": color, "pad": 0},
+            )
+
+        # plt.gca().xaxis.set_major_locator(NullLocator())
+        # plt.gca().yaxis.set_major_locator(NullLocator())
+        fig.savefig(f"{output_dir}/image_{index}.png")
         plt.close()
 
 

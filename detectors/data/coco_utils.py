@@ -15,9 +15,13 @@ from torch.utils.data import Dataset
 
 
 class PreprocessCoco(object):
+    """Preprocess the coco dataset before any augmentations are applied"""
+
     def __init__(self, return_masks=False):
         self.return_masks = return_masks
-        self.coco_class_91_to_80 = coco91_to_coco80_class()
+        
+        # Used to make the dataset labels sequential
+        self.coco_class_91_to_80 = coco91_to_coco80_class() 
 
     def __call__(
         self, image: Image.Image, target: Dict[str, Any]
@@ -27,6 +31,7 @@ class PreprocessCoco(object):
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
             3. converts bboxes from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]
+               - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h]
 
             Note: The bboxes are normalized and converted to Yolo format in data/transforms/Normalize()
 
@@ -59,7 +64,8 @@ class PreprocessCoco(object):
         boxes[:, 0::2].clamp_(min=0, max=w)
         boxes[:, 1::2].clamp_(min=0, max=h)
 
-        # Create list of object labels, shift the coco ids so they are between 0-79, and convert to tensor
+        # Create list of object labels, shift the coco ids so they are between 0-79 (i.e., sequential), 
+        # and convert to tensor
         ## TODO: This may not be the correct way to convert the classes
         classes = [self.coco_class_91_to_80[obj["category_id"]] for obj in annotations]
         classes = torch.tensor(classes, dtype=torch.int64)

@@ -13,6 +13,7 @@ from detectors.data.coco_utils import PreprocessCoco, explore_coco
 
 
 class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
+    ## TODO: can probably convert this to regular coco
     """COCO Minitrain dataset. This dataset is a curated set of 25,000 train images
     from the 2017 Train COOO dataset. This dataset has 80 classes.
 
@@ -78,8 +79,12 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         # Match the randomly sampled index with the image_id; self.ids contains the image_ids in the train set
         image_id = self.ids[index]
 
+        file_name = self.coco.loadImgs(image_id)[0]["file_name"]
+        image_path = self.root / file_name
+
         # Preprocess the input data before passing it to the model; see PreprocessCoco() for more info
-        target = {"image_id": image_id, "annotations": annotations}
+        target = {"image_id": image_id, "image_path": image_path, "annotations": annotations}
+        breakpoint()
         image, target = self.prepare(image, target)
         if self._transforms is not None:
             image, target = self._transforms(image, target)
@@ -164,6 +169,9 @@ def build_coco_mini(
     elif dataset_split == "val":
         images_dir = coco_root / "images" / "val2017"
         annotation_file = coco_root / "annotations" / "instances_val2017.json"
+    elif dataset_split == "test":
+        images_dir = coco_root / "images" / "test2017"
+        annotation_file = coco_root / "annotations" / "instances_test2017.json"
 
     # Create the data augmentation transforms
     data_transforms = make_coco_transforms(dataset_split)

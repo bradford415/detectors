@@ -15,7 +15,7 @@ from detectors.evaluate import evaluate, load_model_state_dict
 from detectors.models.backbones import backbone_map
 from detectors.models.darknet import Darknet
 from detectors.models.yolov4 import YoloV4
-from detectors.utils import reproduce
+from detectors.utils import reproduce, plots
 
 # TODO: should move this to its own file
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
@@ -87,7 +87,7 @@ def main(base_config_path: str, model_config_path):
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_test = dataset_map[base_config["dataset_name"]](
         dataset_split="val", debug_mode=base_config["debug_mode"], **dataset_kwargs
-    )
+    ) ##TODO, change this to test split once it's downloaded
 
     dataloader_test = DataLoader(
         dataset_test,
@@ -125,7 +125,9 @@ def main(base_config_path: str, model_config_path):
         "class_names": dataset_test.class_names,
         "device": device,
     }
-    evaluate(**evaluation_args)
+    batch_metrics, image_detections = evaluate(**evaluation_args)
+
+    plots.plot_detections(image_detections)
 
 
 if __name__ == "__main__":
