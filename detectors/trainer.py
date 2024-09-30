@@ -96,6 +96,7 @@ class Trainer:
 
         # Starting the epoch at 1 makes calculations more intuitive
         for epoch in range(start_epoch, epochs + 1):
+            model.train()
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
 
             # Track the time it takes for one epoch (train and val)
