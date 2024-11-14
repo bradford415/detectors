@@ -8,6 +8,10 @@ Objection detection implementations mostly my own learning and practice.
 ## Training a Model
 `python scripts/train.py scripts/configs/base-config.yaml scripts/configs/yolov4/model-base.yaml`
 
+## Notes
+### COCO Format
+* COCO bbox annotations have the form `[top_left_x, top_left_y, w, h]`
+
 ## Resources
 ### COCO Format
 - [COCO object detection format](https://cocodataset.org/#format-data)
