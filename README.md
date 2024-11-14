@@ -1,5 +1,5 @@
 # Detectors
-Modular objection detection framework, mostly my own learning and practice.
+Objection detection implementations mostly my own learning and practice.
 
 ## Table of Contents
 * [Training a Model](#training-a-model)
