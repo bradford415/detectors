@@ -15,4 +15,6 @@ Objection detection implementations mostly my own learning and practice.
 ## Resources
 ### COCO Format
 - [COCO object detection format](https://cocodataset.org/#format-data)
-  - Explains the coco format of the json annotation file 
+  - Explains the coco format of the json annotation file
+### YoloV3
+- [Really nice implementation of YoloV3](https://github.com/eriklindernoren/PyTorch-YOLOv3)
