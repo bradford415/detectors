@@ -44,7 +44,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         image_folder: str,
         annotation_file: str,
         transforms: T = None,
-        debug_mode: bool = False,
+        dev_mode: bool = False,
     ):
         """Initialize the COCO dataset class
 
@@ -62,7 +62,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         self.class_names = [category["name"] for category in categories_list]
 
         # Substantially reduces the dataset size to quickly test code
-        if debug_mode:
+        if dev_mode:
             self.ids = self.ids[:32]
 
         # Display coco information of the current dataset; this should be placed at the end of the __init__()
@@ -83,9 +83,14 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         image_path = self.root / file_name
 
         # Preprocess the input data before passing it to the model; see PreprocessCoco() for more info
-        target = {"image_id": image_id, "image_path": image_path, "annotations": annotations}
-        breakpoint()
+        target = {
+            "image_id": image_id,
+            "image_path": image_path,
+            "annotations": annotations,
+        }
+
         image, target = self.prepare(image, target)
+        
         if self._transforms is not None:
             image, target = self._transforms(image, target)
 
@@ -150,15 +155,15 @@ def make_coco_transforms(dataset_split):
 def build_coco_mini(
     root: str,
     dataset_split: str,
-    debug_mode: bool = False,
+    dev_mode: bool = False,
 ):
     """Initialize the COCO dataset class
 
     Args:
         root: full path to the dataset root
         split: which dataset split to use; `train` or `val`
-        debug_mode: Whether to build the dataset in debug mode; if true, this only uses a few samples
-                    to quickly run the code
+        dev_mode: Whether to build the dataset in dev mode; if true, this only uses a few samples
+                         to quickly run the code
     """
     coco_root = Path(root)
 
@@ -180,7 +185,7 @@ def build_coco_mini(
         image_folder=images_dir,
         annotation_file=annotation_file,
         transforms=data_transforms,
-        debug_mode=debug_mode,
+        dev_mode=dev_mode,
     )
 
     return dataset

@@ -97,7 +97,9 @@ def main(base_config_path: str, model_config_path):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
 
         cuda_kwargs = {
-            "num_workers": base_config["dataset"]["num_workers"],
+            "num_workers": base_config["dataset"]["num_workers"]
+            if not base_config["dev_mode"]
+            else 0,
             "pin_memory": True,
         }
 
@@ -108,10 +110,10 @@ def main(base_config_path: str, model_config_path):
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_train = dataset_map[base_config["dataset_name"]](
-        dataset_split="train", debug_mode=base_config["debug_mode"], **dataset_kwargs
+        dataset_split="train", dev_mode=base_config["dev_mode"], **dataset_kwargs
     )
     dataset_val = dataset_map[base_config["dataset_name"]](
-        dataset_split="val", debug_mode=base_config["debug_mode"], **dataset_kwargs
+        dataset_split="val", dev_mode=base_config["dev_mode"], **dataset_kwargs
     )
 
     # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;

@@ -6,30 +6,31 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from pil import Image
+from PIL import Image
 
-from detectors.data.transforms import UnNormalize
+from detectors.data.transforms import Unnormalize
 from detectors.utils.misc import to_cpu
 
 
 def visualize_norm_img_tensors(
-    img_tensors: torch.Tensor, targets, classes: List[str], output_dir: Path
+    img_tensors: torch.Tensor, targets: list[dict], classes: list[str], output_dir: Path
 ):
     """Visualizes the boxes of augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
-    
+
     Args:
-        img_tensors:
-        targets:
+        img_tensors: tensor of normalized images (b, c, h, w)
+        targets: list of dicts containing at least the image bboxes; bboxes format (cx, cy, w, h)
         classes: list of unique class names by label index
         output_dir: Path to save the outputs
     """
+    assert img_tensors.shape[0] == len(targets)
 
-    un_norm = UnNormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+    un_norm = Unnormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
     # assert torch.max(img_tensors) <= 1.0
 
-    img_tensors = to_cpu("cpu")
+    img_tensors = to_cpu(img_tensors)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -79,12 +80,10 @@ def visualize_norm_img_tensors(
         plt.close()
 
 
-def plot_detections(
-    image_detections, classes: List[str], output_dir: Path
-):
+def plot_detections(image_detections, classes: List[str], output_dir: Path):
     """Visualizes the augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
-    
+
     Args:
         image_detections: Tuple containing the image file path and its detections after non-max suppression;
                           detected boxes should be (tl_x, tl_y, br_x, br_y, conf, cls)
@@ -96,7 +95,7 @@ def plot_detections(
     img_paths, img_detections = list(zip(*image_detections))
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     breakpoint()
     for detections in img_detections:
         labels += detections[:, -1].astype(np.uint8)
@@ -115,7 +114,6 @@ def plot_detections(
         ax.imshow(pil_image)
 
         for detection in detections:
-            
             cx, cy, w, h, conf, label_num = detection
 
             tl_x = cx - w // 2

@@ -19,7 +19,7 @@ def non_max_suppression(
 
     Returns:
         A list of tensors where each element is the nms predictions for an image;
-        the length of the output is the batch_size and each element has shape (max_nms, 6)
+        len(output) = batch_size and each element has shape (max_nms, 6)
         where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
     """
 
@@ -114,7 +114,7 @@ def non_max_suppression(
         output[image_index] = box_pred[nms_indices].detach().cpu()
 
         if (time.time() - t) > time_limit:
-            #print(f"WARNING: NMS time limit {time_limit}s exceeded")
+            # print(f"WARNING: NMS time limit {time_limit}s exceeded")
             break  # time limit exceeded
 
     return output

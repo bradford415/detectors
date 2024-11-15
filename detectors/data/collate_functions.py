@@ -57,7 +57,7 @@ def collate_fn_test(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -
     # Convert a batch of images and annoations [(image, annoations), (image, annoations), ...]
     # to (image, image), (annotations, annotations), ... ; this operation is called iterable unpacking
     images, annotations = zip(*batch)  # images (C, H, W)
-    
+
     images = torch.stack(images)
 
     # This is what will be returned in the main train for loop (samples, targets)

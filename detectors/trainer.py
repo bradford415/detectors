@@ -15,13 +15,14 @@ from torch.utils import data
 from torchvision.transforms import functional as F
 from tqdm import tqdm
 
+from detectors import visualize
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
 from detectors.evaluate import evaluate
 from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
                                            print_eval_stats)
 from detectors.postprocessing.nms import non_max_suppression
-from detectors.utils import misc, plots
+from detectors.utils import misc
 from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
 
 log = logging.getLogger(__name__)
@@ -42,10 +43,6 @@ class Trainer:
             output_path: Path to save the train outputs
             use_cuda: Whether to use the GPU
         """
-        ## TODO: PROBALBY REMOVE THESE Initialize training objects
-        # self.optimizer = optimizer_map[optimizer]
-        # self.lr_scheduler = "test"
-
         self.device = device
 
         # Paths
@@ -168,7 +165,7 @@ class Trainer:
         for steps, (samples, targets) in enumerate(dataloader_train):
             samples = samples.to(self.device)
             targets = [
-                {key: value.to(self.device) for key, value in t.items()}
+                {key: val.to(self.device) if isinstance(val, torch.Tensor) else val for key, val in t.items()}
                 for t in targets
             ]
 
@@ -233,9 +230,15 @@ class Trainer:
             A Tuple of the (prec, rec, ap, f1, and class) per class
         """
 
-        # evaluate() is used by both the validation set and the test; this can be customized in the future if needed
+        # evaluate() is used by both val and test set; this can be customized in the future if needed
         # but for now validation and test behave the same
-        metrics_output, detections = evaluate(model, dataloader_val, class_names, output_path=self.output_paths["output_dir"],device=self.device)
+        metrics_output, detections = evaluate(
+            model,
+            dataloader_val,
+            class_names,
+            output_path=self.output_paths["output_dir"],
+            device=self.device,
+        )
 
         return metrics_output
 
@@ -268,7 +271,7 @@ class Trainer:
             raise ValueError("split must either be in valid_splits")
 
         samples, targets = next(iter(dataloader))
-        plots.visualize_norm_img_tensors(
+        visualize.visualize_norm_img_tensors(
             samples,
             targets,
             class_names,

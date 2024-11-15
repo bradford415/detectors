@@ -14,14 +14,14 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 
-class PreprocessCoco(object):
+class PreprocessCoco:
     """Preprocess the coco dataset before any augmentations are applied"""
 
     def __init__(self, return_masks=False):
         self.return_masks = return_masks
-        
+
         # Used to make the dataset labels sequential
-        self.coco_class_91_to_80 = coco91_to_coco80_class() 
+        self.coco_class_91_to_80 = coco91_to_coco80_class()
 
     def __call__(
         self, image: Image.Image, target: Dict[str, Any]
@@ -64,7 +64,7 @@ class PreprocessCoco(object):
         boxes[:, 0::2].clamp_(min=0, max=w)
         boxes[:, 1::2].clamp_(min=0, max=h)
 
-        # Create list of object labels, shift the coco ids so they are between 0-79 (i.e., sequential), 
+        # Create list of object labels, shift the coco ids so they are between 0-79 (i.e., sequential),
         # and convert to tensor
         ## TODO: This may not be the correct way to convert the classes
         classes = [self.coco_class_91_to_80[obj["category_id"]] for obj in annotations]
@@ -75,11 +75,14 @@ class PreprocessCoco(object):
         boxes = boxes[keep]
         classes = classes[keep]
 
+        image_path = target["image_path"]
+
         # Update ground truth labels with the preprocessed boxes and classes
         target = {}
         target["boxes"] = boxes
         target["labels"] = classes
         target["image_id"] = image_id
+        target["image_path"] = str(image_path)
 
         # Extract area and iscrowd for conversion to coco api
         # Area is used during evaluation with the COCO metric, to separate the metric scores between small, medium and large boxes.
@@ -311,7 +314,7 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
             dataset["annotations"].append(ann)
             ann_id += 1
     dataset["categories"] = [{"id": i} for i in sorted(categories)]
-    # breakpoint()
+
     coco_ds.dataset = dataset
     # suppress pycocotools prints
     with open(os.devnull, "w") as devnull:
