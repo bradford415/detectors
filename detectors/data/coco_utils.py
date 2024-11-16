@@ -225,15 +225,15 @@ def get_coco_object(dataset: Dataset):
         ValueError("Dataset type not recognized.")
 
 
-def explore_coco(dataset: torchvision.datasets.CocoDetection):
+def explore_coco(dataset: torchvision.datasets.CocoDetection, split: str):
     """Display dataset information based on the coco format
 
     Args:
         dataset: Dataset instance that is dervied from torchvision.datasets.CocoDetection
     """
-    print("\nExploring COCO dataset:")
     # Category IDs.
     cat_ids = dataset.coco.getCatIds()
+    
     print(f"\tunique categories: {len(cat_ids)}")
 
     img_ids = dataset.coco.getImgIds()

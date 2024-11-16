@@ -44,7 +44,7 @@ def evaluate(
     labels = []
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
     image_paths = []
-    image_detections = []  # list of image paths and tensors containing nms dectections
+    final_preds = []
     for steps, (samples, targets) in enumerate(
         tqdm(dataloader_test, desc="Evaluating")
     ):
@@ -52,12 +52,11 @@ def evaluate(
 
         # Extract object labels from all samples in the batch into a 1d python list
         for target in targets:
+            # extract labels (b*labels_per_img,) and image paths for visualization
             labels += target["labels"].tolist()
-            image_paths += target["image_path"].tolist()
+            image_paths.append(target["image_path"])
 
-        breakpoint()
-
-        for target in targets:
+            # convert bbox yolo format to xyxy
             target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
         # (b, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
@@ -67,10 +66,10 @@ def evaluate(
         predictions = misc.to_cpu(predictions)
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
-        # returns of list of tensor predictions (tl_x, tl_y, br_x, br_y, conf, cls)
-        breakpoint()
+        # list (b,) of tensor predictions (max_nms_preds, 6)
+        # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
-        image_detections.append((target["image_path"], nms_preds))
+        final_preds.extend(nms_preds)
 
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
@@ -87,6 +86,9 @@ def evaluate(
     metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
     print_eval_stats(metrics_output, class_names, verbose=True)
+
+    # Pair the image paths with the final predictions to visualize
+    image_detections = list(zip(image_paths, final_preds))
 
     return metrics_output, image_detections
 
