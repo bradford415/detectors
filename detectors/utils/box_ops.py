@@ -9,20 +9,25 @@ import torch
 from torchvision.ops.boxes import box_area
 
 
-def cxcywh_to_xyxy(x: torch.Tensor):
-    """Convert boxes in yolo format [cw, cy, w, h] to [tl_x, tl_y, br_x, br,y]
+def cxcywh_to_xyxy(boxes: torch.Tensor):
+    """Convert boxes in yolo format [cx, cy, w, h] to [tl_x, tl_y, br_x, br_y];
+    returns a new tensor, does not modify in place
 
+
+    NOTE: this is not a batch function, this only supports one image at a time
+    
     Args:
-        x: TODO
+        boxes: a tensor of boxes for each object in an image (num_objects, 4)
+               where 4 represents the [cx, cy, w, h] of each object
 
     Returns:
         A new tensor of the same shape as the the input tensor
     """
-    y = x.new(x.shape)
-    y[..., 0] = x[..., 0] - x[..., 2] / 2
-    y[..., 1] = x[..., 1] - x[..., 3] / 2
-    y[..., 2] = x[..., 0] + x[..., 2] / 2
-    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    y = boxes.new(boxes.shape)
+    y[..., 0] = boxes[..., 0] - boxes[..., 2] / 2
+    y[..., 1] = boxes[..., 1] - boxes[..., 3] / 2
+    y[..., 2] = boxes[..., 0] + boxes[..., 2] / 2
+    y[..., 3] = boxes[..., 1] + boxes[..., 3] / 2
     return y
 
 

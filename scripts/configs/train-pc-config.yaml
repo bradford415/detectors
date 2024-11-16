@@ -5,9 +5,6 @@
 # to quickly run the code as well as sets num_workers=0
 dev_mode: True
 
-# Root directory of your project; type "pwd" in the command line to find it
-root_dir: "/home/bselee/programming/detectors"
-
 input_data: "data/input.txt"
 
 # Base directory for output files; do not change this 
