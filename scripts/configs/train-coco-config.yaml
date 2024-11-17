@@ -8,13 +8,19 @@ dev_mode: True
 input_data: "data/input.txt"
 
 # Base directory for output files; do not change this 
-output_path: "output/train"
+output_dir: "output/train"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
 exp_name: "development"
 
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetectionMiniTrain"
+
+# Log the train progress every n steps
+log_train_steps: 20
+
+# Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+ckpt_epochs: 15
 
 # Parameters for the dataset class
 dataset:
@@ -32,15 +38,9 @@ train:
 
   batch_size: 16
 
-  # Various epochs used during training
-  epochs:
-
-    # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
-    start_epoch: 1
-    epochs: 200
-
-    # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-    ckpt_epochs: 10
+  # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
+  start_epoch: 1
+  epochs: 200
 
 validation:
   batch_size: 4
@@ -51,11 +51,6 @@ cuda:
   # List of GPU devices to use
   gpus: [0]
 
-# Logging parameters
-logging:
-
-  # Log the train progress every n steps
-  train_steps_freq: 20
 
 # Reproducibility information
 reproducibility:

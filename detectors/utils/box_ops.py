@@ -15,7 +15,7 @@ def cxcywh_to_xyxy(boxes: torch.Tensor):
 
 
     NOTE: this is not a batch function, this only supports one image at a time
-    
+
     Args:
         boxes: a tensor of boxes for each object in an image (num_objects, 4)
                where 4 represents the [cx, cy, w, h] of each object

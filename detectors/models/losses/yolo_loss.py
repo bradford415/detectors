@@ -7,6 +7,7 @@ from torch import nn
 
 ## TODO: implement the yolov3 version for better readability
 
+
 class Yolo_loss(nn.Module):
     def __init__(self, n_classes=80, n_anchors=3, device=None, batch=2):
         super(Yolo_loss, self).__init__()

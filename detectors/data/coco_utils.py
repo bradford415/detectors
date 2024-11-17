@@ -233,7 +233,7 @@ def explore_coco(dataset: torchvision.datasets.CocoDetection, split: str):
     """
     # Category IDs.
     cat_ids = dataset.coco.getCatIds()
-    
+
     print(f"\tunique categories: {len(cat_ids)}")
 
     img_ids = dataset.coco.getImgIds()

@@ -43,6 +43,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         self,
         image_folder: str,
         annotation_file: str,
+        split: str,
         transforms: T = None,
         dev_mode: bool = False,
     ):
@@ -51,6 +52,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         Args:
             image_folder: path to the images
             annotation_file: path to the .json annotation file in coco format
+            split: the dataset split type; train, val, or test
         """
         super().__init__(root=image_folder, annFile=annotation_file)
         self._transforms = transforms
@@ -66,7 +68,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
             self.ids = self.ids[:32]
 
         # Display coco information of the current dataset; this should be placed at the end of the __init__()
-        explore_coco(self)
+        explore_coco(self, split)
 
     def __getitem__(self, index):
         """Retrieve and preprocess samples from the dataset"""
@@ -90,7 +92,7 @@ class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
         }
 
         image, target = self.prepare(image, target)
-        
+
         if self._transforms is not None:
             image, target = self._transforms(image, target)
 
@@ -186,6 +188,7 @@ def build_coco_mini(
         annotation_file=annotation_file,
         transforms=data_transforms,
         dev_mode=dev_mode,
+        split=dataset_split
     )
 
     return dataset

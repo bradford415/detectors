@@ -57,18 +57,21 @@ def main(base_config_path: str, model_config_path):
 
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
+        
+    dev_mode = base_config["dev_mode"]
+    
+    if dev_mode:
+        base_config["train"]["batch_size"] = 2
+        base_config["validation"]["batch_size"] = 2
 
     # Initialize paths
     output_path = (
-        Path(base_config["output_path"])
+        Path(base_config["output_dir"])
         / base_config["exp_name"]
         / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
     )
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
-
-    # Dictionary of logging parameters; used to log training and evaluation progress after certain intervals
-    logging_intervals = base_config["logging"]
 
     # Configure logger that prints to a log file and stdout
     logging.basicConfig(
@@ -98,7 +101,7 @@ def main(base_config_path: str, model_config_path):
 
         cuda_kwargs = {
             "num_workers": base_config["dataset"]["num_workers"]
-            if not base_config["dev_mode"]
+            if not dev_mode
             else 0,
             "pin_memory": True,
         }
@@ -110,10 +113,10 @@ def main(base_config_path: str, model_config_path):
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_train = dataset_map[base_config["dataset_name"]](
-        dataset_split="train", dev_mode=base_config["dev_mode"], **dataset_kwargs
+        dataset_split="train", dev_mode=dev_mode, **dataset_kwargs
     )
     dataset_val = dataset_map[base_config["dataset_name"]](
-        dataset_split="val", dev_mode=base_config["dev_mode"], **dataset_kwargs
+        dataset_split="val", dev_mode=dev_mode, **dataset_kwargs
     )
 
     # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
@@ -149,7 +152,7 @@ def main(base_config_path: str, model_config_path):
     # model = Yolov4_pytorch(n_classes=80,inference=False)
     model.to(device)
 
-    ## TODO: Apply weights init
+    ## TODO: Apply weights init maybe
 
     # For the YoloV4Loss function, if the batch size is different than the
     criterion = YoloV4Loss(
@@ -177,7 +180,10 @@ def main(base_config_path: str, model_config_path):
     )
 
     trainer = Trainer(
-        output_path=str(output_path), device=device, logging_intervals=logging_intervals
+        output_dir=str(output_path),
+        device=device,
+        log_train_steps=base_config["log_train_steps"],
+        ckpt_epochs=base_config["ckpt_epochs"],
     )
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
@@ -198,7 +204,8 @@ def main(base_config_path: str, model_config_path):
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
-        **train_args["epochs"],
+        "start_epoch": train_args["start_epoch"],
+        "epochs": train_args["epochs"],
     }
     trainer.train(**trainer_args)
 

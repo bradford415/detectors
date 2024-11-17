@@ -33,9 +33,10 @@ class Trainer:
 
     def __init__(
         self,
-        output_path: str,
+        output_dir: str,
         device: torch.device = torch.device("cpu"),
-        logging_intervals: Dict = {},
+        log_train_steps: int = 20,
+        ckpt_epochs: int = 15
     ):
         """Constructor for the Trainer class
 
@@ -44,15 +45,10 @@ class Trainer:
             use_cuda: Whether to use the GPU
         """
         self.device = device
-
-        # Paths
-        self.output_paths = {
-            "output_dir": Path(output_path),
-        }
-
-        self.log_intervals = logging_intervals
-        if not logging_intervals:
-            self.log_intervals = {"train_steps_freq": 100}
+        
+        self.output_dir = Path(output_dir)
+        self.log_train_steps = log_train_steps
+        self.ckpt_epochs = ckpt_epochs
 
     def train(
         self,
@@ -118,7 +114,7 @@ class Trainer:
 
             # Save the model every ckpt_epochs
             if (epoch) % ckpt_epochs == 0:
-                ckpt_path = self.output_paths["output_dir"] / f"checkpoint{epoch:04}.pt"
+                ckpt_path = self.output_dir / f"checkpoint{epoch:04}.pt"
                 self._save_model(
                     model,
                     optimizer,
@@ -162,10 +158,13 @@ class Trainer:
             scheduler: Learning rate scheduler to update the learning rate
             epoch: Current epoch; used for logging purposes
         """
-        for steps, (samples, targets) in enumerate(dataloader_train):
+        for steps, (samples, targets) in enumerate(dataloader_train, 1):
             samples = samples.to(self.device)
             targets = [
-                {key: val.to(self.device) if isinstance(val, torch.Tensor) else val for key, val in t.items()}
+                {
+                    key: val.to(self.device) if isinstance(val, torch.Tensor) else val
+                    for key, val in t.items()
+                }
                 for t in targets
             ]
 
@@ -192,13 +191,13 @@ class Trainer:
             # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
             scheduler.step()
 
-            if (steps + 1) % 100 == 0:
+            if (steps) % 100 == 0:
                 log.info(
                     "Current learning_rate: %s\n",
                     optimizer.state_dict()["param_groups"][0]["lr"],
                 )
 
-            if (steps + 1) % self.log_intervals["train_steps_freq"] == 0:
+            if (steps) % self.log_train_steps == 0:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
                     epoch,
@@ -207,7 +206,6 @@ class Trainer:
                     final_loss.item(),
                 )
 
-                log.info("cpu utilization: %s\n", psutil.virtual_memory().percent)
 
     @torch.no_grad()
     def _evaluate(
@@ -236,21 +234,27 @@ class Trainer:
             model,
             dataloader_val,
             class_names,
-            output_path=self.output_paths["output_dir"],
+            output_path=self.output_dir,
             device=self.device,
         )
 
         return metrics_output
 
     def _save_model(
-        self, model, optimizer, lr_scheduler, current_epoch, ckpt_every, save_path
+        self,
+        model,
+        optimizer,
+        current_epoch,
+        save_path,
+        lr_scheduler: nn.Module | None = None,
     ):
         torch.save(
             {
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "lr_scheduler": lr_scheduler.state_dict(),
-                "epoch": current_epoch,
+                "epoch": current_epoch
+                + 1,  # + 1 bc when we resume training we want to start at the next step
             },
             save_path,
         )
@@ -275,5 +279,5 @@ class Trainer:
             samples,
             targets,
             class_names,
-            self.output_paths["output_dir"] / f"{split}-images",
+            self.output_dir / f"{split}-images",
         )
