@@ -71,8 +71,10 @@ def evaluate(
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds.extend(nms_preds)
 
+        # [(num_true_)... batch_size]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
+    breakpoint()
     # No detections over whole validation set
     if len(sample_metrics) == 0:
         log.info("---- No detections over whole validation set ----")
