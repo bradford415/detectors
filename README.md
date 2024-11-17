@@ -6,7 +6,7 @@ Objection detection implementations mostly my own learning and practice.
 * [Resources](#resources)
 
 ## Training a Model
-`python scripts/train.py scripts/configs/base-config.yaml scripts/configs/yolov4/model-base.yaml`
+`python scripts/train.py scripts/configs/train-coco-config.yaml scripts/configs/yolov4/model-base.yaml`
 
 ## Notes
 ### COCO Format
