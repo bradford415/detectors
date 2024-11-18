@@ -71,20 +71,21 @@ def evaluate(
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds.extend(nms_preds)
 
-        # [(num_true_)... batch_size]
+        # [[TPs, predicted_scores, pred_labels], ..., num_val_images]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
-    breakpoint()
     # No detections over whole validation set
     if len(sample_metrics) == 0:
         log.info("---- No detections over whole validation set ----")
         return None
 
-    # Concatenate sample statistics (batch_size*num_preds,)
+    # Concatenate sample statistics
     true_positives, pred_scores, pred_labels = [
-        np.concatenate(x, 0) for x in list(zip(*sample_metrics))
+        np.concatenate(x, axis=0) for x in list(zip(*sample_metrics))
     ]
-
+    
+    assert true_positives.ndim == 1 and true_positives.shape == pred_scores.shape == pred_labels.shape
+    
     metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
     print_eval_stats(metrics_output, class_names, verbose=True)

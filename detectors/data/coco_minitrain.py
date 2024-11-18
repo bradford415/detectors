@@ -188,7 +188,7 @@ def build_coco_mini(
         annotation_file=annotation_file,
         transforms=data_transforms,
         dev_mode=dev_mode,
-        split=dataset_split
+        split=dataset_split,
     )
 
     return dataset

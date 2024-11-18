@@ -57,9 +57,9 @@ def main(base_config_path: str, model_config_path):
 
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
-        
+
     dev_mode = base_config["dev_mode"]
-    
+
     if dev_mode:
         base_config["train"]["batch_size"] = 2
         base_config["validation"]["batch_size"] = 2
@@ -81,6 +81,8 @@ def main(base_config_path: str, model_config_path):
     )
 
     log.info("Initializing...\n")
+    log.info("writing outputs to %s", str(output_path))
+
 
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
@@ -100,9 +102,7 @@ def main(base_config_path: str, model_config_path):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
 
         cuda_kwargs = {
-            "num_workers": base_config["dataset"]["num_workers"]
-            if not dev_mode
-            else 0,
+            "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
             "pin_memory": True,
         }
 

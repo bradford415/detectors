@@ -10,6 +10,7 @@ from PIL import Image
 
 from detectors.data.transforms import Unnormalize
 from detectors.utils.misc import to_cpu
+from detectors.utils.box_ops import rescale_boxes
 
 
 def visualize_norm_img_tensors(
@@ -78,9 +79,14 @@ def visualize_norm_img_tensors(
         # plt.gca().yaxis.set_major_locator(NullLocator())
         fig.savefig(f"{output_dir}/image_tensor_{index}.png")
         plt.close()
+        
+def plot_all_detections(img_detections, classes: list[str], output_dir: Path):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for index, (image_path, detections) in enumerate(img_detections):
+        plot_detections(image_path, detections, classes, save_name=output_dir / f"detection_{index}.jpg")
 
 
-def plot_detections(image_detections, classes: List[str], output_dir: Path):
+def plot_detections(image_path: str, detections, classes: List[str], save_name: str):
     """Visualizes the augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
 
@@ -92,12 +98,24 @@ def plot_detections(image_detections, classes: List[str], output_dir: Path):
         classes: list of unique class names by label index
         output_dir: Path to save the outputs
     """
-    img_paths, img_detections = list(zip(*image_detections))
+    img = np.array(Image.open(image_path))
+    
+    plt.figure()
+    fig, ax = plt.subplots(1)
+        
+    ax.imshow(img)
+    
+    rescale_boxes()
+    
+    ################# START HERE ########################
 
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     breakpoint()
+    labels = []
     for detections in img_detections:
+        if isinstance(detections, torch.Tensor):
+            detections = detections.numpy()
+        breakpoint()
         labels += detections[:, -1].astype(np.uint8)
     unique_classes = np.unique(np.array(labels))
     num_unique_classes = len(unique_classes)
@@ -135,67 +153,5 @@ def plot_detections(image_detections, classes: List[str], output_dir: Path):
                 bbox={"color": color, "pad": 0},
             )
 
-        # plt.gca().xaxis.set_major_locator(NullLocator())
-        # plt.gca().yaxis.set_major_locator(NullLocator())
         fig.savefig(f"{output_dir}/image_{index}.png")
         plt.close()
-
-
-def _draw_and_save_output_image(image_path, detections, img_size, output_path, classes):
-    """Draws detections in output image and stores this.
-
-    :param image_path: Path to input image
-    :type image_path: str
-    :param detections: List of detections on image
-    :type detections: [Tensor]
-    :param img_size: Size of each image dimension for yolo
-    :type img_size: int
-    :param output_path: Path of output directory
-    :type output_path: str
-    :param classes: List of class names
-    :type classes: [str]
-    """
-    # Create plot
-    img = np.array(Image.open(image_path))
-    plt.figure()
-    fig, ax = plt.subplots(1)
-    ax.imshow(img)
-    # Rescale boxes to original image
-    detections = rescale_boxes(detections, img_size, img.shape[:2])
-    unique_labels = detections[:, -1].cpu().unique()
-    n_cls_preds = len(unique_labels)
-    # Bounding-box colors
-    cmap = plt.get_cmap("tab20b")
-    colors = [cmap(i) for i in np.linspace(0, 1, n_cls_preds)]
-    bbox_colors = random.sample(colors, n_cls_preds)
-    for x1, y1, x2, y2, conf, cls_pred in detections:
-        print(f"\t+ Label: {classes[int(cls_pred)]} | Confidence: {conf.item():0.4f}")
-
-        box_w = x2 - x1
-        box_h = y2 - y1
-
-        color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
-        # Create a Rectangle patch
-        bbox = patches.Rectangle(
-            (x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none"
-        )
-        # Add the bbox to the plot
-        ax.add_patch(bbox)
-        # Add label
-        plt.text(
-            x1,
-            y1,
-            s=f"{classes[int(cls_pred)]}: {conf:.2f}",
-            color="white",
-            verticalalignment="top",
-            bbox={"color": color, "pad": 0},
-        )
-
-    # Save generated image with detections
-    plt.axis("off")
-    plt.gca().xaxis.set_major_locator(NullLocator())
-    plt.gca().yaxis.set_major_locator(NullLocator())
-    filename = os.path.basename(image_path).split(".")[0]
-    output_path = os.path.join(output_path, f"{filename}.png")
-    plt.savefig(output_path, bbox_inches="tight", pad_inches=0.0)
-    plt.close()

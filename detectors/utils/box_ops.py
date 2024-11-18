@@ -44,8 +44,20 @@ def box_xyxy_to_cxcywh(x):
 
 
 def bbox_iou(box1, box2, x1y1x2y2=True):
-    """
-    Returns the IoU of two bounding boxes
+    """Returns the IoUs of a single box (box1) with many candidate boxes (box2) 
+    
+    For example, box1 can be a single predicted box coords and we want to know which
+    ground-truth target box coord overlaps best with the predicted box coord;
+    the number of bbox coords in box2 depends on how many target boxes there
+    are for the predicted label 
+
+    Args:
+        box1: (1, 4)
+        box2: (b, 4)
+        x1y1x2y2: whether bbox coords are in the form (tl_x, tl_y, br_x, br_y)
+    
+    Returns:
+        TODO: figure this out better
     """
     if not x1y1x2y2:
         # Transform from center and width to exact coordinates
@@ -54,15 +66,16 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
         b2_x1, b2_x2 = box2[:, 0] - box2[:, 2] / 2, box2[:, 0] + box2[:, 2] / 2
         b2_y1, b2_y2 = box2[:, 1] - box2[:, 3] / 2, box2[:, 1] + box2[:, 3] / 2
     else:
-        # Get the coordinates of bounding boxes
+        # Get the coordinates of bounding boxes (b, )
         b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
         b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
-    # get the corrdinates of the intersection rectangle
+    # get the coordinates of the intersection rectangle (b,); box-wise max comparison (i.e., does not flatten)
     inter_rect_x1 = torch.max(b1_x1, b2_x1)
     inter_rect_y1 = torch.max(b1_y1, b2_y1)
     inter_rect_x2 = torch.min(b1_x2, b2_x2)
     inter_rect_y2 = torch.min(b1_y2, b2_y2)
+    
     # Intersection area
     inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min=0) * torch.clamp(
         inter_rect_y2 - inter_rect_y1 + 1, min=0
@@ -74,6 +87,28 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
     iou = inter_area / (b1_area + b2_area - inter_area + 1e-16)
 
     return iou
+
+
+def rescale_boxes(boxes, current_dim, original_size: tuple[int, int]):
+    """TODO comment this
+    Rescales bounding boxes to the original shape
+    """
+    orig_h, orig_w = original_size
+
+    # The amount of padding that was added
+    pad_x = max(orig_h - orig_w, 0) * (current_dim / max(original_size))
+    pad_y = max(orig_w - orig_h, 0) * (current_dim / max(original_size))
+
+    # Image height and width after padding is removed
+    unpad_h = current_dim - pad_y
+    unpad_w = current_dim - pad_x
+
+    # Rescale bounding boxes to dimension of original image
+    boxes[:, 0] = ((boxes[:, 0] - pad_x // 2) / unpad_w) * orig_w
+    boxes[:, 1] = ((boxes[:, 1] - pad_y // 2) / unpad_h) * orig_h
+    boxes[:, 2] = ((boxes[:, 2] - pad_x // 2) / unpad_w) * orig_w
+    boxes[:, 3] = ((boxes[:, 3] - pad_y // 2) / unpad_h) * orig_h
+    return boxes
 
 
 # modified from torchvision to also return the union

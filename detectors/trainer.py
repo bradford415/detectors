@@ -15,7 +15,7 @@ from torch.utils import data
 from torchvision.transforms import functional as F
 from tqdm import tqdm
 
-from detectors import visualize
+from detectors.visualize import plot_all_detections, visualize_norm_img_tensors
 from detectors.data.coco_eval import CocoEvaluator
 from detectors.data.coco_utils import convert_to_coco_api
 from detectors.evaluate import evaluate
@@ -36,7 +36,7 @@ class Trainer:
         output_dir: str,
         device: torch.device = torch.device("cpu"),
         log_train_steps: int = 20,
-        ckpt_epochs: int = 15
+        ckpt_epochs: int = 15,
     ):
         """Constructor for the Trainer class
 
@@ -45,7 +45,7 @@ class Trainer:
             use_cuda: Whether to use the GPU
         """
         self.device = device
-        
+
         self.output_dir = Path(output_dir)
         self.log_train_steps = log_train_steps
         self.ckpt_epochs = ckpt_epochs
@@ -58,7 +58,7 @@ class Trainer:
         dataloader_val: data.DataLoader,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
-        class_names: List,
+        class_names: list[str],
         start_epoch: int = 1,
         epochs: int = 100,
         ckpt_epochs: int = 10,
@@ -108,7 +108,8 @@ class Trainer:
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
-            metrics_output = self._evaluate(
+            # TODO: probably save metrics output into csv
+            metrics_output, image_detections = self._evaluate(
                 model, criterion, dataloader_val, class_names=class_names
             )
 
@@ -123,6 +124,11 @@ class Trainer:
                     ckpt_epochs,
                     save_path=ckpt_path,
                 )
+            
+            # TODO: Save "best" model
+            
+            save_dir = self.output_dir / "validation" / f"epoch{epoch}"
+            plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -137,6 +143,8 @@ class Trainer:
             start_epoch - epochs,
             total_time_str,
         )
+        
+        
 
     def _train_one_epoch(
         self,
@@ -206,7 +214,6 @@ class Trainer:
                     final_loss.item(),
                 )
 
-
     @torch.no_grad()
     def _evaluate(
         self,
@@ -238,7 +245,7 @@ class Trainer:
             device=self.device,
         )
 
-        return metrics_output
+        return metrics_output, detections
 
     def _save_model(
         self,
@@ -275,7 +282,7 @@ class Trainer:
             raise ValueError("split must either be in valid_splits")
 
         samples, targets = next(iter(dataloader))
-        visualize.visualize_norm_img_tensors(
+        visualize_norm_img_tensors(
             samples,
             targets,
             class_names,
