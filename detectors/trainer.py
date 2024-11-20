@@ -128,7 +128,7 @@ class Trainer:
             # TODO: Save "best" model
             
             save_dir = self.output_dir / "validation" / f"epoch{epoch}"
-            plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
+            #plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -209,7 +209,7 @@ class Trainer:
                 log.info(
                     "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
                     epoch,
-                    steps + 1,
+                    steps,
                     len(dataloader_train),
                     final_loss.item(),
                 )

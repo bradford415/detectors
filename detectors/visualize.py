@@ -4,6 +4,7 @@ from typing import List
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import torch
 from PIL import Image
@@ -11,6 +12,9 @@ from PIL import Image
 from detectors.data.transforms import Unnormalize
 from detectors.utils.misc import to_cpu
 from detectors.utils.box_ops import rescale_boxes
+from matplotlib.ticker import NullLocator
+
+matplotlib.use('Agg')
 
 
 def visualize_norm_img_tensors(
@@ -65,6 +69,8 @@ def visualize_norm_img_tensors(
                 (tl_x, tl_y), w, h, linewidth=2, edgecolor=color, facecolor="none"
             )
             # Add the bbox to the plot
+            # TODO: need to figure out if I need to clip these boxes because sometimes the figure is too large
+            # Might be in rescale_boxes() in github code
             ax.add_patch(bbox)
             plt.text(
                 tl_x,
@@ -77,6 +83,7 @@ def visualize_norm_img_tensors(
 
         # plt.gca().xaxis.set_major_locator(NullLocator())
         # plt.gca().yaxis.set_major_locator(NullLocator())
+        plt.axis("off")
         fig.savefig(f"{output_dir}/image_tensor_{index}.png")
         plt.close()
         
@@ -91,67 +98,63 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
     manually verify the data augmentation on the images and labels is accurate
 
     Args:
-        image_detections: Tuple containing the image file path and its detections after non-max suppression;
-                          detected boxes should be (tl_x, tl_y, br_x, br_y, conf, cls)
+        image_path: the image path of the image being detected
+        detections: detections after non-max suppression (num_detections, 6);
+                    detected boxes should be (tl_x, tl_y, br_x, br_y, conf, cls)
         targets: Dictionaries containing at least the ground truth bboxes and label for each
                  object; bboxes should be (tl_x)each element of the list is an image's labels
         classes: list of unique class names by label index
         output_dir: Path to save the outputs
     """
-    img = np.array(Image.open(image_path))
+    img = np.array(Image.open(image_path).convert("RGB"))
     
     plt.figure()
     fig, ax = plt.subplots(1)
         
     ax.imshow(img)
     
-    rescale_boxes()
     
-    ################# START HERE ########################
+    if isinstance(detections, torch.Tensor):
+        detections = detections.numpy()
 
-
-    breakpoint()
-    labels = []
-    for detections in img_detections:
-        if isinstance(detections, torch.Tensor):
-            detections = detections.numpy()
-        breakpoint()
-        labels += detections[:, -1].astype(np.uint8)
+    detections[:, 0]
+    labels = detections[:, -1].astype(np.uint8)
     unique_classes = np.unique(np.array(labels))
     num_unique_classes = len(unique_classes)
 
     cmap = plt.get_cmap("tab20b")
     colors = [cmap(i) for i in np.linspace(0, 1, num_unique_classes)]
     bbox_colors = random.sample(colors, num_unique_classes)
+    try:
+        for tl_x, tl_y, br_x, br_y, conf, cls_pred in detections:
+            #print(f"tl_x: {tl_x} tl_y: {tl_y} br_x: {br_x} br_y: {br_y} ")
+            #fig, ax = plt.subplots(1, 1)
 
-    for index, (img_path, detections) in enumerate(zip(img_paths, img_detections)):
-        fig, ax = plt.subplots(1, 1)
+            if tl_x < -1000.0 or tl_y < -1000.0 or br_x > 10000.0 or br_y > 10000.0:
+                continue
 
-        pil_image = Image.open(img_path).convert("RGB")
-        # ax.imshow(image.to(dtype=torch.uint8), vmin=0, vmax=255)
-        ax.imshow(pil_image)
+            box_width = br_x - tl_x
+            box_height = br_y - tl_y
 
-        for detection in detections:
-            cx, cy, w, h, conf, label_num = detection
-
-            tl_x = cx - w // 2
-            tl_y = cy - h // 2
-
-            color = bbox_colors[int(np.where(unique_classes == int(label_num))[0])]
+            color = bbox_colors[int(np.where(unique_classes == int(cls_pred))[0])]
+            
             # Create a Rectangle patch
             bbox = patches.Rectangle(
-                (tl_x, tl_y), w, h, linewidth=2, edgecolor=color, facecolor="none"
+                (tl_x, tl_y), box_width, box_height, linewidth=2, edgecolor=color, facecolor="none"
             )
             # Add the bbox to the plot
             ax.add_patch(bbox)
             plt.text(
                 tl_x,
                 tl_y,
-                s=f"{classes[int(label_num)]}",
+                s=f"{classes[int(cls_pred)]}: {conf:.2f}",
                 color="white",
                 verticalalignment="top",
                 bbox={"color": color, "pad": 0},
             )
 
-        fig.savefig(f"{output_dir}/image_{index}.png")
+        plt.axis("off")
+        fig.savefig(save_name, bbox_inches="tight", pad_inches=0.0)
         plt.close()
+    except:
+        breakpoint()
