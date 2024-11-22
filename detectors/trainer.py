@@ -1,29 +1,17 @@
-import cProfile
 import datetime
 import logging
 import time
-import tracemalloc
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
-import psutil
 import torch
-from pycocotools.coco import COCO
 from torch import nn
 from torch.utils import data
-from torchvision.transforms import functional as F
-from tqdm import tqdm
 
-from detectors.visualize import plot_all_detections, visualize_norm_img_tensors
-from detectors.data.coco_eval import CocoEvaluator
-from detectors.data.coco_utils import convert_to_coco_api
-from detectors.evaluate import evaluate
-from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
-                                           print_eval_stats)
-from detectors.postprocessing.nms import non_max_suppression
+from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.utils import misc
-from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
+from detectors.visualize import visualize_norm_img_tensors
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +24,6 @@ class Trainer:
         output_dir: str,
         device: torch.device = torch.device("cpu"),
         log_train_steps: int = 20,
-        ckpt_epochs: int = 15,
     ):
         """Constructor for the Trainer class
 
@@ -48,7 +35,6 @@ class Trainer:
 
         self.output_dir = Path(output_dir)
         self.log_train_steps = log_train_steps
-        self.ckpt_epochs = ckpt_epochs
 
     def train(
         self,
@@ -62,6 +48,7 @@ class Trainer:
         start_epoch: int = 1,
         epochs: int = 100,
         ckpt_epochs: int = 10,
+        checkpoint_path: Optional[str] = None,
     ):
         """Trains a model
 
@@ -80,7 +67,17 @@ class Trainer:
             epochs: The epoch to end training on; unless starting from a check point, this will be the number of epochs to train for
             ckpt_every: Save the model after n epochs
         """
-        log.info("\nTraining started\n")
+        log.info("\ntraining started\n")
+
+        if checkpoint_path is not None:
+            start_epoch = load_model_checkpoint(
+                checkpoint_path, model, optimizer, self.device, scheduler
+            )
+            log.info(
+                "NOTE: A checkpoint file was provided, the model will resume training at epoch %d",
+                start_epoch,
+            )
+
         total_train_start_time = time.time()
 
         # Visualize the first batch for each dataloader; manually verifies data augmentation correctness
@@ -115,20 +112,16 @@ class Trainer:
 
             # Save the model every ckpt_epochs
             if (epoch) % ckpt_epochs == 0:
-                ckpt_path = self.output_dir / f"checkpoint{epoch:04}.pt"
+                ckpt_path = self.output_dir / "checkpoints" / f"checkpoint{epoch:04}.pt"
+                ckpt_path.parents[0].mkdir(parents=True, exist_ok=True)
                 self._save_model(
-                    model,
-                    optimizer,
-                    scheduler,
-                    epoch,
-                    ckpt_epochs,
-                    save_path=ckpt_path,
+                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
                 )
-            
+
             # TODO: Save "best" model
-            
+
             save_dir = self.output_dir / "validation" / f"epoch{epoch}"
-            #plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
+            # plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -143,8 +136,6 @@ class Trainer:
             start_epoch - epochs,
             total_time_str,
         )
-        
-        
 
     def _train_one_epoch(
         self,
@@ -207,7 +198,7 @@ class Trainer:
 
             if (steps) % self.log_train_steps == 0:
                 log.info(
-                    "epoch: %-10d iter: %d/%-10d loss: %-10.4f",
+                    "epoch: %-10d iter: %d/%-10d train loss: %-10.4f",
                     epoch,
                     steps,
                     len(dataloader_train),
@@ -255,14 +246,17 @@ class Trainer:
         save_path,
         lr_scheduler: nn.Module | None = None,
     ):
+        save_dict = {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "epoch": current_epoch
+            + 1,  # + 1 bc when we resume training we want to start at the next step
+        }
+        if lr_scheduler is not None:
+            save_dict["lr_scheduler"] = lr_scheduler.state_dict()
+
         torch.save(
-            {
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "lr_scheduler": lr_scheduler.state_dict(),
-                "epoch": current_epoch
-                + 1,  # + 1 bc when we resume training we want to start at the next step
-            },
+            save_dict,
             save_path,
         )
 

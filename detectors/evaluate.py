@@ -29,7 +29,7 @@ def evaluate(
     Args:
         model: Model to train
         criterion: Loss function; only used to inspect the loss on the val set,
-                    not used for backpropagation
+                    not used for ba ropagation
         dataloader_val: Dataloader for the validation set
         device: Device to run the model on
 
@@ -46,7 +46,7 @@ def evaluate(
     image_paths = []
     final_preds = []
     for steps, (samples, targets) in enumerate(
-        tqdm(dataloader_test, desc="Evaluating")
+        tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
         samples = samples.to(device)
 
@@ -83,9 +83,12 @@ def evaluate(
     true_positives, pred_scores, pred_labels = [
         np.concatenate(x, axis=0) for x in list(zip(*sample_metrics))
     ]
-    
-    assert true_positives.ndim == 1 and true_positives.shape == pred_scores.shape == pred_labels.shape
-    
+
+    assert (
+        true_positives.ndim == 1
+        and true_positives.shape == pred_scores.shape == pred_labels.shape
+    )
+
     metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
     print_eval_stats(metrics_output, class_names, verbose=True)
@@ -96,20 +99,37 @@ def evaluate(
     return metrics_output, image_detections
 
 
-def load_model_state_dict(model: nn.Module, weights_path: str):
-    """Load the weights of a trained or pretrained model from the state_dict file;
+def load_model_checkpoint(
+    checkpoint_path: str,
+    model: nn.Module = None,
+    optimizer: nn.Module = None,
+    device=torch.device("cpu"),
+    lr_scheduler: Optional[nn.Module] = None,
+):
+    """Load the checkpoints of a trained or pretrained model from the state_dict file;
     this could be from a fully trained model or a partially trained model that you want
     to resume training from.
 
     Args:
-        model: The torch model to load the weights into
-        weights_path:
+        checkpoint_path: path to the weights file to resume training from
+        model: the model being trained
+        optimizer: the optimizer used during training
+        device: the device to map the checkpoints to
+        lr_scheduler: the learning rate scheduler used during training
+
+    Returns:
+        the epoch to start training on
     """
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )  # Select device for inference
+    # Load the torch weights
+    weights = torch.load(checkpoint_path, map_location=device, weights_only=True)
 
-    state_dict = torch.load(weights_path, map_location=device)
-    model.load_state_dict(state_dict["model"])
+    # load the state dictionaries for the necessary training modules
+    if model is not None:
+        model.load_state_dict(weights["model"])
+    if optimizer is not None:
+        optimizer.load_state_dict(weights["optimizer"])
+    if lr_scheduler is not None:
+        lr_scheduler.load_state_dict(weights["lr_scheduler"])
+    start_epoch = weights["epoch"]
 
-    return model
+    return start_epoch

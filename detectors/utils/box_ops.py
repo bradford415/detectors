@@ -44,18 +44,18 @@ def box_xyxy_to_cxcywh(x):
 
 
 def bbox_iou(box1, box2, x1y1x2y2=True):
-    """Returns the IoUs of a single box (box1) with many candidate boxes (box2) 
-    
+    """Returns the IoUs of a single box (box1) with many candidate boxes (box2)
+
     For example, box1 can be a single predicted box coords and we want to know which
     ground-truth target box coord overlaps best with the predicted box coord;
     the number of bbox coords in box2 depends on how many target boxes there
-    are for the predicted label 
+    are for the predicted label
 
     Args:
         box1: (1, 4)
         box2: (b, 4)
         x1y1x2y2: whether bbox coords are in the form (tl_x, tl_y, br_x, br_y)
-    
+
     Returns:
         TODO: figure this out better
     """
@@ -75,7 +75,7 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
     inter_rect_y1 = torch.max(b1_y1, b2_y1)
     inter_rect_x2 = torch.min(b1_x2, b2_x2)
     inter_rect_y2 = torch.min(b1_y2, b2_y2)
-    
+
     # Intersection area
     inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min=0) * torch.clamp(
         inter_rect_y2 - inter_rect_y1 + 1, min=0
@@ -143,7 +143,9 @@ def clip_boxes(boxes, img_shape, xyxy=True):
     Returns:
         (torch.Tensor | numpy.ndarray): Clipped boxes
     """
-    if isinstance(boxes, torch.Tensor):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
+    if isinstance(
+        boxes, torch.Tensor
+    ):  # faster individually (WARNING: inplace .clamp_() Apple MPS bug)
         boxes[..., 0] = boxes[..., 0].clamp(0, shape[1])  # x1
         boxes[..., 1] = boxes[..., 1].clamp(0, shape[0])  # y1
         boxes[..., 2] = boxes[..., 2].clamp(0, shape[1])  # x2
@@ -152,6 +154,7 @@ def clip_boxes(boxes, img_shape, xyxy=True):
         boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])  # x1, x2
         boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])  # y1, y2
     return boxes
+
 
 def generalized_box_iou(boxes1, boxes2):
     """

@@ -2,19 +2,19 @@ import random
 from pathlib import Path
 from typing import List
 
+import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-import matplotlib
 import numpy as np
 import torch
+from matplotlib.ticker import NullLocator
 from PIL import Image
 
 from detectors.data.transforms import Unnormalize
-from detectors.utils.misc import to_cpu
 from detectors.utils.box_ops import rescale_boxes
-from matplotlib.ticker import NullLocator
+from detectors.utils.misc import to_cpu
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 
 def visualize_norm_img_tensors(
@@ -86,11 +86,17 @@ def visualize_norm_img_tensors(
         plt.axis("off")
         fig.savefig(f"{output_dir}/image_tensor_{index}.png")
         plt.close()
-        
+
+
 def plot_all_detections(img_detections, classes: list[str], output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
     for index, (image_path, detections) in enumerate(img_detections):
-        plot_detections(image_path, detections, classes, save_name=output_dir / f"detection_{index}.jpg")
+        plot_detections(
+            image_path,
+            detections,
+            classes,
+            save_name=output_dir / f"detection_{index}.jpg",
+        )
 
 
 def plot_detections(image_path: str, detections, classes: List[str], save_name: str):
@@ -107,13 +113,12 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
         output_dir: Path to save the outputs
     """
     img = np.array(Image.open(image_path).convert("RGB"))
-    
+
     plt.figure()
     fig, ax = plt.subplots(1)
-        
+
     ax.imshow(img)
-    
-    
+
     if isinstance(detections, torch.Tensor):
         detections = detections.numpy()
 
@@ -127,8 +132,8 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
     bbox_colors = random.sample(colors, num_unique_classes)
     try:
         for tl_x, tl_y, br_x, br_y, conf, cls_pred in detections:
-            #print(f"tl_x: {tl_x} tl_y: {tl_y} br_x: {br_x} br_y: {br_y} ")
-            #fig, ax = plt.subplots(1, 1)
+            # print(f"tl_x: {tl_x} tl_y: {tl_y} br_x: {br_x} br_y: {br_y} ")
+            # fig, ax = plt.subplots(1, 1)
 
             if tl_x < -1000.0 or tl_y < -1000.0 or br_x > 10000.0 or br_y > 10000.0:
                 continue
@@ -137,10 +142,15 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
             box_height = br_y - tl_y
 
             color = bbox_colors[int(np.where(unique_classes == int(cls_pred))[0])]
-            
+
             # Create a Rectangle patch
             bbox = patches.Rectangle(
-                (tl_x, tl_y), box_width, box_height, linewidth=2, edgecolor=color, facecolor="none"
+                (tl_x, tl_y),
+                box_width,
+                box_height,
+                linewidth=2,
+                edgecolor=color,
+                facecolor="none",
             )
             # Add the bbox to the plot
             ax.add_patch(bbox)

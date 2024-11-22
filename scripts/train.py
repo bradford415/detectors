@@ -61,6 +61,7 @@ def main(base_config_path: str, model_config_path):
     dev_mode = base_config["dev_mode"]
 
     if dev_mode:
+        log.info("NOTE: executing in dev mode")
         base_config["train"]["batch_size"] = 2
         base_config["validation"]["batch_size"] = 2
 
@@ -82,7 +83,6 @@ def main(base_config_path: str, model_config_path):
 
     log.info("Initializing...\n")
     log.info("writing outputs to %s", str(output_path))
-
 
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
@@ -183,7 +183,6 @@ def main(base_config_path: str, model_config_path):
         output_dir=str(output_path),
         device=device,
         log_train_steps=base_config["log_train_steps"],
-        ckpt_epochs=base_config["ckpt_epochs"],
     )
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
@@ -206,6 +205,8 @@ def main(base_config_path: str, model_config_path):
         "class_names": dataset_train.class_names,
         "start_epoch": train_args["start_epoch"],
         "epochs": train_args["epochs"],
+        "ckpt_epochs": train_args["ckpt_epochs"],
+        "checkpoint_path": train_args["checkpoint_path"],
     }
     trainer.train(**trainer_args)
 

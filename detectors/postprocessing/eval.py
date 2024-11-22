@@ -146,7 +146,7 @@ def print_eval_stats(
                 )
                 # ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
             # print(ap_table)#.table)
-        log.info("---- mAP %.5f} ----", AP.mean())
+        log.info("---- mAP %.5f  ->  %.2f %%  ----", AP.mean(), AP.mean() * 100)
     else:
         print("---- mAP not measured (no detections found by model) ----")
 
@@ -248,21 +248,21 @@ def get_batch_statistics(
                 # iou, box_filtered_index = box_iou_modified(
                 #     pred_box.unsqueeze(0), torch.stack(filtered_targets), return_union=False
                 # ).max(0)
-                
-                pred_box = pred_box.unsqueeze(0) # (4,) -> (1, 4)
-                filtered_target_coords = torch.stack(filtered_target_coords) # tuple -> (num_filtered, 4)
+
+                pred_box = pred_box.unsqueeze(0)  # (4,) -> (1, 4)
+                filtered_target_coords = torch.stack(
+                    filtered_target_coords
+                )  # tuple -> (num_filtered, 4)
 
                 # Find the best matching target for our predicted box;
                 # pred_box is a single box prediction and filtered_target_cooreds is 1 or more bbox coords
                 # depending on how many true objects are in the image;
                 # this allows us to try and match the predicted box with the best overlapping target label
-                all_bbox_ious = bbox_iou(
-                    pred_box, filtered_target_coords
-                )
-                
+                all_bbox_ious = bbox_iou(pred_box, filtered_target_coords)
+
                 # return the highest IoU between the predicted bbox and the target bbox for that
                 # predicted object; box_filtered_index is the index of the target bbox coord which
-                # gave the the highest IoU from the filtered list above 
+                # gave the the highest IoU from the filtered list above
                 best_iou, box_filtered_index = all_bbox_ious.max(dim=0)
 
                 # Remap the index in the list of filtered targets for that label to the index in the list with all targets.
@@ -274,7 +274,7 @@ def get_batch_statistics(
                     # if detected, set the true_positives tensor to 1 for that prediction
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
-        
+
         # Keep track of the TPs, pred_scores, & pred_labels for each image
         batch_metrics.append([true_positives, pred_scores, pred_labels])
 

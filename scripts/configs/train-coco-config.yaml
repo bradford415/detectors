@@ -3,7 +3,7 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: False #True
+dev_mode: False # True
 
 input_data: "data/input.txt"
 
@@ -18,9 +18,6 @@ dataset_name: "CocoDetectionMiniTrain"
 
 # Log the train progress every n steps
 log_train_steps: 20
-
-# Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-ckpt_epochs: 15
 
 # Parameters for the dataset class
 dataset:
@@ -41,6 +38,13 @@ train:
   # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
   start_epoch: 1
   epochs: 200
+
+  # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+  ckpt_epochs: 10
+
+  # Path of weights file (.pt) to resume training; 
+  # use `null` to train a new model from scratch 
+  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
 
 validation:
   batch_size: 4
