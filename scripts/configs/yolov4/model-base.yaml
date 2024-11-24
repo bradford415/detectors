@@ -6,6 +6,8 @@ detector: "yolov4"
 backbone:
   name: "resnet18"
   pretrained: True
+
+  # Removes the last few MLP since we aren't doing classification
   remove_top: True
 
 neck:

@@ -134,15 +134,16 @@ def main(base_config_path: str, model_config_path):
         **val_kwargs,
     )
 
-    # Initalize model components
+    # Initalize the detector backbone; typically some feature extractor
     backbone = backbone_map[model_config["backbone"]["name"]](
         pretrain=model_config["backbone"]["pretrained"],
         remove_top=model_config["backbone"]["remove_top"],
     )
 
+    # detector args
     model_components = {
         "backbone": backbone,
-        "num_classes": 80,
+        "num_classes": dataset_train.num_classes,
         **model_config["priors"],
     }
 
