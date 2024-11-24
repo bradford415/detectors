@@ -1,7 +1,7 @@
 import datetime
 import logging
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict
 
 import torch
 import yaml
@@ -11,8 +11,8 @@ from torch.utils.data import DataLoader
 
 from detectors import visualize
 from detectors.data.coco_minitrain import build_coco_mini
-from detectors.data.collate_functions import collate_fn_test
-from detectors.evaluate import evaluate, load_model_state_dict
+from detectors.data.collate_functions import collate_fn
+from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.models.backbones import backbone_map
 from detectors.models.darknet import Darknet
 from detectors.models.yolov4 import YoloV4
@@ -27,11 +27,11 @@ dataset_map: Dict[str, Any] = {"CocoDetectionMiniTrain": build_coco_mini}
 log = logging.getLogger(__name__)
 
 
-def main(base_config_path: str, model_config_path):
+def main(base_config_path: str, model_config_path: str):
     """Entrypoint for the project
 
     Args:
-        base_config_path: path to the desired configuration file
+        base_config_path: path to the desired base configuration file
         model_config_path: path to the detection model configuration file
 
     """
@@ -44,7 +44,7 @@ def main(base_config_path: str, model_config_path):
 
     # Initialize paths
     output_path = (
-        Path(base_config["output_path"])
+        Path(base_config["output_dir"])
         / base_config["exp_name"]
         / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
     )
@@ -58,16 +58,16 @@ def main(base_config_path: str, model_config_path):
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
-    log.info("Initializing...\n")
+    log.info("initializing...\n")
 
-    # Apply reproducibility seeds
+    # apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
 
     # Set cuda parameters
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
     test_kwargs = {
-        "batch_size": 1,
+        "batch_size": base_config["test"]["batch_size"],
         "shuffle": False,
     }
 
@@ -87,30 +87,31 @@ def main(base_config_path: str, model_config_path):
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_test = dataset_map[base_config["dataset_name"]](
-        dataset_split="val", debug_mode=base_config["debug_mode"], **dataset_kwargs
-    )  ##TODO, change this to test split once it's downloaded
+        dataset_split="val", dev_mode=base_config["dev_mode"], **dataset_kwargs
+    )
 
     dataloader_test = DataLoader(
         dataset_test,
-        collate_fn=collate_fn_test,
+        collate_fn=collate_fn,
         drop_last=True,
     )
 
-    # Initalize model components
+    # Initalize the detector backbone; typically some feature extractor
     backbone = backbone_map[model_config["backbone"]["name"]](
         pretrain=model_config["backbone"]["pretrained"],
         remove_top=model_config["backbone"]["remove_top"],
     )
 
+    # detector args
     model_components = {
         "backbone": backbone,
-        "num_classes": 80,
+        "num_classes": dataset_test.num_classes,
         **model_config["priors"],
     }
 
     # Initialize detection model and load its state_dict
     model = detectors_map[model_config["detector"]](**model_components)
-    model = load_model_state_dict(model, base_config["state_dict_path"])
+    model = load_model_checkpoint(model, base_config["test"]["checkpoint_path"])
     model.to(device)
 
     reproduce.save_configs(

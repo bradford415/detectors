@@ -69,7 +69,7 @@ def evaluate(
         # list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
-        final_preds.extend(nms_preds)
+        final_preds += nms_preds
 
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)

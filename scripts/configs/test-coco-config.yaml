@@ -14,9 +14,6 @@ exp_name: "development"
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetectionMiniTrain"
 
-# Log the train progress every n steps
-log_train_steps: 20
-
 # Parameters for the dataset class
 dataset:
 
@@ -26,21 +23,11 @@ dataset:
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
 
-train:
-  # Configurations for learning parameters such as the optmizier and lr scheduler
-  learning_config: "learning_config_1"
+test:
 
   batch_size: 16
 
-  # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
-  start_epoch: 1
-  epochs: 200
-
-  # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-  ckpt_epochs: 10
-
-  # Path of weights file (.pt) to resume training; 
-  # use `null` to train a new model from scratch 
+  # Abs path of checkpoint file (.pt) to evaluate on; 
   checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
 
 validation:
@@ -48,6 +35,7 @@ validation:
 
 # GPU parameters
 cuda:
+
   # List of GPU devices to use
   gpus: [0]
 
@@ -55,20 +43,3 @@ cuda:
 # Reproducibility information
 reproducibility:
   seed: 42
-
-
-# Params for training objects
-
-
-# Adam optimizer parameters defined here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/config/yolov3.cfg
-learning_config_1:
-  optimizer: "adam"
-
-  learning_rate: 0.0001 #1e-4
-
-  # L2 regulartization penalty to add to the loss function: 
-  weight_decay: 0.0005
-
-  lr_scheduler: "lambda_lr"
-
-
