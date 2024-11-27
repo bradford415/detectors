@@ -6,8 +6,7 @@ Objection detection model implementations.
 * [Resources](#resources)
 
 ## Download the COCO dataset
-On Linux, the coco dataset can be downloaded by running the bash script
-Note: this will download the dataset in the current working directory
+On Linux, the coco dataset can be downloaded by running the bash script. NOTE: this will download the dataset in the current working directory
 ```bash
 bash scripts/bash/download_coco.sh
 ```
