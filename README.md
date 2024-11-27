@@ -1,12 +1,34 @@
 # Detectors
-Objection detection implementations mostly my own learning and practice.
+Objection detection model implementations.
 
 ## Table of Contents
 * [Training a Model](#training-a-model)
 * [Resources](#resources)
 
-## Training a Model
-`python scripts/train.py scripts/configs/train-coco-config.yaml scripts/configs/yolov4/model-base.yaml`
+## Download the COCO dataset
+On Linux, the coco dataset can be downloaded by running the bash script
+Note: this will download the dataset in the current working directory
+```bash
+bash scripts/bash/download_coco.sh
+```
+
+## Environment setup
+TODO
+
+
+## Training a model
+
+### Setting up the configuration files
+Change the `root` parameter in `scripts/config/train-coco-config.yaml` to the path of the dataset root. For the coco dataset, this will be the path to the directory containing the `images` and `annotations` dirs.
+```bash
+dataset:
+  root: "/path/to/dataset/root/coco"
+```
+
+Begin training by specifying the train configuration file and the desired model configuration file to use 
+```bash
+python scripts/train.py scripts/configs/train-coco-config.yaml scripts/configs/yolov4/model-base.yaml
+```
 
 ## Notes
 ### COCO Format
