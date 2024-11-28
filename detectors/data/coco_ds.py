@@ -12,26 +12,27 @@ from detectors.data import transforms as T
 from detectors.data.coco_utils import PreprocessCoco, explore_coco
 
 
-class CocoDetectionMiniTrain(torchvision.datasets.CocoDetection):
+class CocoDetection(torchvision.datasets.CocoDetection):
     ## TODO: can probably convert this to regular coco
-    """COCO Minitrain dataset. This dataset is a curated set of 25,000 train images
-    from the 2017 Train COOO dataset. This dataset has 80 classes.
-
-    Dataset can be found here https://github.com/giddyyupp/coco-minitrain.
-
-    The dataset will need to be placed in a directory named "coco_minitrain_25k".
+    """COCO object detection dataset from 2017 which has 80 classes.
+    The dataset can be downloaded by running the script in scripts/bash/download_coco.sh
+    or  can be found here: https://cocodataset.org/#home
+    
+    One could also use the coco minitrain dataset. This dataset is a curated set of 
+    25,000 train images from the 2017 Train COOO dataset. This dataset can be found here 
+    https://github.com/giddyyupp/coco-minitrain.
 
     Official Coco annotation format: https://cocodataset.org/#format-data
 
     Create a file heiarchy as the following:
-    coco_minitrain25k/
+    coco/
     ├─ images/
     │  ├─ train_2017
     │  │  ├─ train_images.jpg
     │  ├─ val_2017
     │  │  ├─ train_images.jpg
     │  ├─ annotations
-    │  │  ├─ instances_mintrain2017.json
+    │  │  ├─ instances_train2017.json
     │  │  ├─ instances_val2017.json
 
     Inside "coco_minitrain_25k" create another directory named "annotations" and place the
@@ -155,7 +156,49 @@ def make_coco_transforms(dataset_split):
         raise ValueError(f"unknown dataset split {dataset_split}")
 
 
-## TODO: This would probably make the most since as a cls method and call it from_data_split()
+
+
+## TODO: This would probably make the most since as a cls method and name it from_data_split()
+def build_coco(
+    root: str,
+    dataset_split: str,
+    dev_mode: bool = False,
+):
+    """Initialize the COCO dataset class
+
+    Args:
+        root: full path to the dataset root
+        split: which dataset split to use; `train` or `val`
+        dev_mode: Whether to build the dataset in dev mode; if true, this only uses a few samples
+                         to quickly run the code
+    """
+    coco_root = Path(root)
+
+    # Set path to images and annotations
+    if dataset_split == "train":
+        images_dir = coco_root / "images" / "train2017"
+        annotation_file = coco_root / "annotations" / "instances_train2017.json"
+    elif dataset_split == "val":
+        images_dir = coco_root / "images" / "val2017"
+        annotation_file = coco_root / "annotations" / "instances_val2017.json"
+    elif dataset_split == "test":
+        images_dir = coco_root / "images" / "test2017"
+        annotation_file = coco_root / "annotations" / "instances_test2017.json"
+
+    # Create the data augmentation transforms
+    data_transforms = make_coco_transforms(dataset_split)
+
+    dataset = CocoDetection(
+        image_folder=images_dir,
+        annotation_file=annotation_file,
+        transforms=data_transforms,
+        dev_mode=dev_mode,
+        split=dataset_split,
+    )
+
+    return dataset
+
+
 def build_coco_mini(
     root: str,
     dataset_split: str,
@@ -185,7 +228,7 @@ def build_coco_mini(
     # Create the data augmentation transforms
     data_transforms = make_coco_transforms(dataset_split)
 
-    dataset = CocoDetectionMiniTrain(
+    dataset = CocoDetection(
         image_folder=images_dir,
         annotation_file=annotation_file,
         transforms=data_transforms,

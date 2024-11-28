@@ -84,7 +84,7 @@ class Trainer:
         self._visualize_batch(dataloader_train, "train", class_names)
         self._visualize_batch(dataloader_val, "val", class_names)
 
-        # Starting the epoch at 1 makes calculations more intuitive
+        best_ap = 0.0
         for epoch in range(start_epoch, epochs + 1):
             model.train()
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
@@ -109,6 +109,9 @@ class Trainer:
             metrics_output, image_detections = self._evaluate(
                 model, criterion, dataloader_val, class_names=class_names
             )
+            
+            precision, recall, AP, f1, ap_class = metrics_output
+            mAP = AP.mean()
 
             # Save the model every ckpt_epochs
             if (epoch) % ckpt_epochs == 0:
@@ -118,10 +121,23 @@ class Trainer:
                     model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
                 )
 
-            # TODO: Save "best" model
+            # Save and overwrite the checkpoint with the highest mAP
+            if mAP > best_ap:
+                best_ap = mAP
+                
+                mAP_str = f"{mAP*100:.2f}".replace(".", "-")
+                ckpt_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
+                ckpt_path.parents[0].mkdir(parents=True, exist_ok=True)
+                
+                log.info("new best mAP of %.2f found at epoch %d; saving checkpoint", mAP*100, epoch)
+                self._save_model(
+                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
+                )
+                
 
-            save_dir = self.output_dir / "validation" / f"epoch{epoch}"
-            # plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
+            # Uncomment to visualize validation detections
+            #save_dir = self.output_dir / "validation" / f"epoch{epoch}"
+            #plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
@@ -280,5 +296,5 @@ class Trainer:
             samples,
             targets,
             class_names,
-            self.output_dir / f"{split}-images",
+            self.output_dir / "aug" / f"{split}-images",
         )

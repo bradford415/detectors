@@ -10,7 +10,7 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors.data.coco_minitrain import build_coco_mini
+from detectors.data.coco_ds import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
 from detectors.models.backbones import backbone_map
@@ -22,7 +22,7 @@ from detectors.utils import reproduce, schedulers
 
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
-dataset_map: Dict[str, Any] = {"CocoDetectionMiniTrain": build_coco_mini}
+dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
 optimizer_map = {
     "adam": torch.optim.Adam,
@@ -150,7 +150,6 @@ def main(base_config_path: str, model_config_path):
     # Initialize detection model and transfer to GPU
     model = detectors_map[model_config["detector"]](**model_components)
     # model = Darknet("scripts/configs/yolov4.cfg")
-    # model = Yolov4_pytorch(n_classes=80,inference=False)
     model.to(device)
 
     ## TODO: Apply weights init maybe

@@ -9,8 +9,8 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors import visualize
-from detectors.data.coco_minitrain import build_coco_mini
+from detectors.visualize import plot_all_detections
+from detectors.data.coco_ds import build_coco_mini
 from detectors.data.collate_functions import collate_fn
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.models.backbones import backbone_map
@@ -21,7 +21,7 @@ from detectors.utils import reproduce
 # TODO: should move this to its own file
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
 
-dataset_map: Dict[str, Any] = {"CocoDetectionMiniTrain": build_coco_mini}
+dataset_map: Dict[str, Any] = {"CocoDetection": build_coco_mini}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -111,8 +111,9 @@ def main(base_config_path: str, model_config_path: str):
 
     # Initialize detection model and load its state_dict
     model = detectors_map[model_config["detector"]](**model_components)
-    model = load_model_checkpoint(model, base_config["test"]["checkpoint_path"])
     model.to(device)
+
+    start_epoch = load_model_checkpoint(base_config["test"]["checkpoint_path"], model)
 
     reproduce.save_configs(
         config_dicts=[base_config, model_config],
@@ -122,14 +123,12 @@ def main(base_config_path: str, model_config_path: str):
     # Build trainer args used for the training
     evaluation_args = {
         "output_path": output_path,
-        "model": model,
-        "dataloader_test": dataloader_test,
-        "class_names": dataset_test.class_names,
         "device": device,
     }
-    batch_metrics, image_detections = evaluate(**evaluation_args)
+    batch_metrics, image_detections = evaluate(model, dataloader_test, dataset_test.class_names, **evaluation_args)
 
-    visualize.plot_detections(image_detections)
+    save_dir = output_path / "test"
+    plot_all_detections(image_detections, classes=dataset_test.class_names, output_dir=save_dir)
 
 
 if __name__ == "__main__":
