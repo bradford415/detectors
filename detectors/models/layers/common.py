@@ -1,5 +1,7 @@
 # Common pytorch layers used across models
+import torch
 from torch import nn
+from torch.nn import functional as F
 
 
 class ConvNormLRelu(nn.Module):
@@ -52,3 +54,17 @@ class ConvNormLRelu(nn.Module):
         """
         x = self.sequential(x)
         return x
+
+
+class Upsample(nn.Module):
+    """Upsample feature map to specific dimensions"""
+
+    def __init__(self, scale_factor: float, mode: str = "nearest"):
+        super().__init__()
+        self.scale_factor = scale_factor
+        self.mode = mode
+
+    def forward(self, x: torch.Tensor):
+        x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
+        return x
+        

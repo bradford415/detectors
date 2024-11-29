@@ -44,10 +44,8 @@ class DarkResidualBlock(nn.Module):
 
 
 class DarkNet53(nn.Module):
-    """Yolo3 object detection model
-    TODO: Right something about it being a feature extractor
+    """DarkNet53 used as the feature extractor in Yolo3
 
-    Specifically, DarkNet53 is used in Yolov3
 
     Implementation is based on: https://github.com/developer0hye/PyTorch-Darknet53/blob/master/model.py
 
@@ -95,11 +93,6 @@ class DarkNet53(nn.Module):
             block=block, in_channels=1024, num_blocks=4
         )
 
-        # Layers for classification
-        if not remove_top:
-            self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-            self.fc = nn.Linear(1024, self.num_classes)
-
     def forward(self, x):
         """Forward pass through DarkNet53
 
@@ -114,20 +107,19 @@ class DarkNet53(nn.Module):
         out = self.residual_blocks2(out)
 
         out = self.conv4(out)
-        out = self.residual_blocks3(out)
+        inter_1 = self.residual_blocks3(out)
 
-        out = self.conv5(out)
-        out = self.residual_blocks4(out)
+        out = self.conv5(inter_1)
+        inter_2 = self.residual_blocks4(out)
 
-        out = self.conv6(out)
+        out = self.conv6(inter_2)
         out = self.residual_blocks5(out)
 
-        if not self.remove_top:
-            out = self.global_avg_pool(out)
-            out = out.view(-1, 1024)
-            out = self.fc(out)
+        # NOTE: classification layers removed
 
-        return out
+        # Returns the final output and 2 intermediate outputs;
+        # the 2 inter outputs will be concatenated in the head
+        return out, inter_2, inter_1
 
     def _make_blocks(block: nn.Module, in_channels, num_blocks) -> nn.Sequential:
         """Create a sequential object of a specific type of block

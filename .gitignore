@@ -3,6 +3,9 @@
 # Outputs
 output/
 
+# incase the coco dataset sneaks into the repo
+coco/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 
