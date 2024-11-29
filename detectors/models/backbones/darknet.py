@@ -10,129 +10,143 @@ from detectors.utils.box_ops import get_region_boxes
 
 class DarkResidualBlock(nn.Module):
     """Residual block specifically for DarkNet
-    
+
     This module performs 2 convolutions and adds the residual input; t
     he final num of output channels = number of input channels.
     """
-    
+
     def __init__(self, in_ch: int):
         """Initalize the residual block
-                
+
         Args:
             in_ch: number of input channels for the conn2d layers
         """
         out_ch = in_ch // 2
-        
+
         self.layer1 = ConvNormLRelu(in_channels=in_ch, out_channels=out_ch)
         self.layer2 = ConvNormLRelu(in_channels=out_ch, out_channels=in_ch)
-        
+
     def forward(self, x):
         """Forward pass through residual block
-        
+
         Args:
             x: input feature maps (b, c, h, w)
-            
+
         Return:
             a feature map of the same size as the input (b, c, h , w)
         """
         residual = x
-        
+
         out = self.layer1(x)
         out = self.layer2(out)
 
         return out + residual
 
+
 class DarkNet53(nn.Module):
     """Yolo3 object detection model
     TODO: Right something about it being a feature extractor
-    
+
     Specifically, DarkNet53 is used in Yolov3
-    
-    Implementation is based on: https://github.com/developer0hye/PyTorch-Darknet53/blob/master/model.py 
+
+    Implementation is based on: https://github.com/developer0hye/PyTorch-Darknet53/blob/master/model.py
+
+    This matches the Yolov3 model configuration file here:https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/config/yolov3.cfg
+    DarkNet53 feature extractor starts at line 25 and ends at line 549
     """
-    
-    def __init__(self, num_classes: int, block: nn.Module = DarkResidualBlock):
+
+    def __init__(
+        self, num_classes: int, block: nn.Module = DarkResidualBlock, remove_top=True
+    ):
         """Initialize the darknet53 model
-        
+
         Args:
             block: the type of module block to use in DarkNet
             num_class: number of classes in the dataset ontology to detect
+            remove_top: whether to remove the classification layers and use darknet as a feature extractor
 
         """
         self.num_classes = num_classes
-        
+        self.remove_top = remove_top
+
         self.conv1 = ConvNormLRelu(in_channels=3, out_channels=32, stride=1, padding=1)
         self.conv2 = ConvNormLRelu(in_channels=32, out_channels=64, stride=2, padding=1)
-        self.residual_blocks1 = self._make_blocks(block=block, in_channels=64, num_blocks=1)
-        
+        self.residual_blocks1 = self._make_blocks(
+            block=block, in_channels=64, num_blocks=1
+        )
+
         self.conv3 = ConvNormLRelu(in_channels=64, out_channels=128, stride=2)
-        self.residual_blocks2 = self._make_blocks(block=block, in_channels=128, num_blocks=2)
-        
+        self.residual_blocks2 = self._make_blocks(
+            block=block, in_channels=128, num_blocks=2
+        )
+
         self.conv4 = ConvNormLRelu(in_channels=128, out_channels=256, stride=2)
-        self.residual_blocks3 = self._make_blocks(block=block, in_channels=256, num_blocks=8)
-        
+        self.residual_blocks3 = self._make_blocks(
+            block=block, in_channels=256, num_blocks=8
+        )
+
         self.conv5 = ConvNormLRelu(in_channels=256, out_channels=512, stride=2)
-        self.residual_blocks4 = self._make_blocks(block=block, in_channels=512, num_blocks=8)
-        
+        self.residual_blocks4 = self._make_blocks(
+            block=block, in_channels=512, num_blocks=8
+        )
+
         self.conv6 = ConvNormLRelu(in_channels=512, out_channels=1024, stride=2)
-        self.residual_blocks5 = self._make_blocks(block=block, in_channels=1024, num_blocks=4)
-        
+        self.residual_blocks5 = self._make_blocks(
+            block=block, in_channels=1024, num_blocks=4
+        )
+
         # Layers for classification
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(1024, self.num_classes)
-        
+        if not remove_top:
+            self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+            self.fc = nn.Linear(1024, self.num_classes)
+
     def forward(self, x):
         """Forward pass through DarkNet53
-        
+
         Args:
             x: input image (b, c, h, w)
         """
         out = self.conv1(x)
         out = self.conv2(out)
         out = self.residual_blocks1(out)
-        
+
         out = self.conv3(out)
         out = self.residual_blocks2(out)
-        
+
         out = self.conv4(out)
         out = self.residual_blocks3(out)
-        
+
         out = self.conv5(out)
         out = self.residual_blocks4(out)
-        
+
         out = self.conv6(out)
         out = self.residual_blocks5(out)
-        
-        out = self.global_avg_pool(out)
-        out = out.view(-1, 1024)
-        out = self.fc(out)
+
+        if not self.remove_top:
+            out = self.global_avg_pool(out)
+            out = out.view(-1, 1024)
+            out = self.fc(out)
 
         return out
-        
-        
+
     def _make_blocks(block: nn.Module, in_channels, num_blocks) -> nn.Sequential:
         """Create a sequential object of a specific type of block
-        
+
         Args:
             block: the type of module block to loop sequentially through
             in_channels: number of input channels to the convolution in the block
             num_blocks: number of blocks to sequentially loop through
-            
+
         """
         layers = []
         for _ in range(num_blocks):
             layers.append(block(in_channels))
         return nn.Sequential(*layers)
-    
+
+
 ######## TODO START HERE SEE WHERE THIS IS IMPLEMENTED ********* MIGHT NEED A REMOVE TOP PARAMETER AND RETURN THE DOWNSAMPLE BLOCKS
 def darknet53(num_classes):
     return DarkNet53(num_classes, block=DarkResidualBlock)
-        
-    
-    
-    
-    
-    
 
 
 class Mish(torch.nn.Module):

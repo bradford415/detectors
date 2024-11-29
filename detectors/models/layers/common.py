@@ -12,11 +12,11 @@ class ConvNormLRelu(nn.Module):
         kernel_size: int = 3,
         stride: int = 1,
         padding: int = 1,
-        leaky_slope: float = 0.01,
+        leaky_slope: float = 0.1,
         conv_bias: bool = False,
     ):
         """Initialize the module layers
-        
+
         Note: the default parameters do not downsample the feature maps
 
         Args:
@@ -25,7 +25,9 @@ class ConvNormLRelu(nn.Module):
             kernel_size: Size of the Conv2D kernel
             stride: Stide of the ConvTranspose
             padding: Padding of the ConvTranspose
-            leaky_slope: Negative slope of the leaky relu; the default parameter is the same as the pytorch default
+            leaky_slope: Negative slope of the leaky relu;
+                         the default value is from here:
+                         https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/1d621c8489e22c76ceb93bb2397ac6c8dfb5ceb7/pytorchyolo/models.py#L67
             conv_bias: Whether to use a bias in Conv2D; typically this is false if BatchNorm is the following layer
         """
         super().__init__()
@@ -39,7 +41,7 @@ class ConvNormLRelu(nn.Module):
         )
         _bn = nn.BatchNorm2d(num_features=out_channels)
         _leaky_relu = nn.LeakyReLU(negative_slope=leaky_slope)
-        
+
         self.sequential = nn.Sequential(_conv, _bn, _leaky_relu)
 
     def forward(self, x):

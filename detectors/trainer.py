@@ -109,7 +109,7 @@ class Trainer:
             metrics_output, image_detections = self._evaluate(
                 model, criterion, dataloader_val, class_names=class_names
             )
-            
+
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
 
@@ -124,20 +124,23 @@ class Trainer:
             # Save and overwrite the checkpoint with the highest mAP
             if mAP > best_ap:
                 best_ap = mAP
-                
+
                 mAP_str = f"{mAP*100:.2f}".replace(".", "-")
                 ckpt_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
                 ckpt_path.parents[0].mkdir(parents=True, exist_ok=True)
-                
-                log.info("new best mAP of %.2f found at epoch %d; saving checkpoint", mAP*100, epoch)
+
+                log.info(
+                    "new best mAP of %.2f found at epoch %d; saving checkpoint",
+                    mAP * 100,
+                    epoch,
+                )
                 self._save_model(
                     model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
                 )
-                
 
             # Uncomment to visualize validation detections
-            #save_dir = self.output_dir / "validation" / f"epoch{epoch}"
-            #plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
+            # save_dir = self.output_dir / "validation" / f"epoch{epoch}"
+            # plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
 
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time

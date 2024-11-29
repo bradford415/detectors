@@ -9,14 +9,14 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors.visualize import plot_all_detections
 from detectors.data.coco_ds import build_coco_mini
 from detectors.data.collate_functions import collate_fn
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.models.backbones import backbone_map
-from detectors.models.darknet import Darknet
+from detectors.models.backbones.darknet import Darknet
 from detectors.models.yolov4 import YoloV4
 from detectors.utils import reproduce
+from detectors.visualize import plot_all_detections
 
 # TODO: should move this to its own file
 detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
@@ -125,10 +125,14 @@ def main(base_config_path: str, model_config_path: str):
         "output_path": output_path,
         "device": device,
     }
-    batch_metrics, image_detections = evaluate(model, dataloader_test, dataset_test.class_names, **evaluation_args)
+    batch_metrics, image_detections = evaluate(
+        model, dataloader_test, dataset_test.class_names, **evaluation_args
+    )
 
     save_dir = output_path / "test"
-    plot_all_detections(image_detections, classes=dataset_test.class_names, output_dir=save_dir)
+    plot_all_detections(
+        image_detections, classes=dataset_test.class_names, output_dir=save_dir
+    )
 
 
 if __name__ == "__main__":

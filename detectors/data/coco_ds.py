@@ -17,9 +17,9 @@ class CocoDetection(torchvision.datasets.CocoDetection):
     """COCO object detection dataset from 2017 which has 80 classes.
     The dataset can be downloaded by running the script in scripts/bash/download_coco.sh
     or  can be found here: https://cocodataset.org/#home
-    
-    One could also use the coco minitrain dataset. This dataset is a curated set of 
-    25,000 train images from the 2017 Train COOO dataset. This dataset can be found here 
+
+    One could also use the coco minitrain dataset. This dataset is a curated set of
+    25,000 train images from the 2017 Train COOO dataset. This dataset can be found here
     https://github.com/giddyyupp/coco-minitrain.
 
     Official Coco annotation format: https://cocodataset.org/#format-data
@@ -154,8 +154,6 @@ def make_coco_transforms(dataset_split):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
-
-
 
 
 ## TODO: This would probably make the most since as a cls method and name it from_data_split()

@@ -14,7 +14,7 @@ from detectors.data.coco_ds import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
 from detectors.models.backbones import backbone_map
-from detectors.models.darknet import Darknet
+from detectors.models.backbones.darknet import Darknet
 from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
 from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
@@ -133,6 +133,8 @@ def main(base_config_path: str, model_config_path):
         drop_last=True,
         **val_kwargs,
     )
+
+    ## TODO: log the backbone, neck, head, and detector used.
 
     # Initalize the detector backbone; typically some feature extractor
     backbone = backbone_map[model_config["backbone"]["name"]](

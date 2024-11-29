@@ -84,7 +84,11 @@ def visualize_norm_img_tensors(
         # plt.gca().xaxis.set_major_locator(NullLocator())
         # plt.gca().yaxis.set_major_locator(NullLocator())
         plt.axis("off")
-        fig.savefig(f"{output_dir}/image_tensor_{index}.png", bbox_inches="tight", pad_inches=0.0)
+        fig.savefig(
+            f"{output_dir}/image_tensor_{index}.png",
+            bbox_inches="tight",
+            pad_inches=0.0,
+        )
         plt.close()
 
 

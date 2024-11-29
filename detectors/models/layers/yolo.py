@@ -263,7 +263,7 @@ class YoloLayer(nn.Module):
     """TODO: Flesh this out more; basically just a post processing step, not learned params
     Yolo layer only used at inference time"""
 
-    def __init__(self, anchors: List[int], stride, num_classes=80, num_anchors=3):
+    def __init__(self, anchors: list[int], stride, num_classes=80, num_anchors=3):
         """Initalize Yolo Inference Layer
 
         Args:
@@ -391,6 +391,120 @@ class YoloLayer(nn.Module):
         # reminder output shape is (B, C, H, W) where H/W are downsampled by the stride
         # bx_bw /= head_output.size(3)
         # by_bh /= head_output.size(2)
+
+        return head_output
+
+    @staticmethod
+    def _make_grid(grid_w: int = 20, grid_h: int = 20):
+        """Create grid of (x, y) coordinates used for the cell offsets
+
+        Args:
+            grid_w: Width of the grid
+            grid_h: Height of the grid
+
+        Returns:
+            Tensor of x/y coords of the cell grid (1, 1, grid_h, grid_w, 2)
+        """
+        yv, xv = torch.meshgrid(
+            [torch.arange(grid_h), torch.arange(grid_w)], indexing="ij"
+        )
+
+        # Stack so [:, :, 0] is the x coord grid and [:, :, 1] is the y coord grid
+        return torch.stack((xv, yv), dim=2).view((1, 1, grid_h, grid_w, 2)).float()
+
+
+class YoloLayerNew(nn.Module):
+    """Detection layer
+    TODO: Flesh this out more; basically just a post processing step, not learned params
+    Yolo layer only used at inference time"""
+
+    def __init__(self, anchors: list[tuple[int, int]], num_classes: int = 80):
+        """Initalize Yolo Inference Layer
+
+        Args:
+            anchors: lsit of anchors in (w, h) format, relative to the original input dimensions
+            num_classes: number of classes in the ontology
+            stride: The ratio to which the image was downsampled; this will be used to normalize
+                    the anchor boxes coordinates to the range of the downsampled image;
+                    i.e. input_size: (512, 512), head_output: (64, 64) -> stride = 8
+        """
+        super().__init__()
+        self.num_classes = num_classes
+
+        # The number of outputs per anchor
+        self.num_output = num_classes + 5
+
+        self.num_anchors = len(anchors)
+
+        self.mse_loss = nn.MSELoss()
+        self.bce_loss = nn.BCELoss()
+
+        # Flatten anchors to 1d python list then convert to tensor (anchor_pairs, 2)
+        anchors = torch.tensor(list(chain(*anchors))).float().view(-1, 2)
+
+        assert anchors.shape[0] == self.num_anchors and anchors.ndim == 2
+
+        # Assign as model parameters to be saved/restored by the state_dict;
+        self.register_buffer("anchors", anchors)
+        self.register_buffer(
+            "anchor_grid", anchors.clone().view(1, -1, 1, 1, 2)
+        )  # (1, num_anchors, 1, 1, 2)
+
+    def forward(self, head_output: torch.Tensor, img_size: int) -> Tuple[torch.tensor, torch.tensor]:
+        """TODO
+
+        Args:
+            head_output: Output predictions of a certain scale from the detector head (b, num_anchors*(5+num_classes), grid_h, grid_w)
+            img_size:
+
+        Returns:
+            during inference:
+                1. scales all predictions for each grid cell for every anchor (b, nx*ny*num_anchors, 5 + num_classes)
+            during training:
+                1. reshapes x (b, num_anchors*(num_classes+5), ny, nx) -> (B, num_anchors, ny, nx, (num_classes+5))
+        """
+        
+        assert head_output.shape[1] == (5 + self.num_classes) * self.num_anchors
+        
+        # the ratio the input image was downsample by
+        stride = img_size  // head_output.shape[2]
+
+        # ny & nx are the height and width of the grid i.e., the final downsample feature at a scale
+        batch_size, _, ny, nx = head_output.shape
+
+        # (b, num_anchors*(num_classes+5), ny, nx) -> (b, num_anchors, (num_classes+5), ny, nx) -> (B, num_anchors, ny, nx, (num_classes+5))
+        head_output = head_output.view(
+            batch_size, self.num_anchors, self.num_output, ny, nx
+        ).permute(0, 1, 3, 4, 2).contiguous()
+
+
+        
+        # During inference
+        if not self.training:
+            
+            # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
+            self.grid = self._make_grid(nx, ny).to(head_output)
+            
+            # bound cx, cy predictions to [0, 1] and offset by cell grid,
+            # then multiply by stride to scale back to the input image size range
+            head_output[..., 0:2] = (
+                head_output[..., 0:2].sigmoid() + self.grid
+            ) * stride # x/y
+
+            # Scale w, h predictions by e and multiply by anchor w/h;
+            # multiplying by anchor_grid, applies the anchor sizes, element-wise, to the w/h predictions;
+            # anchors are not divided by stride during inference (only divided by stride when computing the loss)
+            head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid # w/h
+
+            # Scale objectness and class confidence predictions to [0, 1]
+            head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
+
+            # Reshape to (b, nx*ny*num_anchors, num_classes+5);
+            # this allows us to concatenate all the yolo layers along dim=1 since
+            # each layer returns a different scale
+            head_output = head_output.reshape(
+                batch_size, -1, self.num_output
+            )
 
         return head_output
 
