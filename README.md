@@ -39,3 +39,4 @@ python scripts/train.py scripts/configs/train-coco-config.yaml scripts/configs/y
   - Explains the coco format of the json annotation file
 ### YoloV3
 - [Really nice implementation of YoloV3](https://github.com/eriklindernoren/PyTorch-YOLOv3)
+- [Explains the YoloV3 model configuration file pretty well](https://blog.paperspace.com/how-to-implement-a-yolo-v3-object-detector-from-scratch-in-pytorch-part-2/)
