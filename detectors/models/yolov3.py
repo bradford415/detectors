@@ -17,6 +17,7 @@ class Yolov3Neck(nn.Module):
         self.conv6 = ConvNormLRelu(in_channels=512, out_channels=1024)
         self.conv7 = nn.Conv2d(in_channels=1024, out_channels=255, kernel_size=1, stride=1, padding=0)
 
+        ################## START HERE ################
         self.yolo1 = YoloLayerNew
 
 class Yolov3Head(nn.Module):
