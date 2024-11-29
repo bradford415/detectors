@@ -95,11 +95,6 @@ class DarkNet53(nn.Module):
             block=block, in_channels=1024, num_blocks=4
         )
 
-        # Layers for classification
-        if not remove_top:
-            self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-            self.fc = nn.Linear(1024, self.num_classes)
-
     def forward(self, x):
         """Forward pass through DarkNet53
 
@@ -122,10 +117,7 @@ class DarkNet53(nn.Module):
         out = self.conv6(out)
         out = self.residual_blocks5(out)
 
-        if not self.remove_top:
-            out = self.global_avg_pool(out)
-            out = out.view(-1, 1024)
-            out = self.fc(out)
+        # NOTE: classification layers removed
 
         return out
 

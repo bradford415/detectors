@@ -477,7 +477,6 @@ class YoloLayerNew(nn.Module):
             batch_size, self.num_anchors, self.num_output, ny, nx
         ).permute(0, 1, 3, 4, 2).contiguous()
 
-
         
         # During inference
         if not self.training:
