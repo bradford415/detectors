@@ -1,4 +1,5 @@
 import contextlib
+import logging
 import os
 from typing import Any, Dict, Tuple
 
@@ -12,6 +13,8 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from torch import Tensor
 from torch.utils.data import Dataset
+
+log = logging.getLogger(__name__)
 
 
 class PreprocessCoco:
@@ -225,21 +228,20 @@ def get_coco_object(dataset: Dataset):
         ValueError("Dataset type not recognized.")
 
 
-def explore_coco(dataset: torchvision.datasets.CocoDetection, split: str):
+def coco_stats(dataset: torchvision.datasets.CocoDetection, split: str):
     """Display dataset information based on the coco format
 
     Args:
         dataset: Dataset instance that is dervied from torchvision.datasets.CocoDetection
     """
-    # Category IDs.
     cat_ids = dataset.coco.getCatIds()
-
-    print(f"\tunique categories: {len(cat_ids)}")
-
     img_ids = dataset.coco.getImgIds()
-    print(f"\timages in the entire dataset: {len(img_ids)}")
 
-    print(f"\tnumber of images in used for the current run: {len(dataset.ids)}")
+    log.info("\n%s set stats", split)
+
+    log.info("\tunique categories: %d", len(cat_ids))
+    log.info("\timages in the entire dataset: %d", len(img_ids))
+    log.info("\tnumber of images in used for the current run: %d", len(dataset.ids))
 
 
 def convert_to_coco_api(ds, bbox_fmt="voc"):

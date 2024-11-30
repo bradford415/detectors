@@ -60,11 +60,6 @@ def main(base_config_path: str, model_config_path):
 
     dev_mode = base_config["dev_mode"]
 
-    if dev_mode:
-        log.info("NOTE: executing in dev mode")
-        base_config["train"]["batch_size"] = 2
-        base_config["validation"]["batch_size"] = 2
-
     # Initialize paths
     output_path = (
         Path(base_config["output_dir"])
@@ -81,7 +76,12 @@ def main(base_config_path: str, model_config_path):
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
-    log.info("Initializing...\n")
+    if dev_mode:
+        log.info("NOTE: executing in dev mode")
+        base_config["train"]["batch_size"] = 2
+        base_config["validation"]["batch_size"] = 2
+
+    log.info("initializing...\n")
     log.info("writing outputs to %s", str(output_path))
 
     # Apply reproducibility seeds
@@ -162,7 +162,7 @@ def main(base_config_path: str, model_config_path):
         batch_size=base_config["train"]["batch_size"],
         device=device,
     )
-    
+
     ## TODO: log the backbone, neck, head, and detector used.
     log.info("model architecture")
     log.info("\tbackbone: %s", type(backbone).__name__)

@@ -7,22 +7,50 @@ from detectors.models.layers.yolo import YoloLayerNew
 
 class ScalePrediction(nn.Module):
     """Predicts the the bounding boxes at a particular scale
-    
+
     This is branches out from the main path by a few convolution layers to make the predictions;
     this module is used because after the prediction the main branch use has a differnt number of filters as an
     input, so we can use the output from the module before this one; this is why the yolo3.cfg file
     has [route] layers = -4, it grabs the output from 4 layers backwards.
     """
-    def __init__(self, in_chs: int, pred_chs: int, scale_anchors: list[list[int, int]], num_classes: int):
-        self.conv = ConvNormLRelu(in_channels=in_chs, out_channels=in_chs*2),
+
+    def __init__(
+        self,
+        in_chs: int,
+        pred_chs: int,
+        scale_anchors: list[list[int, int]],
+        num_classes: int,
+    ):
+        super().__init__()
+        self.conv = ConvNormLRelu(in_channels=in_chs, out_channels=in_chs * 2)
         self.pred = nn.Conv2d(
-                    in_channels=in_chs*2,
-                    out_channels=pred_chs,
-                    kernel_size=1,
-                    stride=1,
-                    padding=0,
-                ),
-        self.yolo = YoloLayerNew(scale_anchors, num_classes),
+            in_channels=in_chs * 2,
+            out_channels=pred_chs,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        )
+        self.yolo = YoloLayerNew(scale_anchors, num_classes)
+
+    def forward(self, x, img_size):
+        """Create predictions for the particular scale
+
+        Args:
+            x: feature maps from previous CNN layers (b, c, h, w)
+            img_size: height of the original input image to the model; this is used to calculate the output stride;
+
+        Returns:
+            during inference:
+                1. scales all predictions for each grid cell for every anchor (b, nx*ny*num_anchors, 5 + num_classes)
+            during training:
+                1. reshapes x (b, num_anchors*(num_classes+5), ny, nx) -> (B, num_anchors, ny, nx, (num_classes+5))
+        """
+        x = self.conv(x)
+        x = self.pred(
+            x
+        )  # (b, (num_classes+5)*num_anchors, ny, nx); ny = height of grid scale, nx = width of grid scale
+        x = self.yolo(x, img_size)
+        return x
 
 
 class Yolov3Head(nn.Module):
@@ -39,8 +67,8 @@ class Yolov3Head(nn.Module):
         super().__init__()
 
         assert len(anchors) % 3 == 0
-        
-        num_pred_chs = (5 + num_classes) * 3
+
+        pred_chs = (5 + num_classes) * 3
 
         # in_channels comes from the out_ch of DarkNet53
         self.layers = nn.ModuleList(
@@ -68,9 +96,14 @@ class Yolov3Head(nn.Module):
                     stride=1,
                     padding=0,
                 ),
-                ScalePrediction(in_chs=512, scale_anchors=anchors[6:]), ####### START HERE, ADD THIS TO THE OTHER YOLO LAYERS
+                ScalePrediction(
+                    in_chs=512,
+                    pred_chs=pred_chs,
+                    scale_anchors=anchors[6:],
+                    num_classes=num_classes,
+                ),  ####### START HERE, ADD THIS TO THE OTHER YOLO LAYERS
                 ConvNormLRelu(
-                    in_channels=512, # input from the output of the module before ScalePrediction; [route] layers=-4 in yolov3.cfg 
+                    in_channels=512,  # input from the output of the module before ScalePrediction; [route] layers=-4 in yolov3.cfg
                     out_channels=256,
                     kernel_size=1,
                     stride=1,
@@ -112,9 +145,14 @@ class Yolov3Head(nn.Module):
                     stride=1,
                     padding=0,
                 ),
-                ScalePrediction(in_chs=512, scale_anchors=anchors[3:6]),
+                ScalePrediction(
+                    in_chs=256,
+                    pred_chs=pred_chs,
+                    scale_anchors=anchors[3:6],
+                    num_classes=num_classes,
+                ),
                 ConvNormLRelu(
-                    in_channels=512,
+                    in_channels=256,
                     out_channels=128,
                     kernel_size=1,
                     stride=1,
@@ -156,7 +194,12 @@ class Yolov3Head(nn.Module):
                     stride=1,
                     padding=0,
                 ),
-                ScalePrediction(in_chs=128, scale_anchors=anchors[:3]) ########### START HERE and TEST
+                ScalePrediction(
+                    in_chs=128,
+                    pred_chs=pred_chs,
+                    scale_anchors=anchors[:3],
+                    num_classes=num_classes,
+                ),  ########### START HERE and TEST
             ]
         )
 
@@ -179,10 +222,10 @@ class Yolov3Head(nn.Module):
 
         yolo_outputs = []
         for layer in self.layers:
-            if isinstance(layer, YoloLayerNew):
+            if isinstance(layer, ScalePrediction):
                 yolo_outputs.append(layer(x, img_size))
                 continue
-            breakpoint()
+            
             x = layer(x)
 
             # Upsample then concat the intermediate feature maps from DarkNet53
@@ -211,8 +254,8 @@ class Yolov3(nn.Module):
         Args:
             x: batch of input images (b, c, h , w)
         """
-        img_size = x.shape[2] # used to calcuate the output strice
-        
+        img_size = x.shape[2]  # used to calcuate the output strice
+
         out, inter2, inter1 = self.backbone(x)
         yolo_outputs = self.head(out, inter2, inter1, img_size=img_size)
 

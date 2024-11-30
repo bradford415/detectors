@@ -1,5 +1,7 @@
 # Dataset class for the COCO dataset
 # Mostly taken from here: https://github.com/facebookresearch/detr/blob/main/datasets/coco.py
+import contextlib
+import os
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +11,7 @@ import torchvision
 from pycocotools import mask as coco_mask
 
 from detectors.data import transforms as T
-from detectors.data.coco_utils import PreprocessCoco, explore_coco
+from detectors.data.coco_utils import PreprocessCoco, coco_stats
 
 
 class CocoDetection(torchvision.datasets.CocoDetection):
@@ -55,7 +57,11 @@ class CocoDetection(torchvision.datasets.CocoDetection):
             annotation_file: path to the .json annotation file in coco format
             split: the dataset split type; train, val, or test
         """
-        super().__init__(root=image_folder, annFile=annotation_file)
+        # Suppress coco prints while loading the image folder and annoation file
+        with open(os.devnull, "w") as devnull:
+            with contextlib.redirect_stdout(devnull):
+                super().__init__(root=image_folder, annFile=annotation_file)
+
         self._transforms = transforms
 
         self.prepare = PreprocessCoco()
@@ -71,7 +77,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
             self.ids = self.ids[:32]
 
         # Display coco information of the current dataset; this should be placed at the end of the __init__()
-        explore_coco(self, split)
+        coco_stats(self, split)
 
     def __getitem__(self, index):
         """Retrieve and preprocess samples from the dataset"""

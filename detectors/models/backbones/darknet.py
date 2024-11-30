@@ -54,9 +54,7 @@ class DarkNet53(nn.Module):
     DarkNet53 feature extractor starts at line 25 and ends at line 549
     """
 
-    def __init__(
-        self, block: nn.Module = DarkResidualBlock
-    ):
+    def __init__(self, block: nn.Module = DarkResidualBlock):
         """Initialize the darknet53 model
 
         Args:
