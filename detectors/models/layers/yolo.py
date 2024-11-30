@@ -450,7 +450,9 @@ class YoloLayerNew(nn.Module):
             "anchor_grid", anchors.clone().view(1, -1, 1, 1, 2)
         )  # (1, num_anchors, 1, 1, 2)
 
-    def forward(self, head_output: torch.Tensor, img_size: int) -> Tuple[torch.tensor, torch.tensor]:
+    def forward(
+        self, head_output: torch.Tensor, img_size: int
+    ) -> Tuple[torch.tensor, torch.tensor]:
         """TODO
 
         Args:
@@ -463,37 +465,39 @@ class YoloLayerNew(nn.Module):
             during training:
                 1. reshapes x (b, num_anchors*(num_classes+5), ny, nx) -> (B, num_anchors, ny, nx, (num_classes+5))
         """
-        
+
         assert head_output.shape[1] == (5 + self.num_classes) * self.num_anchors
-        
+
         # the ratio the input image was downsample by
-        stride = img_size  // head_output.shape[2]
+        stride = img_size // head_output.shape[2]
 
         # ny & nx are the height and width of the grid i.e., the final downsample feature at a scale
         batch_size, _, ny, nx = head_output.shape
 
         # (b, num_anchors*(num_classes+5), ny, nx) -> (b, num_anchors, (num_classes+5), ny, nx) -> (B, num_anchors, ny, nx, (num_classes+5))
-        head_output = head_output.view(
-            batch_size, self.num_anchors, self.num_output, ny, nx
-        ).permute(0, 1, 3, 4, 2).contiguous()
+        head_output = (
+            head_output.view(batch_size, self.num_anchors, self.num_output, ny, nx)
+            .permute(0, 1, 3, 4, 2)
+            .contiguous()
+        )
 
-        
         # During inference
         if not self.training:
-            
             # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
             self.grid = self._make_grid(nx, ny).to(head_output)
-            
+
             # bound cx, cy predictions to [0, 1] and offset by cell grid,
             # then multiply by stride to scale back to the input image size range
             head_output[..., 0:2] = (
                 head_output[..., 0:2].sigmoid() + self.grid
-            ) * stride # x/y
+            ) * stride  # x/y
 
             # Scale w, h predictions by e and multiply by anchor w/h;
             # multiplying by anchor_grid, applies the anchor sizes, element-wise, to the w/h predictions;
             # anchors are not divided by stride during inference (only divided by stride when computing the loss)
-            head_output[..., 2:4] = torch.exp(head_output[..., 2:4]) * self.anchor_grid # w/h
+            head_output[..., 2:4] = (
+                torch.exp(head_output[..., 2:4]) * self.anchor_grid
+            )  # w/h
 
             # Scale objectness and class confidence predictions to [0, 1]
             head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
@@ -501,9 +505,7 @@ class YoloLayerNew(nn.Module):
             # Reshape to (b, nx*ny*num_anchors, num_classes+5);
             # this allows us to concatenate all the yolo layers along dim=1 since
             # each layer returns a different scale
-            head_output = head_output.reshape(
-                batch_size, -1, self.num_output
-            )
+            head_output = head_output.reshape(batch_size, -1, self.num_output)
 
         return head_output
 

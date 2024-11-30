@@ -13,14 +13,14 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_ds import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
+from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
 from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
-from detectors.models.yolov4 import YoloV4
 from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
 
-detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
+detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
@@ -134,13 +134,13 @@ def main(base_config_path: str, model_config_path):
         **val_kwargs,
     )
 
-    ## TODO: log the backbone, neck, head, and detector used.
-
     # Initalize the detector backbone; typically some feature extractor
-    backbone = backbone_map[model_config["backbone"]["name"]](
-        pretrain=model_config["backbone"]["pretrained"],
-        remove_top=model_config["backbone"]["remove_top"],
-    )
+    backbone_name = model_config["backbone"]["name"]
+    if backbone_name in model_config["backbone"]:
+        backbone_params = model_config["backbone"][backbone_name]
+    else:
+        backbone_params = {}
+    backbone = backbone_map[backbone_name](**backbone_params)
 
     # detector args
     model_components = {
@@ -162,6 +162,11 @@ def main(base_config_path: str, model_config_path):
         batch_size=base_config["train"]["batch_size"],
         device=device,
     )
+    
+    ## TODO: log the backbone, neck, head, and detector used.
+    log.info("model architecture")
+    log.info("\tbackbone: %s", type(backbone).__name__)
+    log.info("\tdetector: %s", type(model).__name__)
 
     # criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
 

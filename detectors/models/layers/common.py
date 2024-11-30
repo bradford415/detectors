@@ -67,4 +67,3 @@ class Upsample(nn.Module):
     def forward(self, x: torch.Tensor):
         x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
         return x
-        

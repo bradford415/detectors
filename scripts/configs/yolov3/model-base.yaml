@@ -5,12 +5,6 @@ detector: "yolov3"
 
 backbone:
   name: "darknet53"
-  pretrained: True
-
-  # Removes the last few MLP since we aren't doing classification
-  remove_top: True
-
-neck:
 
 head:
 

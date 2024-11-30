@@ -21,6 +21,7 @@ class DarkResidualBlock(nn.Module):
         Args:
             in_ch: number of input channels for the conn2d layers
         """
+        super().__init__()
         out_ch = in_ch // 2
 
         self.layer1 = ConvNormLRelu(in_channels=in_ch, out_channels=out_ch)
@@ -54,19 +55,15 @@ class DarkNet53(nn.Module):
     """
 
     def __init__(
-        self, num_classes: int, block: nn.Module = DarkResidualBlock, remove_top=True
+        self, block: nn.Module = DarkResidualBlock
     ):
         """Initialize the darknet53 model
 
         Args:
             block: the type of module block to use in DarkNet
-            num_class: number of classes in the dataset ontology to detect
-            remove_top: whether to remove the classification layers and use darknet as a feature extractor
 
         """
-        self.num_classes = num_classes
-        self.remove_top = remove_top
-
+        super().__init__()
         self.conv1 = ConvNormLRelu(in_channels=3, out_channels=32, stride=1, padding=1)
         self.conv2 = ConvNormLRelu(in_channels=32, out_channels=64, stride=2, padding=1)
         self.residual_blocks1 = self._make_blocks(
@@ -121,7 +118,7 @@ class DarkNet53(nn.Module):
         # the 2 inter outputs will be concatenated in the head
         return out, inter_2, inter_1
 
-    def _make_blocks(block: nn.Module, in_channels, num_blocks) -> nn.Sequential:
+    def _make_blocks(self, block: nn.Module, in_channels, num_blocks) -> nn.Sequential:
         """Create a sequential object of a specific type of block
 
         Args:
@@ -136,9 +133,8 @@ class DarkNet53(nn.Module):
         return nn.Sequential(*layers)
 
 
-######## TODO START HERE SEE WHERE THIS IS IMPLEMENTED ********* MIGHT NEED A REMOVE TOP PARAMETER AND RETURN THE DOWNSAMPLE BLOCKS
-def darknet53(num_classes):
-    return DarkNet53(num_classes, block=DarkResidualBlock)
+def darknet53():
+    return DarkNet53(block=DarkResidualBlock)
 
 
 class Mish(torch.nn.Module):

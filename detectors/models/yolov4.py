@@ -359,7 +359,7 @@ class Yolov4Head(nn.Module):
             return [predictions_scale1, predictions_scale2, predictions_scale3]
 
 
-class YoloV4(nn.Module):
+class Yolov4(nn.Module):
     """Yolov4 based on the architecture described here https://arxiv.org/pdf/2004.10934.pdf
 
     Yolov4 implementation details in paper section 3.4

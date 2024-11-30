@@ -4,11 +4,15 @@
 detector: "yolov4"
 
 backbone:
+  # the backbone to use
   name: "resnet18"
-  pretrained: True
 
-  # Removes the last few MLP since we aren't doing classification
-  remove_top: True
+  # ResNet18 parameters
+  resnet18:
+    pretrained: True
+
+    # Removes the last few MLP since we aren't doing classification
+    remove_top: True
 
 neck:
 
