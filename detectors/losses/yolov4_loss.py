@@ -7,6 +7,7 @@ from torch import nn
 
 ## TODO: implement the yolov3 version for better readability
 
+
 class Yolov4Loss(nn.Module):
     # Maybe TODO go back through and comment and change functions similar to https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/loss.py
     #      because it's commented very well

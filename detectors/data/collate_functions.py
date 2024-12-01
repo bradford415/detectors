@@ -42,7 +42,7 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
 
     # (B, C, H, W)
     # images = torch.stack(images, dim=0) # This was written before the padding above
-    
+
     # Add sample index to targets
     for i, boxes in enumerate(targets):
         boxes[:, 0] = i
