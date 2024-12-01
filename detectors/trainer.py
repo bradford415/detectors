@@ -176,23 +176,26 @@ class Trainer:
             scheduler: Learning rate scheduler to update the learning rate
             epoch: Current epoch; used for logging purposes
         """
-        for steps, (samples, targets) in enumerate(dataloader_train, 1):
+        for steps, (samples, targets, targets_meta) in enumerate(dataloader_train, 1):
             samples = samples.to(self.device)
-            targets = [
-                {
-                    key: val.to(self.device) if isinstance(val, torch.Tensor) else val
-                    for key, val in t.items()
-                }
-                for t in targets
-            ]
+            targets = targets.to(self.device)
+            # targets = [
+            #     {
+            #         key: val.to(self.device) if isinstance(val, torch.Tensor) else val
+            #         for key, val in t.items()
+            #     }
+            #     for t in targets
+            # ]
 
             optimizer.zero_grad()
 
-            # len(bbox_predictions) = 3; bbox_predictions[i] (B, (5+n_class)*n_bboxes, out_w, out_h)
-            bbox_predictions = model(samples)
+            # list of preds at all 3 scales;
+            # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
+            bbox_preds = model(samples)
 
+            breakpoint()
             final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-                bbox_predictions, targets
+                bbox_preds, targets, model
             )
 
             loss_components = misc.to_cpu(
@@ -294,10 +297,10 @@ class Trainer:
         if split not in valid_splits:
             raise ValueError("split must either be in valid_splits")
 
-        samples, targets = next(iter(dataloader))
+        samples, targets, annoations = next(iter(dataloader))
         visualize_norm_img_tensors(
             samples,
-            targets,
+            annoations,
             class_names,
             self.output_dir / "aug" / f"{split}-images",
         )

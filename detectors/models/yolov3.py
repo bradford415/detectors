@@ -225,7 +225,7 @@ class Yolov3Head(nn.Module):
             if isinstance(layer, ScalePrediction):
                 yolo_outputs.append(layer(x, img_size))
                 continue
-            
+
             x = layer(x)
 
             # Upsample then concat the intermediate feature maps from DarkNet53
@@ -247,9 +247,13 @@ class Yolov3(nn.Module):
         super().__init__()
         self.backbone = backbone
         self.head = Yolov3Head(anchors, num_classes)
+        
+        # keep track of initialized yolo layers to use their attributes in the loss function; e.g., scaling anchors
+        self.yolo_layers = [layer.yolo for layer in self.head.layers if isinstance(layer, ScalePrediction)]
+        assert len(self.yolo_layers) == 3
 
     def forward(self, x):
-        """Forward pass through YoloV3 model
+        """Forward pass through Yolov3 model
 
         Args:
             x: batch of input images (b, c, h , w)

@@ -9,7 +9,8 @@ backbone:
 
   # ResNet18 parameters
   resnet18:
-    pretrained: True
+    # whether to use pretrained ImageNet weights
+    pretrain: True
 
     # Removes the last few MLP since we aren't doing classification
     remove_top: True

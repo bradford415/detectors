@@ -16,7 +16,7 @@ from detectors.data.collate_functions import collate_fn
 from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
-from detectors.models.losses.yolo_loss import Yolo_loss, YoloV4Loss
+from detectors.losses import Yolov3Loss, Yolov4Loss
 from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
 
@@ -133,6 +133,14 @@ def main(base_config_path: str, model_config_path):
         drop_last=True,
         **val_kwargs,
     )
+    
+    anchors = model_config["priors"]["anchors"]
+
+    # number of anchors per scale
+    num_anchors = len(anchors[0])
+    
+    # strip away the outer list to make it a 2d python list
+    anchors = [anchor for anchor_scale in anchors for anchor in anchor_scale]
 
     # Initalize the detector backbone; typically some feature extractor
     backbone_name = model_config["backbone"]["name"]
@@ -146,7 +154,7 @@ def main(base_config_path: str, model_config_path):
     model_components = {
         "backbone": backbone,
         "num_classes": dataset_train.num_classes,
-        **model_config["priors"],
+        "anchors": anchors,
     }
 
     # Initialize detection model and transfer to GPU
@@ -157,16 +165,21 @@ def main(base_config_path: str, model_config_path):
     ## TODO: Apply weights init maybe
 
     # For the YoloV4Loss function, if the batch size is different than the
-    criterion = YoloV4Loss(
-        anchors=model_config["priors"]["anchors"],
-        batch_size=base_config["train"]["batch_size"],
+    # TODO: probably make a function to select the loss
+    # criterion = Yolov4Loss(
+    #     anchors=model_config["priors"]["anchors"],
+    #     batch_size=base_config["train"]["batch_size"],
+    #     device=device,
+    # )
+    criterion = Yolov3Loss(
+        num_anchors=num_anchors,
         device=device,
     )
 
     ## TODO: log the backbone, neck, head, and detector used.
-    log.info("model architecture")
-    log.info("\tbackbone: %s", type(backbone).__name__)
-    log.info("\tdetector: %s", type(model).__name__)
+    log.info("\nmodel architecture")
+    log.info("\tbackbone: %s", backbone_name)
+    log.info("\tdetector: %s", model_config["detector"])
 
     # criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
 

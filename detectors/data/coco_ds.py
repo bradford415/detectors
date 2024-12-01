@@ -104,8 +104,14 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
         if self._transforms is not None:
             image, target = self._transforms(image, target)
+        
+        # create a tensor of the sample index, object label and bboxes (num_objects, 6) where 6 = (sample_index, obj_class_id, cx, cy, h, w)
+        # NOTE: the sample_index will be 0 for now but in the collate_fn it is filled in; this is the sample_index only within the batch
+        target_tens = torch.zeros(len(target["labels"]), 6)
+        cls_boxes = torch.cat((target["labels"][:, None], target["boxes"]), dim=1)
+        target_tens[:, 1:] = cls_boxes
 
-        return image, target
+        return image, target_tens, target
 
 
 def make_coco_transforms(dataset_split):

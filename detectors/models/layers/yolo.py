@@ -418,7 +418,7 @@ class YoloLayerNew(nn.Module):
     TODO: Flesh this out more; basically just a post processing step, not learned params
     Yolo layer only used at inference time"""
 
-    def __init__(self, anchors: list[tuple[int, int]], num_classes: int = 80):
+    def __init__(self, anchors: list[list[int, int]], num_classes: int = 80):
         """Initalize Yolo Inference Layer
 
         Args:
@@ -449,6 +449,9 @@ class YoloLayerNew(nn.Module):
         self.register_buffer(
             "anchor_grid", anchors.clone().view(1, -1, 1, 1, 2)
         )  # (1, num_anchors, 1, 1, 2)
+        
+        # will be used in the loss function to scale the anchors; this gets set in forward()
+        self.stride = None
 
     def forward(
         self, head_output: torch.Tensor, img_size: int
@@ -463,13 +466,14 @@ class YoloLayerNew(nn.Module):
             during inference:
                 1. scales all predictions for each grid cell for every anchor (b, nx*ny*num_anchors, 5 + num_classes)
             during training:
-                1. reshapes x (b, num_anchors*(num_classes+5), ny, nx) -> (B, num_anchors, ny, nx, (num_classes+5))
+                1. reshapes x (b, num_anchors*(num_classes+5), ny, nx) -> (b, num_anchors, ny, nx, (5+num_classes))
         """
 
         assert head_output.shape[1] == (5 + self.num_classes) * self.num_anchors
 
         # the ratio the input image was downsample by
         stride = img_size // head_output.shape[2]
+        self.stride = stride
 
         # ny & nx are the height and width of the grid i.e., the final downsample feature at a scale
         batch_size, _, ny, nx = head_output.shape
