@@ -1,13 +1,13 @@
 # Downloads the full coco 2017 dataset (images & annotations); linux only
 # Usage: bash download_coco.sh
-# mkdir coco
-# cd coco
-# mkdir images
-# cd images
+mkdir coco
+cd coco
+mkdir images
+cd images
 
-# wget http://images.cocodataset.org/zips/train2017.zip
-# wget http://images.cocodataset.org/zips/val2017.zip
-# wget http://images.cocodataset.org/zips/test2017.zip
+wget http://images.cocodataset.org/zips/train2017.zip
+wget http://images.cocodataset.org/zips/val2017.zip
+wget http://images.cocodataset.org/zips/test2017.zip
 wget http://images.cocodataset.org/zips/unlabeled2017.zip
 
 unzip train2017.zip

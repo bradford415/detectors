@@ -3,6 +3,7 @@
 Usage:
     python scripts/visualizations/explore_coco.py
 """
+
 import matplotlib
 import numpy as np
 

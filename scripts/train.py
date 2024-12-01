@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_ds import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
+from detectors.losses import Yolov3Loss, Yolov4Loss
 from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
-from detectors.losses import Yolov3Loss, Yolov4Loss
 from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
 
@@ -87,29 +87,41 @@ def main(base_config_path: str, model_config_path):
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
 
-    # Set cuda parameters
-    use_cuda = torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
-    train_kwargs = {"batch_size": base_config["train"]["batch_size"], "shuffle": True}
+    # Set gpu parameters
+    train_kwargs = {
+        "batch_size": base_config["train"]["batch_size"],
+        "shuffle": True,
+        "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
+    }
     val_kwargs = {
         "batch_size": base_config["validation"]["batch_size"],
         "shuffle": False,
+        "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
     }
 
-    if use_cuda:
+    # Set device specific characteristics
+    use_cpu = False
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
         log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
         for gpu in range(len(base_config["cuda"]["gpus"])):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
+    elif torch.mps.is_available():
+        base_config["dataset"]["root"] = base_config["dataset"]["root_mac"]
+        device = torch.device("mps")
+        log.info("Using: %s", device)
+    else:
+        use_cpu = True
+        device = torch.device("cpu")
+        log.info("Using CPU")
 
-        cuda_kwargs = {
-            "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
+    if not use_cpu:
+        gpu_kwargs = {
             "pin_memory": True,
         }
 
-        train_kwargs.update(cuda_kwargs)
-        val_kwargs.update(cuda_kwargs)
-    else:
-        log.info("Using CPU")
+        train_kwargs.update(gpu_kwargs)
+        val_kwargs.update(gpu_kwargs)
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_train = dataset_map[base_config["dataset_name"]](
@@ -133,12 +145,12 @@ def main(base_config_path: str, model_config_path):
         drop_last=True,
         **val_kwargs,
     )
-    
+
     anchors = model_config["priors"]["anchors"]
 
     # number of anchors per scale
     num_anchors = len(anchors[0])
-    
+
     # strip away the outer list to make it a 2d python list
     anchors = [anchor for anchor_scale in anchors for anchor in anchor_scale]
 

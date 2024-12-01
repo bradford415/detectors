@@ -266,7 +266,7 @@ class Trainer:
         optimizer,
         current_epoch,
         save_path,
-        lr_scheduler: nn.Module | None = None,
+        lr_scheduler: Optional[nn.Module] = None,
     ):
         save_dict = {
             "model": model.state_dict(),

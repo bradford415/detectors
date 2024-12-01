@@ -449,7 +449,7 @@ class YoloLayerNew(nn.Module):
         self.register_buffer(
             "anchor_grid", anchors.clone().view(1, -1, 1, 1, 2)
         )  # (1, num_anchors, 1, 1, 2)
-        
+
         # will be used in the loss function to scale the anchors; this gets set in forward()
         self.stride = None
 
