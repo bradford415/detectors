@@ -72,5 +72,8 @@ class Yolov3Loss(nn.Module):
             #       this should be equivalent
             #    
             scaled_targets = targets / gain
+            breakpoint()
+            if num_targets:
+                r = scaled_targets[:,:, 4:6]
             
             
