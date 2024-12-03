@@ -24,7 +24,8 @@ class Yolov3Loss(nn.Module):
         """Compute the yolov3 loss
 
         Args:
-            TODO
+            preds: list of output predictions at all 3 scales during training (b, num_anchors, ny, nx, 5 + num_classes)
+                   where 5 = (cx, cy, w, h, objectness)
             targets: targets for the batch of images (num_objects*b, 6) where 6 = (batch_sample_index, obj_id, cx, cy, w, h)
         """
         # Add placeholder varables for the different losses;
@@ -46,11 +47,11 @@ class Yolov3Loss(nn.Module):
         
         # Calcluate losses for each yolo layer
         for layer_index, layer_predictions in enumerate(preds):
-            # extract image_ids, ancors, grid index i/j for each target in the current prediction scale
+            # extract image_ids, ancors, grid index i/j for each target in the current prediction scale; (num_objects, )
             image_idx, anchor, grid_j, grid_i = indices[layer_index]
-            breakpoint()
+
             # build empty object target tesnor with shape the same as object prediction
-            t_obj = torch.zeroslike(layer_predictions[..., 0], device=self.device) # (b, num_anchors, ny, nx, 5 + num_classes)
+            t_obj = torch.zeros_like(layer_predictions[..., 0], device=self.device) # (b, num_anchors, ny, nx, 5 + num_classes)
             
             # Number of objects in the batch of images
             num_targets = image_idx.shape[0]
@@ -61,11 +62,59 @@ class Yolov3Loss(nn.Module):
             
             # Check if there's targets for the batch
             if num_targets:
-                # load the corresponding
-                ################## START HERE
+                # using the processed targets, load the corresponding values from the predictions 
+                # (num_objects, 5 + num_classes); 
+                # NOTE: this could extract the same prediction twice just with a different anchor box; this is normal
+                ps = layer_predictions[image_idx, anchor, grid_j, grid_i]
+
+                # apply sigmoid to bound cx,cy predctions to [0, 1] so they can be used as cell offsets
+                p_xy = ps[:, :2]
+                
+                # apply e to wh predictions and multiply with the anchor box that matched best with the label
+                # for each cell that has a target; NOTE: the anchors were scaled by the stride in _build_targets()
+                p_wh = torch.exp(ps[:, 2:4]) * anchors[layer_index]
+                
+                # build box from scaled predictions; (num_objects, 4)
+                pbox = torch.cat((p_xy, p_wh), 1)
+                
+                # Calculate CIoU or GIoU for each target with te predicted box for its cell + anchor
+                iou = bbox_iou_loss(pbox.T, targ_box[layer_index], x1y1x2y2=False, CIoU=True)
+                
+                # We want to minimize our loss and the best posshible IoU is 1 so we take 1 - IoU and reduce it with a mean
+                lbox += (1.0 - iou).mean()  # iou loss # TODO put shape though it might be a scalar
+                
+                # Classification of the objectness
+                # Fill our empty object target tensor with the IoU we just calculated for each target at the targets position
+                t_obj[image_idx, anchor, grid_j, grid_i] = iou.detach().clamp(0).type(t_obj.dtype)  # Use cells with iou > 0 as object targets
+                
+                # Classification of the class
+                # Check if we need to do a classification (number of classes > 1)
+                if ps.size(1) - 5 > 1:
+                    # create one-hot class encoding (num_objects, num_class)
+                    targ_cls_onehot = torch.zeros_like(ps[:, 5:], device=self.device)  # targets
+                    targ_cls_onehot[range(num_targets), targ_cls[layer_index]] = 1
+                    
+                    # Use the tensor to calculate the BCE loss
+                    lcls += bce_cls(ps[:, 5:], targ_cls_onehot)  # BCE
             
-            
-        
+            # Classification of the objectness the sequel
+            # Calculate the BCE loss between the on the fly generated target and the network prediction
+            # both params have shape (b, num_anchors, ny, nx); t_obj is 0 everywhere except the positions
+            # defined by t_obj[image_idx, anchor, grid_j, grid_i]
+            lobj += bce_obj(layer_predictions[..., 4], t_obj) # obj loss
+
+        # weight each of the loss components
+        lbox *= 0.05
+        lobj *= 1.0
+        lcls *= 0.5
+
+        # Merge losses
+        loss = lbox + lobj + lcls
+
+        return loss, torch.cat((lbox, lobj, lcls, loss)).detach().cpu()
+                
+
+                
 
     def _build_targets(
         self, preds, targets, model
@@ -195,3 +244,65 @@ class Yolov3Loss(nn.Module):
 
         # The processed targets for all prediction scales
         return targ_cls, targ_box, indices, anch
+
+
+def bbox_iou_loss(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-9):
+    """IoU between bounding boxes box1 and box2 used in the loss function
+    
+    # TODO: should go through this function and comment it
+    
+    NOTE: there's another bbox_iou in detectors.utils.box_ops that's used to get_batch_statistics after nms;
+          I assume they're equivalent but have not stepped through the code yet
+          
+    Args:
+        box1: typically the predicted boxes (4, num_objects)
+        box2: typically the target boxes (num_objects, 4)
+        x1y1x2y2: whether bounding boxes are in the format (tl_x, tl_y, br_x, br_y); if false
+                  assume (cx, cy, w, h) form
+    """
+    # Returns the IoU of box1 to box2. box1 is 4, box2 is nx4
+    box2 = box2.T
+    
+    assert box1.shape[-1] == box2.shape[-1]
+
+    # Get the coordinates of bounding boxes
+    if x1y1x2y2:  # x1, y1, x2, y2 = box1
+        b1_x1, b1_y1, b1_x2, b1_y2 = box1[0], box1[1], box1[2], box1[3]
+        b2_x1, b2_y1, b2_x2, b2_y2 = box2[0], box2[1], box2[2], box2[3]
+    else:  # transform from xywh to xyxy
+        b1_x1, b1_x2 = box1[0] - box1[2] / 2, box1[0] + box1[2] / 2
+        b1_y1, b1_y2 = box1[1] - box1[3] / 2, box1[1] + box1[3] / 2
+        b2_x1, b2_x2 = box2[0] - box2[2] / 2, box2[0] + box2[2] / 2
+        b2_y1, b2_y2 = box2[1] - box2[3] / 2, box2[1] + box2[3] / 2
+
+    # Intersection area
+    inter = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
+            (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
+
+    # Union Area
+    w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
+    w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
+    union = w1 * h1 + w2 * h2 - inter + eps
+
+    iou = inter / union
+    if GIoU or DIoU or CIoU:
+        # convex (smallest enclosing box) width
+        cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)
+        ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)  # convex height
+        if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
+            c2 = cw ** 2 + ch ** 2 + eps  # convex diagonal squared
+            rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 +
+                    (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center distance squared
+            if DIoU:
+                return iou - rho2 / c2  # DIoU
+            elif CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
+                v = (4 / math.pi ** 2) * \
+                    torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
+                with torch.no_grad():
+                    alpha = v / ((1 + eps) - iou + v)
+                return iou - (rho2 / c2 + v * alpha)  # CIoU
+        else:  # GIoU https://arxiv.org/pdf/1902.09630.pdf
+            c_area = cw * ch + eps  # convex area
+            return iou - (c_area - union) / c_area  # GIoU
+    else:
+        return iou  # IoU
