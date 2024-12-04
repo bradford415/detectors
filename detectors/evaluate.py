@@ -45,25 +45,26 @@ def evaluate(
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
     image_paths = []
     final_preds = []
-    for steps, (samples, targets) in enumerate(
+    for steps, (samples, targets, target_meta) in enumerate(
         tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
         samples = samples.to(device)
+        targets = targets.to(device)
 
-        # Extract object labels from all samples in the batch into a 1d python list
-        for target in targets:
-            # extract labels (b*labels_per_img,) and image paths for visualization
-            labels += target["labels"].tolist()
-            image_paths.append(target["image_path"])
+        # # Extract object labels from all samples in the batch into a 1d python list
+        # for target in targets:
+        #     # extract labels (b*labels_per_img,) and image paths for visualization
+        #     labels += target["labels"].tolist()
+        #     image_paths.append(target["image_path"])
 
-            # convert bbox yolo format to xyxy
-            target["boxes"] = cxcywh_to_xyxy(target["boxes"])
+        #     # convert bbox yolo format to xyxy
+        #     target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
         # (b, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
-        predictions = model(samples, inference=True)
+        predictions = model(samples)
 
         # Transfer preds to CPU for post processing
-        predictions = misc.to_cpu(predictions)
+        #predictions = misc.to_cpu(predictions)
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
         # list (b,) of tensor predictions (max_nms_preds, 6)

@@ -198,14 +198,14 @@ def get_batch_statistics(
         # NOTE: The line below is from the original code; I think their labels
         # are in a different format [image_index, class_index, cx, cy, w, h]
         # so I modified the annotations code below to use the target format this code uses
-        # annotations = targets[targets[:, 0] == sample_i][:, 1:]
-        # target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
+        annotations = targets[targets[:, 0] == sample_i][:, 1:]
+        #target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
 
         # Extract label and box annotations for the image and convert to tensor
         # (num_objects, 5) where 5 = (object_label, tl_x, tl_y, br_x, br_y)
-        annotations = torch.cat(
-            [torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1
-        )
+        # annotations = torch.cat(
+        #     [torch.unsqueeze(target["labels"], 1), target["boxes"]], dim=1
+        # )
 
         # Extract just the object labels for the image (num_objects,)
         target_labels = annotations[:, 0] if len(annotations) else []
@@ -258,6 +258,7 @@ def get_batch_statistics(
                 # pred_box is a single box prediction and filtered_target_cooreds is 1 or more bbox coords
                 # depending on how many true objects are in the image;
                 # this allows us to try and match the predicted box with the best overlapping target label
+                breakpoint()
                 all_bbox_ious = bbox_iou(pred_box, filtered_target_coords)
 
                 # return the highest IoU between the predicted bbox and the target bbox for that

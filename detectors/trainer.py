@@ -193,17 +193,17 @@ class Trainer:
             # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
             bbox_preds = model(samples)
 
-            breakpoint()
-            final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-                bbox_preds, targets, model
-            )
-
-            loss_components = misc.to_cpu(
-                torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
-            )
+            # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+            #     bbox_preds, targets, model
+            # ) # yolov4
+            # loss_components = misc.to_cpu(
+            #     torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
+            # )
+            
+            total_loss, loss_components = criterion(bbox_preds, targets, model)
 
             # Calculate gradients and updates weights
-            final_loss.backward()
+            total_loss.backward()
             optimizer.step()
 
             # Calling scheduler step increments a counter which is passed to the lambda function;
@@ -224,7 +224,7 @@ class Trainer:
                     epoch,
                     steps,
                     len(dataloader_train),
-                    final_loss.item(),
+                    total_loss.item(),
                 )
 
     @torch.no_grad()

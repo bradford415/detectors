@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_ds import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
-from detectors.losses import Yolov3Loss, Yolov4Loss
+from detectors.losses import loss_map
 from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
@@ -28,10 +28,6 @@ optimizer_map = {
     "adam": torch.optim.Adam,
     "adamw": torch.optim.AdamW,
     "sgd": torch.optim.SGD,
-}
-
-loss_map = {
-    "cross_entropy": nn.CrossEntropyLoss(),
 }
 
 scheduler_map = {
@@ -170,7 +166,8 @@ def main(base_config_path: str, model_config_path):
     }
 
     # Initialize detection model and transfer to GPU
-    model = detectors_map[model_config["detector"]](**model_components)
+    detector_name = model_config["detector"]
+    model = detectors_map[detector_name](**model_components)
     # model = Darknet("scripts/configs/yolov4.cfg")
     model.to(device)
 
@@ -183,11 +180,13 @@ def main(base_config_path: str, model_config_path):
     #     batch_size=base_config["train"]["batch_size"],
     #     device=device,
     # )
-    criterion = Yolov3Loss(
-        num_anchors=num_anchors,
-        device=device,
-    )
-
+    
+    # initalize loss with specific args
+    if detector_name == "yolov3":
+        criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
+    else:
+        ValueError(f"loss function for {detector_name} not implemented")
+    
     ## TODO: log the backbone, neck, head, and detector used.
     log.info("\nmodel architecture")
     log.info("\tbackbone: %s", backbone_name)
@@ -257,6 +256,7 @@ def _init_training_objects(
     lr_scheduler = scheduler_map[scheduler](
         optimizer, schedulers.burnin_schedule_modified
     )
+
     return optimizer, lr_scheduler
 
 
