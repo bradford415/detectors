@@ -168,6 +168,10 @@ def main(base_config_path: str, model_config_path):
     # Initialize detection model and transfer to GPU
     detector_name = model_config["detector"]
     model = detectors_map[detector_name](**model_components)
+
+    # Compute and log the number of params in the model
+    reproduce.model_info(model)
+
     # model = Darknet("scripts/configs/yolov4.cfg")
     model.to(device)
 

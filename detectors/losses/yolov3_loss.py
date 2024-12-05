@@ -76,7 +76,7 @@ class Yolov3Loss(nn.Module):
                 ps = layer_predictions[image_idx, anchor, grid_j, grid_i]
 
                 # apply sigmoid to bound cx,cy predctions to [0, 1] so they can be used as cell offsets
-                p_xy = ps[:, :2]
+                p_xy = ps[:, :2].sigmoid()
 
                 # apply e to wh predictions and multiply with the anchor box that matched best with the label
                 # for each cell that has a target; NOTE: the anchors were scaled by the stride in _build_targets()

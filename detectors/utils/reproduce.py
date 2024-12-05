@@ -1,12 +1,15 @@
 # Utility functions to reproduce the results from experimentss
 import json
 import random
+import logging
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Dict
 
 import numpy as np
 import torch
+
+log = logging.getLogger(__name__)
 
 
 def reproducibility(seed: int) -> None:
@@ -15,6 +18,13 @@ def reproducibility(seed: int) -> None:
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+
+def model_info(model):
+    model_size = 0
+    for param in model.parameters():
+        model_size += param.data.nelement()
+    log.info("Model params: %.2f M", (model_size / 1024 / 1024))
 
 
 def save_configs(

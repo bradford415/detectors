@@ -6,7 +6,8 @@
 dev_mode: False
 
 # Base directory for output files; do not change this 
-output_dir: "output/train"
+#output_dir: "output/train"
+output_dir: "/home/jovyan/autofocus-dssi/coco-output/train"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
 exp_name: "development"
@@ -21,8 +22,9 @@ log_train_steps: 20
 dataset:
 
   # Path to the root of the dataset; detects which path to use based on device
-  root: "/mnt/d/Datasets/coco" # windows path
+  #root: "/mnt/d/Datasets/coco" # windows path
   root_mac: "/Users/bsele/datasets/coco" # mac path
+  root: "/home/jovyan/autofocus-dssi/coco" # aif path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
@@ -31,7 +33,7 @@ train:
   # Configurations for learning parameters such as the optmizier and lr scheduler
   learning_config: "learning_config_1"
 
-  batch_size: 8
+  batch_size: 32
 
   # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
   start_epoch: 1

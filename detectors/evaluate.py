@@ -51,6 +51,9 @@ def evaluate(
         # NOTE: I don't think we need to move targets to gpu during eval
         samples = samples.to(device)
         #breakpoint()
+
+        # Extract target labels and convert target boxes to xyxy
+        labels += targets[:, 1].tolist()
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
         # targets = targets.to(device)
 
@@ -92,7 +95,7 @@ def evaluate(
         true_positives.ndim == 1
         and true_positives.shape == pred_scores.shape == pred_labels.shape
     )
-
+    #breakpoint()
     metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
     print_eval_stats(metrics_output, class_names, verbose=True)
