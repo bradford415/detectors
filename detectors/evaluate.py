@@ -11,7 +11,7 @@ from detectors.postprocessing.eval import (ap_per_class, get_batch_statistics,
                                            print_eval_stats)
 from detectors.postprocessing.nms import non_max_suppression
 from detectors.utils import misc
-from detectors.utils.box_ops import cxcywh_to_xyxy, val_preds_to_img_size
+from detectors.utils.box_ops import val_preds_to_img_size, xywh2xyxy
 
 log = logging.getLogger(__name__)
 
@@ -48,8 +48,11 @@ def evaluate(
     for steps, (samples, targets, target_meta) in enumerate(
         tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
+        # NOTE: I don't think we need to move targets to gpu during eval
         samples = samples.to(device)
-        targets = targets.to(device)
+        #breakpoint()
+        targets[:, 2:] = xywh2xyxy(targets[:, 2:])
+        # targets = targets.to(device)
 
         # # Extract object labels from all samples in the batch into a 1d python list
         # for target in targets:
@@ -64,7 +67,7 @@ def evaluate(
         predictions = model(samples)
 
         # Transfer preds to CPU for post processing
-        #predictions = misc.to_cpu(predictions)
+        # predictions = misc.to_cpu(predictions)
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
         # list (b,) of tensor predictions (max_nms_preds, 6)

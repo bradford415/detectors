@@ -4,7 +4,7 @@ from typing import List
 import torch
 import torchvision
 
-from detectors.utils.box_ops import cxcywh_to_xyxy
+from detectors.utils.box_ops import xywh2xyxy
 
 
 def non_max_suppression(
@@ -36,7 +36,7 @@ def non_max_suppression(
     multi_label = nc > 1  # multiple labels per box (adds 0.5ms/img)
 
     t = time.time()
-    output = [torch.zeros((0, 6), device=predictions.device)] * predictions.shape[0]
+    output = [torch.zeros((0, 6), device="cpu")] * predictions.shape[0]
 
     for image_index, box_pred in enumerate(predictions):
         # image index, image inference
@@ -54,7 +54,7 @@ def non_max_suppression(
         box_pred[:, 5:] *= box_pred[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
-        box = cxcywh_to_xyxy(box_pred[:, :4])
+        box = xywh2xyxy(box_pred[:, :4])
 
         # Filter out predictions by conf_threshold in the multi_label case and by the maximum class confidence in the single label case
         if multi_label:

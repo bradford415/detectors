@@ -199,7 +199,7 @@ class Trainer:
             # loss_components = misc.to_cpu(
             #     torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
             # )
-            
+
             total_loss, loss_components = criterion(bbox_preds, targets, model)
 
             # Calculate gradients and updates weights

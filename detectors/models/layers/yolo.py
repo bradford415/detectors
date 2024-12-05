@@ -424,9 +424,6 @@ class YoloLayerNew(nn.Module):
         Args:
             anchors: lsit of anchors in (w, h) format, relative to the original input dimensions
             num_classes: number of classes in the ontology
-            stride: The ratio to which the image was downsampled; this will be used to normalize
-                    the anchor boxes coordinates to the range of the downsampled image;
-                    i.e. input_size: (512, 512), head_output: (64, 64) -> stride = 8
         """
         super().__init__()
         self.num_classes = num_classes

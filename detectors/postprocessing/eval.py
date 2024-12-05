@@ -131,7 +131,6 @@ def print_eval_stats(
     """
     if metrics_output is not None:
         precision, recall, AP, f1, ap_class = metrics_output
-        # breakpoint()
         if verbose:
             # Prints class AP and mean AP
             for index, cls_num in enumerate(ap_class):
@@ -184,7 +183,6 @@ def get_batch_statistics(
 
         # Extract a single image prediction and its labels
         output = outputs[sample_i]
-        target = targets[sample_i]
 
         # Extract box preds (tl_x, tl_y, br_x, br_y, objectness, class score)
         pred_boxes = output[:, :4]
@@ -199,7 +197,7 @@ def get_batch_statistics(
         # are in a different format [image_index, class_index, cx, cy, w, h]
         # so I modified the annotations code below to use the target format this code uses
         annotations = targets[targets[:, 0] == sample_i][:, 1:]
-        #target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
+        # target_labels = torch.unsqueeze(target["labels"], 1) if len(annotations) else []
 
         # Extract label and box annotations for the image and convert to tensor
         # (num_objects, 5) where 5 = (object_label, tl_x, tl_y, br_x, br_y)
@@ -258,7 +256,6 @@ def get_batch_statistics(
                 # pred_box is a single box prediction and filtered_target_cooreds is 1 or more bbox coords
                 # depending on how many true objects are in the image;
                 # this allows us to try and match the predicted box with the best overlapping target label
-                breakpoint()
                 all_bbox_ious = bbox_iou(pred_box, filtered_target_coords)
 
                 # return the highest IoU between the predicted bbox and the target bbox for that

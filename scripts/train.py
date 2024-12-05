@@ -180,13 +180,13 @@ def main(base_config_path: str, model_config_path):
     #     batch_size=base_config["train"]["batch_size"],
     #     device=device,
     # )
-    
+
     # initalize loss with specific args
     if detector_name == "yolov3":
         criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
     else:
         ValueError(f"loss function for {detector_name} not implemented")
-    
+
     ## TODO: log the backbone, neck, head, and detector used.
     log.info("\nmodel architecture")
     log.info("\tbackbone: %s", backbone_name)
