@@ -88,7 +88,7 @@ class DarkNet53(nn.Module):
 
         self.conv6 = ConvNormLRelu(in_channels=512, out_channels=1024, stride=2)
         self.residual_blocks5 = self._make_blocks(
-            block=block, in_channels=self.final_num_channels, num_blocks=4
+            block=block, in_channels=self.final_num_chs, num_blocks=4
         )
 
     def forward(self, x):

@@ -159,6 +159,9 @@ class ResNet(nn.Module):
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
+
+        self.final_num_chs = 1024 // 2
+
         self.remove_top = remove_top
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -274,6 +277,7 @@ class ResNet(nn.Module):
         block2 = self.layer2(block1)
         block3 = self.layer3(block2)
         out = self.layer4(block3)
+        #breakpoint()
 
         if not self.remove_top:
             out = self.avgpool(out)

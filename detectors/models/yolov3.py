@@ -224,7 +224,7 @@ class Yolov3Head(nn.Module):
 
         yolo_outputs = []
         for layer in self.layers:
-            breakpoint()
+            #breakpoint()
             if isinstance(layer, ScalePrediction):
                 yolo_outputs.append(layer(x, img_size))
                 continue
@@ -249,7 +249,7 @@ class Yolov3(nn.Module):
     ):
         super().__init__()
         self.backbone = backbone
-        self.head = Yolov3Head(anchors, num_classes)
+        self.head = Yolov3Head(anchors, num_classes, input_ch=backbone.final_num_chs)
 
         # keep track of initialized yolo layers to use their attributes in the loss function; e.g., scaling anchors
         self.yolo_layers = [
@@ -268,7 +268,7 @@ class Yolov3(nn.Module):
         img_size = x.shape[2]  # used to calcuate the output strice
 
         out, inter2, inter1 = self.backbone(x)
-        breakpoint()
+        #breakpoint()
         yolo_outputs = self.head(out, inter2, inter1, img_size=img_size)
 
         # during inference, concatentate all predictions from every scale
