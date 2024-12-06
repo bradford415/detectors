@@ -441,6 +441,8 @@ class YoloLayerNew(nn.Module):
 
         assert anchors.shape[0] == self.num_anchors and anchors.ndim == 2
 
+        self.grid = torch.zeros(1)
+
         # Assign as model parameters to be saved/restored by the state_dict;
         self.register_buffer("anchors", anchors)
         self.register_buffer(
@@ -484,8 +486,9 @@ class YoloLayerNew(nn.Module):
 
         # During inference
         if not self.training:
-            # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
-            self.grid = self._make_grid(nx, ny).to(head_output)
+            if self.grid.shape[2:4] != head_output.shape[2:4]:
+                # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
+                self.grid = self._make_grid(nx, ny).to(head_output)
 
             # bound cx, cy predictions to [0, 1] and offset by cell grid,
             # then multiply by stride to scale back to the input image size range
