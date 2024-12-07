@@ -300,7 +300,8 @@ class Trainer:
         samples, targets, annoations = next(iter(dataloader))
         visualize_norm_img_tensors(
             samples,
-            annoations,
+            targets,
             class_names,
             self.output_dir / "aug" / f"{split}-images",
+            annoations
         )

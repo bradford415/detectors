@@ -33,11 +33,9 @@ class PreprocessCoco:
 
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
-            3. converts bboxes from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]
-               - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h]
-
-            Note: The bboxes are normalized and converted to Yolo format in data/transforms/Normalize()
-
+            3. converts bboxes from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]; this is done to perform transforms
+               - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h]; this happens
+                       after PreprocessCoco() is called. 
         Args:
             image: singular PIL image
             target dictionary with keys image_id and annotations

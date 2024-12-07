@@ -23,7 +23,7 @@ class ConvNormLRelu(nn.Module):
 
         Args:
             in_channels: Number of input channels to the Conv2D
-            out_channels: Number of output channels in the feature map after the Conv2D
+            out_channels: Number of outpu tchannels in the feature map after the Conv2D
             kernel_size: Size of the Conv2D kernel
             stride: Stide of the ConvTranspose
             padding: Padding of the ConvTranspose

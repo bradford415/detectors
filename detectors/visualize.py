@@ -18,7 +18,7 @@ matplotlib.use("Agg")
 
 
 def visualize_norm_img_tensors(
-    img_tensors: torch.Tensor, targets: list[dict], classes: list[str], output_dir: Path
+    img_tensors: torch.Tensor, targets: list[dict], classes: list[str], output_dir: Path, annotations
 ):
     """Visualizes the boxes of augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
@@ -29,7 +29,7 @@ def visualize_norm_img_tensors(
         classes: list of unique class names by label index
         output_dir: Path to save the outputs
     """
-    assert img_tensors.shape[0] == len(targets)
+    #assert img_tensors.shape[0] == targets.shape[0]
 
     un_norm = Unnormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
@@ -40,30 +40,37 @@ def visualize_norm_img_tensors(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     labels = []
-    for target in targets:
-        labels += target["labels"]
-    unique_classes = np.unique(np.array(labels))
+    #for target in targets:
+    #    labels += target["labels"]
+    unique_classes = np.unique(np.array(targets[:,1]))
     num_unique_classes = len(unique_classes)
 
     cmap = plt.get_cmap("tab20b")
     colors = [cmap(i) for i in np.linspace(0, 1, num_unique_classes)]
     bbox_colors = random.sample(colors, num_unique_classes)
 
-    for index, image in enumerate(img_tensors):
+    for img_index, image in enumerate(img_tensors):
         fig, ax = plt.subplots(1, 1)
+
+        img_h, img_w = image.shape[1:]
 
         image = un_norm(image)
         image = image.permute(1, 2, 0)
         # ax.imshow(image.to(dtype=torch.uint8), vmin=0, vmax=255)
         ax.imshow(image)
 
-        for label_num, (cx, cy, w, h) in zip(
-            targets[index]["labels"], targets[index]["boxes"]
-        ):
+        for img_idx, label, cx, cy, w, h in targets[targets[:, 0] == img_index]:
+            
+            # box coords are normalize [0-1] so we need to scale them to the input size
+            cx *= img_w
+            cy *= img_h
+            w *= img_w
+            h *= img_h
+
             tl_x = cx - w // 2
             tl_y = cy - h // 2
 
-            color = bbox_colors[int(np.where(unique_classes == int(label_num))[0])]
+            color = bbox_colors[int(np.where(unique_classes == int(label))[0])]
             # Create a Rectangle patch
             bbox = patches.Rectangle(
                 (tl_x, tl_y), w, h, linewidth=2, edgecolor=color, facecolor="none"
@@ -75,7 +82,7 @@ def visualize_norm_img_tensors(
             plt.text(
                 tl_x,
                 tl_y,
-                s=f"{classes[int(label_num)]}",
+                s=f"{classes[int(label)]}",
                 color="white",
                 verticalalignment="top",
                 bbox={"color": color, "pad": 0},
@@ -85,7 +92,7 @@ def visualize_norm_img_tensors(
         # plt.gca().yaxis.set_major_locator(NullLocator())
         plt.axis("off")
         fig.savefig(
-            f"{output_dir}/image_tensor_{index}.png",
+            f"{output_dir}/image_tensor_{int(img_idx)}.png",
             bbox_inches="tight",
             pad_inches=0.0,
         )

@@ -134,27 +134,16 @@ def make_coco_transforms(dataset_split):
     if dataset_split == "train":
         return T.Compose(
             [
-                T.RandomHorizontalFlip(),
-                T.RandomResize(scales),
-                T.CenterCrop((512, 512)),
-                # T.RandomSizeCrop(512, 512), # Crop is sort of bugged, if it crops a region with no objects then no labels will exist; maybe I can add this back later
-                # T.RandomSelect(
-                #     T.Compose(
-                #         [
-                #             T.RandomResize(scales),
-                #             T.RandomSizeCrop(384, 600),
-                #             T.RandomResize(scales, max_size=1333),
-                #         ]
-                #     ),
-                # ),
-                # T.ToTensorNoNormalization()
+                #T.RandomHorizontalFlip(),
+                #T.RandomResize(scales),
+                #T.CenterCrop((512, 512)),
                 normalize,
             ]
         )
     elif dataset_split == "val":
         return T.Compose(
             [
-                T.RandomResize([512]),
+                #T.RandomResize([512]),
                 normalize,
             ]
         )

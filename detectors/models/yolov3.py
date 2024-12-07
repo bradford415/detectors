@@ -61,8 +61,6 @@ class Yolov3Head(nn.Module):
 
         Args:
             anchors: list of all anchor box [w, h] across all 3 scales by increasing size
-
-
         """
         super().__init__()
 
@@ -70,7 +68,7 @@ class Yolov3Head(nn.Module):
 
         assert len(anchors) % 3 == 0
 
-        pred_chs = (5 + num_classes) * 3
+        pred_chs = (5 + num_classes) * 3 # 3 = num_anchors
 
         # in_channels comes from the out_ch of DarkNet53
         self.layers = nn.ModuleList(

@@ -3,32 +3,32 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: False # True
+dev_mode: True
 
 # Base directory for output files; do not change this 
-output_dir: "output/train"
+output_dir: "output/test"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
 exp_name: "development"
 
 # Name of dataset; must be one of the names in the dataset_map dict
-dataset_name: "CocoDetectionMiniTrain"
+dataset_name: "CocoDetection"
 
 # Parameters for the dataset class
 dataset:
 
   # Path to the root of the dataset
-  root: "/mnt/c/Users/bsele/Documents/Datasets/coco_minitrain_25k"
+  root: "/mnt/d/Datasets/coco" # windows path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
 
 test:
 
-  batch_size: 16
+  batch_size: 2
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
+  checkpoint_path: /home/bselee/programming/detectors/output/train/development/2024_12_06-12_05_08_AM/checkpoints/best_mAP_0-12.pt #"/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
 
 validation:
   batch_size: 4

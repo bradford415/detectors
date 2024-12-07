@@ -9,19 +9,19 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors.data.coco_ds import build_coco_mini
+from detectors.data.coco_ds import build_coco
 from detectors.data.collate_functions import collate_fn
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
-from detectors.models.yolov4 import YoloV4
+from detectors.models import Yolov3, Yolov4
 from detectors.utils import reproduce
 from detectors.visualize import plot_all_detections
 
 # TODO: should move this to its own file
-detectors_map: Dict[str, Any] = {"yolov4": YoloV4}
+detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}
 
-dataset_map: Dict[str, Any] = {"CocoDetection": build_coco_mini}
+dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def main(base_config_path: str, model_config_path: str):
     )
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "testing.log"
-
+    
     # Configure logger that prints to a log file and stdout
     logging.basicConfig(
         level=logging.INFO,
@@ -58,7 +58,8 @@ def main(base_config_path: str, model_config_path: str):
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
-    log.info("initializing...\n")
+    log.info("initializing...")
+    log.info("outputs beings saved to %s\n", str(output_path))
 
     # apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
@@ -96,17 +97,27 @@ def main(base_config_path: str, model_config_path: str):
         drop_last=True,
     )
 
+    anchors = model_config["priors"]["anchors"]
+
+    # number of anchors per scale
+    num_anchors = len(anchors[0])
+
+    # strip away the outer list to make it a 2d python list
+    anchors = [anchor for anchor_scale in anchors for anchor in anchor_scale]
+
     # Initalize the detector backbone; typically some feature extractor
-    backbone = backbone_map[model_config["backbone"]["name"]](
-        pretrain=model_config["backbone"]["pretrained"],
-        remove_top=model_config["backbone"]["remove_top"],
-    )
+    backbone_name = model_config["backbone"]["name"]
+    if backbone_name in model_config["backbone"]:
+        backbone_params = model_config["backbone"][backbone_name]
+    else:
+        backbone_params = {}
+    backbone = backbone_map[backbone_name](**backbone_params)
 
     # detector args
     model_components = {
         "backbone": backbone,
         "num_classes": dataset_test.num_classes,
-        **model_config["priors"],
+        "anchors": anchors,
     }
 
     # Initialize detection model and load its state_dict

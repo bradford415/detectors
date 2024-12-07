@@ -40,6 +40,8 @@ class Yolov3Loss(nn.Module):
             preds, targets, model
         )
 
+        #breakpoint()
+
         # We use binary cross-entropy and not regular cross-entropy because the classes are not mutually exclusive
         # e.g., some datasets may contains labels that are hierarchical or related, e.g., woman and person;
         #       so each output cell could have more than 1 class to be true; correspondingly, we also apply binary cross-entropy
@@ -159,7 +161,7 @@ class Yolov3Loss(nn.Module):
 
         targ_cls, targ_box, indices, anch = [], [], [], []
 
-        # a tensor used as a placeholder to store the targets (img id, class, x, y, w, h, anchor id)
+        # TODO: also write the purpose of gain; a tensor used as a placeholder to store the targets (img id, class, x, y, w, h, anchor id)
         gain = torch.ones(7, device=self.device)  # normalized to gridspace gain
 
         # tensor that iterates 0-2 along rows and repeats along columns (num_anchors, num_targets)
@@ -185,8 +187,8 @@ class Yolov3Loss(nn.Module):
             ny, nx = torch.tensor(preds[i].shape)[[2, 3]]
 
             # extract the yolo grid height and width (ny, nx) to the gain tensor for this layer; NOTE: training pred shape (b, num_anchors, ny, nx, (5+num_classes))
-            # gain[2:6] = torch.tensor(preds[i].shape)[[3, 2, 3, 2]]  # xyxy gain
-            gain[2:6] = torch.Tensor([yolo_layer.stride] * 4)
+            gain[2:6] = torch.tensor(preds[i].shape)[[3, 2, 3, 2]]  # xyxy gain
+            #gain[2:6] = torch.Tensor([yolo_layer.stride] * 4)
 
             # scale targets by the grid spatial dims; this will put them in the yolo grid coordinate system
             # NOTE: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/1d621c8489e22c76ceb93bb2397ac6c8dfb5ceb7/pytorchyolo/utils/transforms.py#L56
@@ -194,18 +196,19 @@ class Yolov3Loss(nn.Module):
             #       therefore to scale the labels to the grid size you need to multiply by the number cells;
             #       since we keep the original label sizes in this implementation, we need to divide by the stride;
             #       this should be equivalent
-            scaled_targets = targets / gain
+            #scaled_targets = targets / gain
+            scaled_targets = targets * gain
 
             # if targets exist
             if num_targets:
-                # calculate the ratio between the scaled targets and anchors
-                targ_anch_ratio = scaled_targets[:, :, 4:6] / anchors[:, None, :]
+                # calculate the ratio between the scaled targets and anchors (wh)
+                targ_anch_ratio = scaled_targets[:, :, 4:6] / anchors[:, None]
 
                 # select the ratios that have the highest divergence in any axis and check if the ratio is less than 4;
                 # inverting the ratio with 1/targ_anch_ratio considers the case where the target w/h is smaller than the anchors
                 # by a factor of anchor_t so even if the ratio is less than the threshold it can still be
                 # a factor of anchor_t smaller.
-                anchor_t = 4  # TODO put this in the config
+                anchor_t = 4.0  # TODO put this in the config
 
                 ratio_thresh = (
                     torch.max(targ_anch_ratio, 1.0 / targ_anch_ratio).max(dim=2)[0]
@@ -226,7 +229,8 @@ class Yolov3Loss(nn.Module):
             grid_xy = scaled_targets[:, 2:4]  # grid cx, cy
             grid_wh = scaled_targets[:, 4:6]  # grid wh
 
-            # Cast to int to get a cell index e.g., 1.2 gets associated to cell 1
+            # Cast to int to get a cell index; e.g., 1.2 gets associated to cell 1
+            # NOTE: yolov3 in ultralyitcs duplicates the targets by 5 and creates 4 offsets (-0.5 in every direction); this is not implemented here
             grid_ij = grid_xy.long()
 
             # Isolate x and y index dimensions
@@ -240,8 +244,8 @@ class Yolov3Loss(nn.Module):
                 (
                     image_index,
                     anch_inds,
-                    grid_j.clamp_(0, ny.long() - 1),
-                    grid_i.clamp_(0, nx.long() - 1),
+                    grid_j.clamp_(0, gain[3].long() - 1),
+                    grid_i.clamp_(0, gain[2].long() - 1),
                 )
             )
 

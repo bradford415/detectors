@@ -13,7 +13,7 @@ def non_max_suppression(
     """Performs Non-Maximum Suppression (NMS) on inference results
 
     Args:
-        predictions: Model output predictions (B, num_preds, num_class+5); num_preds is the number of
+        predictions:TODO: this is wrong; Model output predictions (B, num_preds, num_class+5); num_preds is the number of
                      predictions across across all output scales; predictions from yolo are (cx, cy, w, h)
                      and are converted to (tl_x, tl_y, br_x, br_y) in this function
 
@@ -22,14 +22,14 @@ def non_max_suppression(
         len(output) = batch_size and each element has shape (max_nms, 6)
         where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
     """
-
+    #breakpoint()
     assert len(predictions.shape) == 3
 
     nc = predictions.shape[2] - 5  # number of classes
 
     # Settings
     # (pixels) minimum and maximum box width and height
-    max_wh = 4096  # 64*64
+    max_wh = 7680 #4096  # 64*64
     max_det = 300  # maximum number of detections per image
     max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
     time_limit = 1.0  # seconds to quit after
@@ -43,7 +43,7 @@ def non_max_suppression(
         # Apply constraints
         # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
 
-        # This thresholds the prediction by their objectness; commenting this out for now
+        # This thresholds the prediction by their objectness;
         box_pred = box_pred[box_pred[..., 4] > conf_thres]  # confidence
 
         # If none remain process next image
@@ -108,8 +108,6 @@ def non_max_suppression(
         # Limit detections if there are more than max_det detection
         if nms_indices.shape[0] > max_det:
             nms_indices = nms_indices[:max_det]
-
-        ########### TODO: Should probably change the yolo layer to not chagne bbox format and return the full tensor, not objectness*cls_conf separately
 
         output[image_index] = box_pred[nms_indices].detach().cpu()
 

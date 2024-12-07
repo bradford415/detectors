@@ -21,6 +21,7 @@ def evaluate(
     model: nn.Module,
     dataloader_test: Iterable,
     class_names: List,
+    img_size: int = 416,
     output_path: Optional[str] = None,
     device: torch.device = torch.device("cpu"),
 ) -> Tuple[Tuple, List]:
@@ -50,11 +51,13 @@ def evaluate(
     ):
         # NOTE: I don't think we need to move targets to gpu during eval
         samples = samples.to(device)
-        #breakpoint()
 
         # Extract target labels and convert target boxes to xyxy
         labels += targets[:, 1].tolist()
+
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
+        targets[:, 2:] *= img_size
+
         # targets = targets.to(device)
 
         # # Extract object labels from all samples in the batch into a 1d python list
@@ -67,13 +70,16 @@ def evaluate(
         #     target["boxes"] = cxcywh_to_xyxy(target["boxes"])
 
         # (b, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
+
         predictions = model(samples)
+        #breakpoint()
+
 
         # Transfer preds to CPU for post processing
         # predictions = misc.to_cpu(predictions)
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
-        # list (b,) of tensor predictions (max_nms_preds, 6)
+        # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds

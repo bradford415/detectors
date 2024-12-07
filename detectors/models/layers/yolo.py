@@ -429,7 +429,7 @@ class YoloLayerNew(nn.Module):
         self.num_classes = num_classes
 
         # The number of outputs per anchor
-        self.num_output = num_classes + 5
+        self.num_output = 5 + num_classes
 
         self.num_anchors = len(anchors)
 
@@ -474,6 +474,8 @@ class YoloLayerNew(nn.Module):
         stride = img_size // head_output.shape[2]
         self.stride = stride
 
+        assert stride in {8, 16, 32}
+
         # ny & nx are the height and width of the grid i.e., the final downsample feature at a scale
         batch_size, _, ny, nx = head_output.shape
 
@@ -486,6 +488,7 @@ class YoloLayerNew(nn.Module):
 
         # During inference
         if not self.training:
+            #breakpoint()
             if self.grid.shape[2:4] != head_output.shape[2:4]:
                 # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
                 self.grid = self._make_grid(nx, ny).to(head_output)

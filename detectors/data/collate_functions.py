@@ -1,6 +1,12 @@
 from typing import Dict, Tuple
 
 import torch
+from torch.nn import functional as F
+
+
+def resize(image, size):
+    image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
+    return image
 
 
 def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:
@@ -17,7 +23,10 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
     # Convert a batch of images and annoations [(image, annoations), (image, annoations), ...]
     # to (image, image), (annotations, annotations), ... ; this operation is called iterable unpacking
     images, targets, annotations = zip(*batch)  # images (C, H, W)
-
+    
+    # Resize images to input shape
+    images = torch.stack([resize(img, 416) for img in images])
+    
     # The below padding method is from the DETR repo here:
     # https://github.com/facebookresearch/detr/blob/29901c51d7fe8712168b8d0d64351170bc0f83e0/util/misc.py#L307
 
