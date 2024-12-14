@@ -34,8 +34,8 @@ class PreprocessCoco:
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
             3. converts bboxes from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]; this is done to perform transforms
-               - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h]; this happens
-                       after PreprocessCoco() is called. 
+               - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h] and normalized by image size;
+                       this happensafter PreprocessCoco() is called.
         Args:
             image: singular PIL image
             target dictionary with keys image_id and annotations
@@ -58,7 +58,7 @@ class PreprocessCoco:
         # guard against no boxes via resizing (not really sure what this means)
         boxes = torch.as_tensor(boxes, dtype=torch.float32).reshape(-1, 4)
 
-        # Convert w & h to br_x & br_y: [tl_x, tl_y, w, h] -> [tl_x, tl_y, tl_x + w, tl_y + h]
+        # Convert w & h to br_x & br_y: [tl_x, tl_y, w, h] -> [tl_x, tl_y, br_x, br_y]
         boxes[:, 2:] += boxes[:, :2]
 
         # Clip the the x and y coordinates to the image size; guards against boxes being larger than image

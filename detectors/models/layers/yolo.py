@@ -488,7 +488,7 @@ class YoloLayerNew(nn.Module):
 
         # During inference
         if not self.training:
-            #breakpoint()
+            # breakpoint()
             if self.grid.shape[2:4] != head_output.shape[2:4]:
                 # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
                 self.grid = self._make_grid(nx, ny).to(head_output)

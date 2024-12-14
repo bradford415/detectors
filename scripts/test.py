@@ -12,9 +12,9 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_ds import build_coco
 from detectors.data.collate_functions import collate_fn
 from detectors.evaluate import evaluate, load_model_checkpoint
+from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
-from detectors.models import Yolov3, Yolov4
 from detectors.utils import reproduce
 from detectors.visualize import plot_all_detections
 
@@ -50,7 +50,7 @@ def main(base_config_path: str, model_config_path: str):
     )
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "testing.log"
-    
+
     # Configure logger that prints to a log file and stdout
     logging.basicConfig(
         level=logging.INFO,
@@ -139,9 +139,9 @@ def main(base_config_path: str, model_config_path: str):
     batch_metrics, image_detections = evaluate(
         model, dataloader_test, dataset_test.class_names, **evaluation_args
     )
-    
+
     save_dir = output_path / "test"
-    
+
     if base_config["plot_detections"]:
         plot_all_detections(
             image_detections, classes=dataset_test.class_names, output_dir=save_dir

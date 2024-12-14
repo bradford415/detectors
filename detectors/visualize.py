@@ -18,7 +18,11 @@ matplotlib.use("Agg")
 
 
 def visualize_norm_img_tensors(
-    img_tensors: torch.Tensor, targets: list[dict], classes: list[str], output_dir: Path, annotations
+    img_tensors: torch.Tensor,
+    targets: list[dict],
+    classes: list[str],
+    output_dir: Path,
+    annotations,
 ):
     """Visualizes the boxes of augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
@@ -29,7 +33,7 @@ def visualize_norm_img_tensors(
         classes: list of unique class names by label index
         output_dir: Path to save the outputs
     """
-    #assert img_tensors.shape[0] == targets.shape[0]
+    # assert img_tensors.shape[0] == targets.shape[0]
 
     un_norm = Unnormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
@@ -40,9 +44,9 @@ def visualize_norm_img_tensors(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     labels = []
-    #for target in targets:
+    # for target in targets:
     #    labels += target["labels"]
-    unique_classes = np.unique(np.array(targets[:,1]))
+    unique_classes = np.unique(np.array(targets[:, 1]))
     num_unique_classes = len(unique_classes)
 
     cmap = plt.get_cmap("tab20b")
@@ -60,7 +64,7 @@ def visualize_norm_img_tensors(
         ax.imshow(image)
 
         for img_idx, label, cx, cy, w, h in targets[targets[:, 0] == img_index]:
-            
+
             # box coords are normalize [0-1] so we need to scale them to the input size
             cx *= img_w
             cy *= img_h

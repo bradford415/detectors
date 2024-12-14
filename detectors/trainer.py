@@ -79,7 +79,7 @@ class Trainer:
             )
 
         total_train_start_time = time.time()
-        
+
         last_best_path = None
 
         # Visualize the first batch for each dataloader; manually verifies data augmentation correctness
@@ -139,7 +139,7 @@ class Trainer:
                 self._save_model(
                     model, optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
                 )
-                
+
                 # delete the previous best mAP model's checkpoint
                 if last_best_path is not None:
                     last_best_path.unlink(missing_ok=True)
@@ -310,5 +310,5 @@ class Trainer:
             targets,
             class_names,
             self.output_dir / "aug" / f"{split}-images",
-            annoations
+            annoations,
         )

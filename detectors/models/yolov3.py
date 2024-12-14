@@ -64,11 +64,11 @@ class Yolov3Head(nn.Module):
         """
         super().__init__()
 
-        #darknet_pred_channels = 
+        # darknet_pred_channels =
 
         assert len(anchors) % 3 == 0
 
-        pred_chs = (5 + num_classes) * 3 # 3 = num_anchors
+        pred_chs = (5 + num_classes) * 3  # 3 = num_anchors
 
         # in_channels comes from the out_ch of DarkNet53
         self.layers = nn.ModuleList(
@@ -101,7 +101,7 @@ class Yolov3Head(nn.Module):
                     pred_chs=pred_chs,
                     scale_anchors=anchors[6:],
                     num_classes=num_classes,
-                ), 
+                ),
                 ConvNormLRelu(
                     in_channels=512,  # input from the output of the module before ScalePrediction; [route] layers=-4 in yolov3.cfg
                     out_channels=256,
@@ -222,7 +222,7 @@ class Yolov3Head(nn.Module):
 
         yolo_outputs = []
         for layer in self.layers:
-            #breakpoint()
+            # breakpoint()
             if isinstance(layer, ScalePrediction):
                 yolo_outputs.append(layer(x, img_size))
                 continue
@@ -266,7 +266,7 @@ class Yolov3(nn.Module):
         img_size = x.shape[2]  # used to calcuate the output strice
 
         out, inter2, inter1 = self.backbone(x)
-        #breakpoint()
+        # breakpoint()
         yolo_outputs = self.head(out, inter2, inter1, img_size=img_size)
 
         # during inference, concatentate all predictions from every scale

@@ -28,7 +28,7 @@ def non_max_suppression(
 
     # Settings
     # (pixels) minimum and maximum box width and height
-    max_wh = 7680 #4096  # 64*64
+    max_wh = 7680  # 4096  # 64*64
     max_det = 300  # maximum number of detections per image
     max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
     time_limit = 1.0  # seconds to quit after
@@ -93,7 +93,7 @@ def non_max_suppression(
             continue
         elif num_boxes > max_nms:  # excess boxes
             # sort by confidence and remove excess boxes
-            box_pred = box_pred[box_pred[:, 4].argsort(descending=True)[:max_nms]] 
+            box_pred = box_pred[box_pred[:, 4].argsort(descending=True)[:max_nms]]
 
         # Batched NMS
         c = box_pred[:, 5:6] * max_wh  # classes

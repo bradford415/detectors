@@ -277,14 +277,14 @@ class ResNet(nn.Module):
         block2 = self.layer2(block1)
         block3 = self.layer3(block2)
         out = self.layer4(block3)
-        #breakpoint()
+        # breakpoint()
 
         if not self.remove_top:
             out = self.avgpool(out)
             out = torch.flatten(x, 1)
             out = self.fc(out)
 
-        #return block1, block2, block3, out
+        # return block1, block2, block3, out
         return out, block3, block2
 
     def forward(self, x: Tensor) -> Tensor:

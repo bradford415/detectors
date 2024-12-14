@@ -40,7 +40,6 @@ class Yolov3Loss(nn.Module):
             preds, targets, model
         )
 
-
         # We use binary cross-entropy and not regular cross-entropy because the classes are not mutually exclusive
         # e.g., some datasets may contains labels that are hierarchical or related, e.g., woman and person;
         #       so each output cell could have more than 1 class to be true; correspondingly, we also apply binary cross-entropy
@@ -86,7 +85,7 @@ class Yolov3Loss(nn.Module):
                 # build box from scaled predictions; (num_objects, 4)
                 pbox = torch.cat((p_xy, p_wh), 1)
 
-                # Calculate CIoU or GIoU for each target with te predicted box for its cell + anchor; transposed to upack xywh easily 
+                # Calculate CIoU or GIoU for each target with te predicted box for its cell + anchor; transposed to upack xywh easily
                 iou = bbox_iou_loss(
                     pbox.T, targ_box[layer_index], x1y1x2y2=False, CIoU=True
                 )
@@ -130,9 +129,7 @@ class Yolov3Loss(nn.Module):
 
         return loss, torch.cat((lbox, lobj, lcls, loss)).detach().cpu()
 
-    def _build_targets(
-        self, preds, targets, model
-    ) -> tuple[
+    def _build_targets(self, preds, targets, model) -> tuple[
         list[torch.Tensor],
         list[torch.Tensor],
         list[tuple[torch.Tensor]],
@@ -187,7 +184,7 @@ class Yolov3Loss(nn.Module):
 
             # extract the yolo grid height and width (ny, nx) to the gain tensor for this layer; NOTE: training pred shape (b, num_anchors, ny, nx, (5+num_classes))
             gain[2:6] = torch.tensor(preds[i].shape)[[3, 2, 3, 2]]  # xyxy gain
-            #gain[2:6] = torch.Tensor([yolo_layer.stride] * 4)
+            # gain[2:6] = torch.Tensor([yolo_layer.stride] * 4)
 
             # scale targets by the grid spatial dims; this will put them in the yolo grid coordinate system
             # NOTE: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/1d621c8489e22c76ceb93bb2397ac6c8dfb5ceb7/pytorchyolo/utils/transforms.py#L56
@@ -195,7 +192,7 @@ class Yolov3Loss(nn.Module):
             #       therefore to scale the labels to the grid size you need to multiply by the number cells;
             #       since we keep the original label sizes in this implementation, we need to divide by the stride;
             #       this should be equivalent
-            #scaled_targets = targets / gain
+            # scaled_targets = targets / gain
             scaled_targets = targets * gain
 
             # if targets exist

@@ -4,6 +4,7 @@ import contextlib
 import os
 from pathlib import Path
 
+import albumentations as A
 import numpy as np
 import torch
 import torch.utils.data
@@ -129,21 +130,74 @@ def make_coco_transforms(dataset_split):
         [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
     )
 
-    scales = [1024]
-
     if dataset_split == "train":
         return T.Compose(
             [
-                #T.RandomHorizontalFlip(),
-                #T.RandomResize(scales),
-                #T.CenterCrop((512, 512)),
+                # T.RandomHorizontalFlip(),
+                # T.RandomResize(scales),
+                # T.CenterCrop((512, 512)),
                 normalize,
             ]
         )
     elif dataset_split == "val":
         return T.Compose(
             [
-                #T.RandomResize([512]),
+                # T.RandomResize([512]),
+                normalize,
+            ]
+        )
+    elif dataset_split == "test":
+        return T.Compose(
+            [
+                normalize,
+            ]
+        )
+    else:
+        raise ValueError(f"unknown dataset split {dataset_split}")
+
+
+def make_coco_transforms_album(dataset_split):
+    """Initialize transforms for the coco dataset using the Albumentations library
+
+    Args:
+        dataset_split: which dataset split to use; `train` or `val`
+    """
+
+    normalize = T.Compose(
+        [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
+    )
+
+    if dataset_split == "train":
+        album_transforms = A.Compose(
+            [
+                # # Rescale an image so that maximum side is equal to image_size
+                # A.LongestMaxSize(max_size=image_size),
+                # # Pad remaining areas with zeros
+                # A.PadIfNeeded(
+                #     min_height=image_size, min_width=image_size, border_mode=cv2.BORDER_CONSTANT
+                # ),
+                A.ColorJitter(
+                    brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5, p=0.5
+                ),
+                A.HorizontalFlip(p=0.5),
+            ],
+            bbox_params=A.BboxParams(
+                format="pascal_voc", min_visibility=0.0, label_fields=[]
+            ),
+        )
+        return T.Compose(
+            [
+                # T.RandomHorizontalFlip(),
+                # T.RandomResize(scales),
+                # T.CenterCrop((512, 512)),
+                album_transforms,
+                normalize,
+            ]
+        )
+    elif dataset_split == "val":
+        return T.Compose(
+            [
+                # T.RandomResize([512]),
                 normalize,
             ]
         )

@@ -1,7 +1,7 @@
 # Utility functions to reproduce the results from experimentss
 import json
-import random
 import logging
+import random
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Dict
