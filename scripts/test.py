@@ -141,9 +141,11 @@ def main(base_config_path: str, model_config_path: str):
     )
     
     save_dir = output_path / "test"
-    plot_all_detections(
-        image_detections, classes=dataset_test.class_names, output_dir=save_dir
-    )
+    
+    if base_config["plot_detections"]:
+        plot_all_detections(
+            image_detections, classes=dataset_test.class_names, output_dir=save_dir
+        )
 
 
 if __name__ == "__main__":

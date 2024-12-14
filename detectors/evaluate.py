@@ -80,8 +80,8 @@ def evaluate(
         # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
 
-        nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
-        #nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
+        #nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
+        nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds
 
         ################### START HERE COMPARE WITH ULTRALYTICS ################

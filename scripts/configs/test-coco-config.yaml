@@ -3,7 +3,7 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: True
+dev_mode: False
 
 # Base directory for output files; do not change this 
 output_dir: "output/test"
@@ -13,6 +13,9 @@ exp_name: "development"
 
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetection"
+
+# Whether to plot the predicted bounding boxes on the test set; if False only the AP scores are shown
+plot_detections: True
 
 # Parameters for the dataset class
 dataset:
