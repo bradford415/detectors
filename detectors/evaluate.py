@@ -81,8 +81,12 @@ def evaluate(
         # TODO: define these thresholds in the config file under postprocessing maybe?
         # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
-        nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
+        #breakpoint()
+        nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
+        #nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds
+
+        ################### START HERE COMPARE WITH ULTRALYTICS ################
 
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)

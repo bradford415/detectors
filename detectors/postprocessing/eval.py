@@ -174,6 +174,7 @@ def get_batch_statistics(
             2. a tensor of class confidences (num_preds,)
             3. a tensor of the pred labels (num_preds,)
     """
+    #breakpoint()
     batch_metrics = []
 
     # Loop through each image detection

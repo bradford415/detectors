@@ -79,6 +79,8 @@ class Trainer:
             )
 
         total_train_start_time = time.time()
+        
+        last_best_path = None
 
         # Visualize the first batch for each dataloader; manually verifies data augmentation correctness
         self._visualize_batch(dataloader_train, "train", class_names)
@@ -122,12 +124,12 @@ class Trainer:
                 )
 
             # Save and overwrite the checkpoint with the highest mAP
-            if mAP > best_ap:
+            if round(mAP, 4) > round(best_ap, 4):
                 best_ap = mAP
 
                 mAP_str = f"{mAP*100:.2f}".replace(".", "-")
-                ckpt_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
-                ckpt_path.parents[0].mkdir(parents=True, exist_ok=True)
+                best_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
+                best_path.parents[0].mkdir(parents=True, exist_ok=True)
 
                 log.info(
                     "new best mAP of %.2f found at epoch %d; saving checkpoint",
@@ -135,8 +137,13 @@ class Trainer:
                     epoch,
                 )
                 self._save_model(
-                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
+                    model, optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
                 )
+                
+                # delete the previous best mAP model's checkpoint
+                if last_best_path is not None:
+                    last_best_path.unlink(missing_ok=True)
+                last_best_path = best_path
 
             # Uncomment to visualize validation detections
             # save_dir = self.output_dir / "validation" / f"epoch{epoch}"

@@ -28,7 +28,7 @@ test:
   batch_size: 2
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: /home/bselee/programming/detectors/output/train/development/2024_12_06-12_05_08_AM/checkpoints/best_mAP_0-12.pt #"/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
+  checkpoint_path: /home/bselee/programming/detectors/output/train/development/2024_12_06-09_41_12_PM/checkpoints/best_mAP_0-41.pt #"/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
 
 validation:
   batch_size: 4

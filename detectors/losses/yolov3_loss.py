@@ -87,7 +87,7 @@ class Yolov3Loss(nn.Module):
                 # build box from scaled predictions; (num_objects, 4)
                 pbox = torch.cat((p_xy, p_wh), 1)
 
-                # Calculate CIoU or GIoU for each target with te predicted box for its cell + anchor
+                # Calculate CIoU or GIoU for each target with te predicted box for its cell + anchor; transposed to upack xywh easily 
                 iou = bbox_iou_loss(
                     pbox.T, targ_box[layer_index], x1y1x2y2=False, CIoU=True
                 )

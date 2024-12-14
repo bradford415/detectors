@@ -22,7 +22,6 @@ def non_max_suppression(
         len(output) = batch_size and each element has shape (max_nms, 6)
         where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
     """
-    #breakpoint()
     assert len(predictions.shape) == 3
 
     nc = predictions.shape[2] - 5  # number of classes
@@ -93,8 +92,8 @@ def non_max_suppression(
         if not num_boxes:  # no boxes
             continue
         elif num_boxes > max_nms:  # excess boxes
-            # sort by confidence
-            box_pred = box_pred[box_pred[:, 4].argsort(descending=True)[:max_nms]]
+            # sort by confidence and remove excess boxes
+            box_pred = box_pred[box_pred[:, 4].argsort(descending=True)[:max_nms]] 
 
         # Batched NMS
         c = box_pred[:, 5:6] * max_wh  # classes

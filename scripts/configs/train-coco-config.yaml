@@ -3,7 +3,7 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: True
+dev_mode: False
 
 # Base directory for output files; do not change this 
 output_dir: "output/train"
@@ -33,18 +33,18 @@ train:
   # Configurations for learning parameters such as the optmizier and lr scheduler
   learning_config: "learning_config_1"
 
-  batch_size: 8
+  batch_size: 4
 
   # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
   start_epoch: 1
   epochs: 200
 
   # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-  ckpt_epochs: 10
+  ckpt_epochs: 5
 
   # Path of weights file (.pt) to resume training; 
   # use `null` to train a new model from scratch
-  checkpoint_path: #"/home/bselee/programming/detectors/output/train/development/2024_11_27-09_19_09_PM/checkpoints/checkpoint0020.pt"
+  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2024_12_11-10_04_42_PM/checkpoints/checkpoint0035.pt" #"/home/bselee/programming/detectors/output/train/development/2024_11_27-09_19_09_PM/checkpoints/checkpoint0020.pt"
 
 validation:
   batch_size: 4
