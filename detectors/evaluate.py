@@ -52,8 +52,9 @@ def evaluate(
         # NOTE: I don't think we need to move targets to gpu during eval
         samples = samples.to(device)
 
-        # Extract target labels and convert target boxes to xyxy
+        # Extract target labels and convert target boxes to xyxy; extract image paths for visualization
         labels += targets[:, 1].tolist()
+        image_paths.append(target_meta[0]["image_path"])
 
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
         targets[:, 2:] *= img_size
@@ -64,7 +65,6 @@ def evaluate(
         # for target in targets:
         #     # extract labels (b*labels_per_img,) and image paths for visualization
         #     labels += target["labels"].tolist()
-        #     image_paths.append(target["image_path"])
 
         #     # convert bbox yolo format to xyxy
         #     target["boxes"] = cxcywh_to_xyxy(target["boxes"])
@@ -72,8 +72,6 @@ def evaluate(
         # (b, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
 
         predictions = model(samples)
-        #breakpoint()
-
 
         # Transfer preds to CPU for post processing
         # predictions = misc.to_cpu(predictions)
@@ -81,7 +79,7 @@ def evaluate(
         # TODO: define these thresholds in the config file under postprocessing maybe?
         # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
-        #breakpoint()
+
         nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
         #nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds
@@ -105,7 +103,7 @@ def evaluate(
         true_positives.ndim == 1
         and true_positives.shape == pred_scores.shape == pred_labels.shape
     )
-    #breakpoint()
+
     metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
     print_eval_stats(metrics_output, class_names, verbose=True)

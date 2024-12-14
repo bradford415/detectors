@@ -139,7 +139,7 @@ def main(base_config_path: str, model_config_path: str):
     batch_metrics, image_detections = evaluate(
         model, dataloader_test, dataset_test.class_names, **evaluation_args
     )
-
+    
     save_dir = output_path / "test"
     plot_all_detections(
         image_detections, classes=dataset_test.class_names, output_dir=save_dir

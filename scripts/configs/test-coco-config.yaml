@@ -25,10 +25,10 @@ dataset:
 
 test:
 
-  batch_size: 2
+  batch_size: 4
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: /home/bselee/programming/detectors/output/train/development/2024_12_06-09_41_12_PM/checkpoints/best_mAP_0-41.pt #"/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
+  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2024_12_12-09_25_42_PM/checkpoints/best_mAP_0-78.pt" #"/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
 
 validation:
   batch_size: 4

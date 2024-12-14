@@ -40,7 +40,6 @@ class Yolov3Loss(nn.Module):
             preds, targets, model
         )
 
-        #breakpoint()
 
         # We use binary cross-entropy and not regular cross-entropy because the classes are not mutually exclusive
         # e.g., some datasets may contains labels that are hierarchical or related, e.g., woman and person;

@@ -35,7 +35,6 @@ def burnin_schedule_modified(i):
     After steps[1] number of steps, the learning rate is multiplied by a factor of scales[1]
     
 
-
     Mofidied from: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/b139d49a99b8866d8d4a7cf75a80b1d982abf6f7/pytorchyolo/train.py#L173
 
     Args:
