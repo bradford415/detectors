@@ -219,7 +219,6 @@ def make_coco_transforms_album(dataset_split):
     elif dataset_split == "val":
         return A.Compose(
             [
-                # T.RandomResize([512]),
                 normalize_album,
             ],
             bbox_params=A.BboxParams(

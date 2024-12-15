@@ -11,7 +11,7 @@ from torch.utils import data
 
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.utils import misc
-from detectors.visualize import visualize_norm_img_tensors
+from detectors.visualize import visualize_norm_img_tensors, plot_loss
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +87,8 @@ class Trainer:
         self._visualize_batch(dataloader_val, "val", class_names)
 
         best_ap = 0.0
+        train_loss = []
+        val_loss = []
         for epoch in range(start_epoch, epochs + 1):
             model.train()
             ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
@@ -95,7 +97,7 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            self._train_one_epoch(
+            epoch_train_loss = self._train_one_epoch(
                 model,
                 criterion,
                 dataloader_train,
@@ -104,13 +106,20 @@ class Trainer:
                 epoch,
                 class_names,
             )
+            train_loss.append(epoch_train_loss)
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
+
+
+            ############# TODO MODIFY SO WE CAN PLOT THE VAL LOSS AS WELL #######################
+
             # TODO: probably save metrics output into csv
             metrics_output, image_detections = self._evaluate(
                 model, criterion, dataloader_val, class_names=class_names
             )
+
+            plot_loss(train_loss, save_dir=str(self.output_dir))
 
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
@@ -183,6 +192,7 @@ class Trainer:
             scheduler: Learning rate scheduler to update the learning rate
             epoch: Current epoch; used for logging purposes
         """
+        epoch_loss = []
         for steps, (samples, targets, annotations) in enumerate(dataloader_train, 1):
             samples = samples.to(self.device)
             targets = targets.to(self.device)
@@ -213,6 +223,8 @@ class Trainer:
             total_loss.backward()
             optimizer.step()
 
+            epoch_loss.append(total_loss.detach())
+
             # Calling scheduler step increments a counter which is passed to the lambda function;
             # if .step() is called after every batch, then it will pass the current step;
             # if .step() is called after every epoch, then it will pass the epoch number;
@@ -234,6 +246,8 @@ class Trainer:
                     total_loss.item(),
                 )
 
+        return np.array(epoch_loss).mean()
+
     @torch.no_grad()
     def _evaluate(
         self,
@@ -242,7 +256,7 @@ class Trainer:
         dataloader_val: Iterable,
         class_names: List,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """A single forward pass to evluate the val set after training an epoch
+        """A single forward pass to evaluate the val set after training an epoch
 
         Args:
             model: Model to train

@@ -190,3 +190,23 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
     plt.axis("off")
     fig.savefig(save_name, bbox_inches="tight", pad_inches=0.0)
     plt.close()
+
+
+#def plot_loss(train_loss: list[float], val_loss: list[float]=None, save_dir: str):
+def plot_loss(train_loss: list[float], save_dir: str):
+    """Plots the total loss"""
+    save_name = Path(save_dir) / "total_loss.jpg"
+
+    x = np.arange(len(train_loss)) + 1
+    fig, ax = plt.subplots(1)
+    ax.plot(x, train_loss)
+    #ax.plot(x, val_loss)
+
+
+    plt.legend(["train loss", "val loss"])
+    plt.title("total loss per epoch")
+    ax.set_xlabel("epoch")
+    ax.set_ylabel("loss")
+
+    fig.savefig(save_name, bbox_inches="tight")
+    plt.close()
