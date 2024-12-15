@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.utils.data
 import torchvision
+from albumentations.pytorch import ToTensorV2 
 from pycocotools import mask as coco_mask
 
 from detectors.data import transforms as T
@@ -103,14 +104,21 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
         image, target = self.prepare(image, target)
 
+        # For torchvision
+        # if self._transforms is not None:
+        #     image, target = self._transforms(image=image, bboxes=target)
+        
+        # For albumentations
         if self._transforms is not None:
             breakpoint()
-            image, target = self._transforms(image=image, bboxes=target)
+            augs = self._transforms(image=image, bboxes=target["boxes"])
+            image = augs["image"] 
+            bboxes = augs["bboxes"]
 
         # create a tensor of the sample index, object label and bboxes (num_objects, 6) where 6 = (sample_index, obj_class_id, cx, cy, h, w)
         # NOTE: the sample_index will be 0 for now but in the collate_fn it is filled in; this is the sample_index only within the batch
         target_tens = torch.zeros(len(target["labels"]), 6)
-        cls_boxes = torch.cat((target["labels"][:, None], target["boxes"]), dim=1)
+        cls_boxes = torch.cat((target["labels"][:, None], bboxes), dim=1)
         target_tens[:, 1:] = cls_boxes
 
         return image, target_tens, target
@@ -168,7 +176,11 @@ def make_coco_transforms_album(dataset_split):
         [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
     )
 
-    #normalize_album = 
+    normalize_album = A.Compose([        A.Normalize( 
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255
+        ), 
+        # Convert the image to PyTorch tensor 
+        ToTensorV2() ])
 
     if dataset_split == "train":
         album_transforms = A.Compose(
@@ -183,7 +195,7 @@ def make_coco_transforms_album(dataset_split):
                     brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5, p=0.5
                 ),
                 A.HorizontalFlip(p=0.5),
-                normalize,
+                normalize_album,
             ],
             bbox_params=A.BboxParams(
                 format="pascal_voc", min_visibility=0.0, label_fields=[]
