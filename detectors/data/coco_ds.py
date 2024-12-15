@@ -9,11 +9,12 @@ import numpy as np
 import torch
 import torch.utils.data
 import torchvision
-from albumentations.pytorch import ToTensorV2 
+from albumentations.pytorch import ToTensorV2
 from pycocotools import mask as coco_mask
 
 from detectors.data import transforms as T
 from detectors.data.coco_utils import PreprocessCoco, coco_stats
+from detectors.utils.box_ops import box_xyxy_to_cxcywh
 
 
 class CocoDetection(torchvision.datasets.CocoDetection):
@@ -107,13 +108,24 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         # For torchvision
         # if self._transforms is not None:
         #     image, target = self._transforms(image=image, bboxes=target)
-        
+
         # For albumentations
+        # Convert bounding boxes from pascal_voc format to Yolo format including normalize between [0, 1];
+
         if self._transforms is not None:
-            breakpoint()
-            augs = self._transforms(image=image, bboxes=target["boxes"])
-            image = augs["image"] 
-            bboxes = augs["bboxes"]
+            augs = self._transforms(
+                image=np.array(image), bboxes=target["boxes"].numpy()
+            )
+            image = augs["image"]
+
+            bboxes = torch.tensor(augs["bboxes"])
+
+            # tl_x, tl_y, br_x, br_y -> cx, cy, w, h
+            bboxes = box_xyxy_to_cxcywh(bboxes)
+
+            # Normalize boxes between [0, 1]
+            h, w = image.shape[-2:]
+            bboxes = bboxes / torch.tensor([w, h, w, h], dtype=torch.float32)
 
         # create a tensor of the sample index, object label and bboxes (num_objects, 6) where 6 = (sample_index, obj_class_id, cx, cy, h, w)
         # NOTE: the sample_index will be 0 for now but in the collate_fn it is filled in; this is the sample_index only within the batch
@@ -172,15 +184,17 @@ def make_coco_transforms_album(dataset_split):
         dataset_split: which dataset split to use; `train` or `val`
     """
 
-    normalize = T.Compose(
-        [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
+    normalize_album = A.Compose(
+        [
+            A.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+                max_pixel_value=255,
+            ),
+            # Convert the image to PyTorch tensor
+            ToTensorV2(),
+        ]
     )
-
-    normalize_album = A.Compose([        A.Normalize( 
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255
-        ), 
-        # Convert the image to PyTorch tensor 
-        ToTensorV2() ])
 
     if dataset_split == "train":
         album_transforms = A.Compose(
@@ -202,27 +216,24 @@ def make_coco_transforms_album(dataset_split):
             ),
         )
         return album_transforms
-        # return T.Compose(
-        #     [
-        #         # T.RandomHorizontalFlip(),
-        #         # T.RandomResize(scales),
-        #         # T.CenterCrop((512, 512)),
-        #         album_transforms,
-        #         normalize,
-        #     ]
-        #)
     elif dataset_split == "val":
-        return T.Compose(
+        return A.Compose(
             [
                 # T.RandomResize([512]),
-                normalize,
-            ]
+                normalize_album,
+            ],
+            bbox_params=A.BboxParams(
+                format="pascal_voc", min_visibility=0.0, label_fields=[]
+            ),
         )
     elif dataset_split == "test":
-        return T.Compose(
+        return A.Compose(
             [
-                normalize,
-            ]
+                normalize_album,
+            ],
+            bbox_params=A.BboxParams(
+                format="pascal_voc", min_visibility=0.0, label_fields=[]
+            ),
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")

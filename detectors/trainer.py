@@ -183,7 +183,7 @@ class Trainer:
             scheduler: Learning rate scheduler to update the learning rate
             epoch: Current epoch; used for logging purposes
         """
-        for steps, (samples, targets, targets_meta) in enumerate(dataloader_train, 1):
+        for steps, (samples, targets, annotations) in enumerate(dataloader_train, 1):
             samples = samples.to(self.device)
             targets = targets.to(self.device)
             # targets = [
@@ -304,8 +304,8 @@ class Trainer:
         if split not in valid_splits:
             raise ValueError("split must either be in valid_splits")
 
-        samples, targets, annotations = next(iter(dataloader))
-
+        dataiter = iter(dataloader)
+        samples, targets, annotations = next(dataiter)
         visualize_norm_img_tensors(
             samples,
             targets,

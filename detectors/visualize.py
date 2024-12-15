@@ -97,7 +97,6 @@ def visualize_norm_img_tensors(
         )
         plt.close()
 
-
     # Plot the original image to compare against the augmented images
     for img_idx, ann in enumerate(annotations):
         img_path = ann["image_path"]
