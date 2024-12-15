@@ -19,10 +19,10 @@ matplotlib.use("Agg")
 
 def visualize_norm_img_tensors(
     img_tensors: torch.Tensor,
-    targets: list[dict],
+    targets: torch.Tensor,
+    annotations: tuple[dict],
     classes: list[str],
     output_dir: Path,
-    annotations,
 ):
     """Visualizes the boxes of augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
@@ -37,15 +37,10 @@ def visualize_norm_img_tensors(
 
     un_norm = Unnormalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
-    # assert torch.max(img_tensors) <= 1.0
-
     img_tensors = to_cpu(img_tensors)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    labels = []
-    # for target in targets:
-    #    labels += target["labels"]
     unique_classes = np.unique(np.array(targets[:, 1]))
     num_unique_classes = len(unique_classes)
 
@@ -54,7 +49,7 @@ def visualize_norm_img_tensors(
     bbox_colors = random.sample(colors, num_unique_classes)
 
     for img_index, image in enumerate(img_tensors):
-        fig, ax = plt.subplots(1, 1)
+        fig, ax = plt.subplots(1)
 
         img_h, img_w = image.shape[1:]
 
@@ -65,7 +60,7 @@ def visualize_norm_img_tensors(
 
         for img_idx, label, cx, cy, w, h in targets[targets[:, 0] == img_index]:
 
-            # box coords are normalize [0-1] so we need to scale them to the input size
+            # box coords are normalize [0,1] so we need to scale them to the input size
             cx *= img_w
             cy *= img_h
             w *= img_w
@@ -96,7 +91,23 @@ def visualize_norm_img_tensors(
         # plt.gca().yaxis.set_major_locator(NullLocator())
         plt.axis("off")
         fig.savefig(
-            f"{output_dir}/image_tensor_{int(img_idx)}.png",
+            f"{output_dir}/augmented_{int(img_idx)}.png",
+            bbox_inches="tight",
+            pad_inches=0.0,
+        )
+        plt.close()
+
+
+    # Plot the original image to compare against the augmented images
+    for img_idx, ann in enumerate(annotations):
+        img_path = ann["image_path"]
+        image = np.array(Image.open(img_path).convert("RGB"))
+        fig, ax = plt.subplots(1)
+
+        ax.imshow(image)
+        plt.axis("off")
+        fig.savefig(
+            f"{output_dir}/original_{int(img_idx)}.png",
             bbox_inches="tight",
             pad_inches=0.0,
         )
@@ -145,41 +156,38 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
     cmap = plt.get_cmap("tab20b")
     colors = [cmap(i) for i in np.linspace(0, 1, num_unique_classes)]
     bbox_colors = random.sample(colors, num_unique_classes)
-    try:
-        for tl_x, tl_y, br_x, br_y, conf, cls_pred in detections:
-            # print(f"tl_x: {tl_x} tl_y: {tl_y} br_x: {br_x} br_y: {br_y} ")
-            # fig, ax = plt.subplots(1, 1)
+    for tl_x, tl_y, br_x, br_y, conf, cls_pred in detections:
+        # print(f"tl_x: {tl_x} tl_y: {tl_y} br_x: {br_x} br_y: {br_y} ")
+        # fig, ax = plt.subplots(1, 1)
 
-            if tl_x < -1000.0 or tl_y < -1000.0 or br_x > 10000.0 or br_y > 10000.0:
-                continue
+        if tl_x < -1000.0 or tl_y < -1000.0 or br_x > 10000.0 or br_y > 10000.0:
+            continue
 
-            box_width = br_x - tl_x
-            box_height = br_y - tl_y
+        box_width = br_x - tl_x
+        box_height = br_y - tl_y
 
-            color = bbox_colors[int(np.where(unique_classes == int(cls_pred))[0])]
+        color = bbox_colors[int(np.where(unique_classes == int(cls_pred))[0])]
 
-            # Create a Rectangle patch
-            bbox = patches.Rectangle(
-                (tl_x, tl_y),
-                box_width,
-                box_height,
-                linewidth=2,
-                edgecolor=color,
-                facecolor="none",
-            )
-            # Add the bbox to the plot
-            ax.add_patch(bbox)
-            plt.text(
-                tl_x,
-                tl_y,
-                s=f"{classes[int(cls_pred)]}: {conf:.2f}",
-                color="white",
-                verticalalignment="top",
-                bbox={"color": color, "pad": 0},
-            )
+        # Create a Rectangle patch
+        bbox = patches.Rectangle(
+            (tl_x, tl_y),
+            box_width,
+            box_height,
+            linewidth=2,
+            edgecolor=color,
+            facecolor="none",
+        )
+        # Add the bbox to the plot
+        ax.add_patch(bbox)
+        plt.text(
+            tl_x,
+            tl_y,
+            s=f"{classes[int(cls_pred)]}: {conf:.2f}",
+            color="white",
+            verticalalignment="top",
+            bbox={"color": color, "pad": 0},
+        )
 
-        plt.axis("off")
-        fig.savefig(save_name, bbox_inches="tight", pad_inches=0.0)
-        plt.close()
-    except:
-        breakpoint()
+    plt.axis("off")
+    fig.savefig(save_name, bbox_inches="tight", pad_inches=0.0)
+    plt.close()

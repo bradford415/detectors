@@ -104,7 +104,8 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         image, target = self.prepare(image, target)
 
         if self._transforms is not None:
-            image, target = self._transforms(image, target)
+            breakpoint()
+            image, target = self._transforms(image=image, bboxes=target)
 
         # create a tensor of the sample index, object label and bboxes (num_objects, 6) where 6 = (sample_index, obj_class_id, cx, cy, h, w)
         # NOTE: the sample_index will be 0 for now but in the collate_fn it is filled in; this is the sample_index only within the batch
@@ -167,6 +168,8 @@ def make_coco_transforms_album(dataset_split):
         [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
     )
 
+    #normalize_album = 
+
     if dataset_split == "train":
         album_transforms = A.Compose(
             [
@@ -180,20 +183,22 @@ def make_coco_transforms_album(dataset_split):
                     brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5, p=0.5
                 ),
                 A.HorizontalFlip(p=0.5),
+                normalize,
             ],
             bbox_params=A.BboxParams(
                 format="pascal_voc", min_visibility=0.0, label_fields=[]
             ),
         )
-        return T.Compose(
-            [
-                # T.RandomHorizontalFlip(),
-                # T.RandomResize(scales),
-                # T.CenterCrop((512, 512)),
-                album_transforms,
-                normalize,
-            ]
-        )
+        return album_transforms
+        # return T.Compose(
+        #     [
+        #         # T.RandomHorizontalFlip(),
+        #         # T.RandomResize(scales),
+        #         # T.CenterCrop((512, 512)),
+        #         album_transforms,
+        #         normalize,
+        #     ]
+        #)
     elif dataset_split == "val":
         return T.Compose(
             [
@@ -239,7 +244,7 @@ def build_coco(
         annotation_file = coco_root / "annotations" / "instances_test2017.json"
 
     # Create the data augmentation transforms
-    data_transforms = make_coco_transforms(dataset_split)
+    data_transforms = make_coco_transforms_album(dataset_split)
 
     dataset = CocoDetection(
         image_folder=images_dir,

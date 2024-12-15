@@ -304,11 +304,12 @@ class Trainer:
         if split not in valid_splits:
             raise ValueError("split must either be in valid_splits")
 
-        samples, targets, annoations = next(iter(dataloader))
+        samples, targets, annotations = next(iter(dataloader))
+
         visualize_norm_img_tensors(
             samples,
             targets,
+            annotations,
             class_names,
             self.output_dir / "aug" / f"{split}-images",
-            annoations,
         )
