@@ -2,7 +2,7 @@ import datetime
 import logging
 import tracemalloc
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Tuple, Optional
 
 import torch
 import yaml
@@ -249,7 +249,7 @@ def main(base_config_path: str, model_config_path):
 def _init_training_objects(
     model_params: Iterable,
     optimizer: str = "sgd",
-    scheduler: str = "step_lr",
+    scheduler: Optional[str] = "step_lr",
     learning_rate: float = 1e-4,
     weight_decay: float = 1e-4,
     lr_drop: int = 200,
@@ -257,9 +257,13 @@ def _init_training_objects(
     optimizer = optimizer_map[optimizer](
         model_params, lr=learning_rate, weight_decay=weight_decay
     )
-    lr_scheduler = scheduler_map[scheduler](
-        optimizer, schedulers.burnin_schedule_modified
-    )
+    
+    if scheduler is not None:
+        lr_scheduler = scheduler_map[scheduler](
+            optimizer, schedulers.burnin_schedule_modified
+        )
+    else:
+        lr_scheduler = None
 
     return optimizer, lr_scheduler
 

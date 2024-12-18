@@ -8,6 +8,8 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils import data
+from torch.optim.lr_scheduler import _LRScheduler
+
 
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.utils import misc
@@ -43,11 +45,11 @@ class Trainer:
         dataloader_train: data.DataLoader,
         dataloader_val: data.DataLoader,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
         class_names: list[str],
         start_epoch: int = 1,
         epochs: int = 100,
         ckpt_epochs: int = 10,
+        scheduler: Optional[_LRScheduler] = None,
         checkpoint_path: Optional[str] = None,
     ):
         """Trains a model
@@ -223,13 +225,14 @@ class Trainer:
             total_loss.backward()
             optimizer.step()
 
-            epoch_loss.append(total_loss.detach())
+            epoch_loss.append(total_loss.detach().cpu())
 
             # Calling scheduler step increments a counter which is passed to the lambda function;
             # if .step() is called after every batch, then it will pass the current step;
             # if .step() is called after every epoch, then it will pass the epoch number;
             # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
-            scheduler.step()
+            if scheduler is not None:
+                scheduler.step()
 
             if (steps) % 100 == 0:
                 log.info(
