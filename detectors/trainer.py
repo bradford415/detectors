@@ -38,6 +38,8 @@ class Trainer:
         self.output_dir = Path(output_dir)
         self.log_train_steps = log_train_steps
 
+        self.enable_amp =  True if not self.device.type == "mps" else False
+
     def train(
         self,
         model: nn.Module,
@@ -88,6 +90,8 @@ class Trainer:
         self._visualize_batch(dataloader_train, "train", class_names)
         self._visualize_batch(dataloader_val, "val", class_names)
 
+        scaler = torch.amp.GradScaler("mps")
+
         best_ap = 0.0
         train_loss = []
         val_loss = []
@@ -106,7 +110,7 @@ class Trainer:
                 optimizer,
                 scheduler,
                 epoch,
-                class_names,
+                scaler,
             )
             train_loss.append(epoch_train_loss)
 
@@ -121,7 +125,7 @@ class Trainer:
                 model, criterion, dataloader_val, class_names=class_names
             )
 
-            plot_loss(train_loss, save_dir=str(self.output_dir))
+            plot_loss(train_loss, save_dir=str())
 
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
@@ -139,7 +143,7 @@ class Trainer:
                 best_ap = mAP
 
                 mAP_str = f"{mAP*100:.2f}".replace(".", "-")
-                best_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
+                best_path =  self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
                 best_path.parents[0].mkdir(parents=True, exist_ok=True)
 
                 log.info(
@@ -157,7 +161,7 @@ class Trainer:
                 last_best_path = best_path
 
             # Uncomment to visualize validation detections
-            # save_dir = self.output_dir / "validation" / f"epoch{epoch}"
+            # save_dir =  / "validation" / f"epoch{epoch}"
             # plot_all_detections(image_detections, classes=class_names, output_dir=save_dir)
 
             # Current epoch time (train/val)
@@ -182,7 +186,8 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
-        class_names: List[str],
+        scaler: torch.amp
+
     ):
         """Train one epoch
 
@@ -208,22 +213,28 @@ class Trainer:
 
             optimizer.zero_grad()
 
-            # list of preds at all 3 scales;
-            # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
-            bbox_preds = model(samples)
+            with torch.autocast(device_type="mps", dtype=torch.float16, enabled=self.enable_amp):
+                # list of preds at all 3 scales;
+                # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
+                bbox_preds = model(samples)
 
-            # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-            #     bbox_preds, targets, model
-            # ) # yolov4
-            # loss_components = misc.to_cpu(
-            #     torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
-            # )
+                # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+                #     bbox_preds, targets, model
+                # ) # yolov4
+                # loss_components = misc.to_cpu(
+                #     torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
+                # )
 
-            total_loss, loss_components = criterion(bbox_preds, targets, model)
+                total_loss, loss_components = criterion(bbox_preds, targets, model)
 
             # Calculate gradients and updates weights
-            total_loss.backward()
-            optimizer.step()
+            if self.enable_amp:
+                scaler.scale(total_loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                total_loss.backward()
+                optimizer.step()
 
             epoch_loss.append(total_loss.detach().cpu())
 

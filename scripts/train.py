@@ -1,8 +1,9 @@
 import datetime
 import logging
-import tracemalloc
+import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple, Optional
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import torch
 import yaml
@@ -19,6 +20,7 @@ from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
 from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
+
 
 detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}
 

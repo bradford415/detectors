@@ -33,7 +33,7 @@ train:
   # Configurations for learning parameters such as the optmizier and lr scheduler
   learning_config: "learning_config_1"
 
-  batch_size: 4
+  batch_size: 16
 
   # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
   start_epoch: 1
