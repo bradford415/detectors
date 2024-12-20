@@ -213,7 +213,7 @@ class Trainer:
 
             optimizer.zero_grad()
 
-            with torch.autocast(device_type="mps", dtype=torch.float16, enabled=self.enable_amp):
+            with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=self.enable_amp):
                 # list of preds at all 3 scales;
                 # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
                 bbox_preds = model(samples)
