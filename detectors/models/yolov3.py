@@ -103,7 +103,7 @@ class Yolov3Head(nn.Module):
                     num_classes=num_classes,
                 ),
                 ConvNormLRelu(
-                    in_channels=512,  # input from the output of the module before ScalePrediction; [route] layers=-4 in yolov3.cfg
+                    in_channels=512,  # input comes from the output of the module before ScalePrediction; [route] layers=-4 in yolov3.cfg
                     out_channels=256,
                     kernel_size=1,
                     stride=1,
@@ -111,7 +111,7 @@ class Yolov3Head(nn.Module):
                 ),
                 Upsample(scale_factor=2),
                 ConvNormLRelu(
-                    in_channels=256,
+                    in_channels=768,
                     out_channels=256,
                     kernel_size=1,
                     stride=1,
@@ -160,7 +160,7 @@ class Yolov3Head(nn.Module):
                 ),
                 Upsample(scale_factor=2),
                 ConvNormLRelu(
-                    in_channels=128,
+                    in_channels=384,
                     out_channels=128,
                     kernel_size=1,
                     stride=1,
@@ -199,7 +199,7 @@ class Yolov3Head(nn.Module):
                     pred_chs=pred_chs,
                     scale_anchors=anchors[:3],
                     num_classes=num_classes,
-                ),  ########### START HERE and TEST
+                ),
             ]
         )
 
@@ -222,15 +222,16 @@ class Yolov3Head(nn.Module):
 
         yolo_outputs = []
         for layer in self.layers:
-            # breakpoint()
+
             if isinstance(layer, ScalePrediction):
                 yolo_outputs.append(layer(x, img_size))
                 continue
 
             x = layer(x)
 
-            # Upsample then concat the intermediate feature maps from DarkNet53
-            if isinstance(layer, nn.Upsample):
+            # Upsample then concat the intermediate feature maps from backbone
+            if isinstance(layer, Upsample):
+                #breakpoint()
                 x = torch.cat([x, route_connection.pop()], dim=1)
 
         return yolo_outputs
@@ -263,10 +264,10 @@ class Yolov3(nn.Module):
         Args:
             x: batch of input images (b, c, h , w)
         """
-        img_size = x.shape[2]  # used to calcuate the output strice
+        img_size = x.shape[2]  # used to calcuate the output stride
 
         out, inter2, inter1 = self.backbone(x)
-        # breakpoint()
+        #breakpoint()
         yolo_outputs = self.head(out, inter2, inter1, img_size=img_size)
 
         # during inference, concatentate all predictions from every scale

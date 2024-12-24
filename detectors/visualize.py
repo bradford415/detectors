@@ -192,7 +192,7 @@ def plot_detections(image_path: str, detections, classes: List[str], save_name: 
     plt.close()
 
 
-#def plot_loss(train_loss: list[float], val_loss: list[float]=None, save_dir: str):
+# def plot_loss(train_loss: list[float], val_loss: list[float]=None, save_dir: str):
 def plot_loss(train_loss: list[float], save_dir: str):
     """Plots the total loss"""
     save_name = Path(save_dir) / "total_loss.jpg"
@@ -200,8 +200,7 @@ def plot_loss(train_loss: list[float], save_dir: str):
     x = np.arange(len(train_loss)) + 1
     fig, ax = plt.subplots(1)
     ax.plot(x, train_loss)
-    #ax.plot(x, val_loss)
-
+    # ax.plot(x, val_loss)
 
     plt.legend(["train loss", "val loss"])
     plt.title("total loss per epoch")
@@ -210,3 +209,29 @@ def plot_loss(train_loss: list[float], save_dir: str):
 
     fig.savefig(save_name, bbox_inches="tight")
     plt.close()
+
+
+def visualize_batch(
+        self, dataloader: torch.utils.data.DataLoader, split: str, class_names: List[str]
+    ):
+        """Visualize a batch of images after data augmentation; sthis helps manually verify
+        the data augmentations are working as intended on the images and boxes
+
+        Args:
+            dataloader: Train or val dataloader
+            split: "train" or "val"
+            class_names: List of class names in the ontology
+        """
+        valid_splits = {"train", "val"}
+        if split not in valid_splits:
+            raise ValueError("split must either be in valid_splits")
+
+        dataiter = iter(dataloader)
+        samples, targets, annotations = next(dataiter)
+        visualize_norm_img_tensors(
+            samples,
+            targets,
+            annotations,
+            class_names,
+            self.output_dir / "aug" / f"{split}-images",
+        )

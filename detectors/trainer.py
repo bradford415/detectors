@@ -7,13 +7,12 @@ from typing import Iterable, List, Optional, Tuple
 import numpy as np
 import torch
 from torch import nn
-from torch.utils import data
 from torch.optim.lr_scheduler import _LRScheduler
-
+from torch.utils import data
 
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.utils import misc
-from detectors.visualize import visualize_norm_img_tensors, plot_loss
+from detectors.visualize import plot_loss, visualize_norm_img_tensors
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class Trainer:
         self.output_dir = Path(output_dir)
         self.log_train_steps = log_train_steps
 
-        self.enable_amp =  True if not self.device.type == "mps" else False
+        self.enable_amp = True if not self.device.type == "mps" else False
 
     def train(
         self,
@@ -86,11 +85,7 @@ class Trainer:
 
         last_best_path = None
 
-        # Visualize the first batch for each dataloader; manually verifies data augmentation correctness
-        self._visualize_batch(dataloader_train, "train", class_names)
-        self._visualize_batch(dataloader_val, "val", class_names)
-
-        scaler = torch.amp.GradScaler("mps")
+        scaler = torch.amp.GradScaler(self.deivce.type)
 
         best_ap = 0.0
         train_loss = []
@@ -117,7 +112,6 @@ class Trainer:
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
-
             ############# TODO MODIFY SO WE CAN PLOT THE VAL LOSS AS WELL #######################
 
             # TODO: probably save metrics output into csv
@@ -143,7 +137,7 @@ class Trainer:
                 best_ap = mAP
 
                 mAP_str = f"{mAP*100:.2f}".replace(".", "-")
-                best_path =  self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
+                best_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
                 best_path.parents[0].mkdir(parents=True, exist_ok=True)
 
                 log.info(
@@ -186,8 +180,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
-        scaler: torch.amp
-
+        scaler: torch.amp,
     ):
         """Train one epoch
 
@@ -213,7 +206,11 @@ class Trainer:
 
             optimizer.zero_grad()
 
-            with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=self.enable_amp):
+            with torch.autocast(
+                device_type=self.device.type,
+                dtype=torch.float16,
+                enabled=self.enable_amp,
+            ):
                 # list of preds at all 3 scales;
                 # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
                 bbox_preds = model(samples)
@@ -315,29 +312,4 @@ class Trainer:
         torch.save(
             save_dict,
             save_path,
-        )
-
-    def _visualize_batch(
-        self, dataloader: data.DataLoader, split: str, class_names: List[str]
-    ):
-        """Visualize a batch of images after data augmentation; sthis helps manually verify
-        the data augmentations are working as intended on the images and boxes
-
-        Args:
-            dataloader: Train or val dataloader
-            split: "train" or "val"
-            class_names: List of class names in the ontology
-        """
-        valid_splits = {"train", "val"}
-        if split not in valid_splits:
-            raise ValueError("split must either be in valid_splits")
-
-        dataiter = iter(dataloader)
-        samples, targets, annotations = next(dataiter)
-        visualize_norm_img_tensors(
-            samples,
-            targets,
-            annotations,
-            class_names,
-            self.output_dir / "aug" / f"{split}-images",
         )

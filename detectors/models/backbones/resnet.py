@@ -14,6 +14,10 @@ __all__ = [
 # From https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/master/network/backbone/resnet.py#L14
 model_urls = {
     "resnet18": "https://download.pytorch.org/models/resnet18-5c106cde.pth",
+    "resnet34": "https://download.pytorch.org/models/resnet34-333f7ec4.pth",
+    "resnet50": "https://download.pytorch.org/models/resnet50-19c8e357.pth",
+    "resnet101": "https://download.pytorch.org/models/resnet101-5d3b4d8f.pth",
+    "resnet152": "https://download.pytorch.org/models/resnet152-b121ed2d.pth",
 }
 
 
@@ -284,7 +288,7 @@ class ResNet(nn.Module):
             out = torch.flatten(x, 1)
             out = self.fc(out)
 
-        # return block1, block2, block3, out
+        # return block2, block3, out
         return out, block3, block2
 
     def forward(self, x: Tensor) -> Tensor:
@@ -353,8 +357,11 @@ def resnet18(
     )
 
 
-def resnet50(pretrain=True, remove_top=True, progress: bool = True, **kwargs: Any) -> ResNet:
-    """ResNet-50 from `Deep Residual Learning for Image Recognition <https://arxiv.org/abs/1512.03385>`__.
-    """
+def resnet50(
+    pretrain=True, remove_top=True, progress: bool = True, **kwargs: Any
+) -> ResNet:
+    """ResNet-50 from `Deep Residual Learning for Image Recognition <https://arxiv.org/abs/1512.03385>`__."""
 
-    return _resnet("resnet50", Bottleneck, [3, 4, 6, 3], pretrain, remove_top, progress, **kwargs)
+    return _resnet(
+        "resnet50", Bottleneck, [3, 4, 6, 3], pretrain, remove_top, progress, **kwargs
+    )

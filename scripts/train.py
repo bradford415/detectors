@@ -2,7 +2,8 @@ import datetime
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Iterable, Tuple, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple
+
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import torch
@@ -20,7 +21,6 @@ from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
 from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
-
 
 detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}
 
@@ -259,7 +259,7 @@ def _init_training_objects(
     optimizer = optimizer_map[optimizer](
         model_params, lr=learning_rate, weight_decay=weight_decay
     )
-    
+
     if scheduler is not None:
         lr_scheduler = scheduler_map[scheduler](
             optimizer, schedulers.burnin_schedule_modified
