@@ -23,7 +23,6 @@ dataset:
   # Path to the root of the dataset; detects which path to use based on device
   root: "/mnt/d/Datasets/coco" # windows path
   root_mac: "/Users/bsele/datasets/coco" # mac path
-  #root: "/home/jovyan/autofocus-dssi/coco" # aif path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4

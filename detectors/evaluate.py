@@ -45,7 +45,7 @@ def evaluate(
     labels = []
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
     image_paths = []
-    final_preds = []
+    final_preds = [] # holds a tensor of predictions for each image; (num_detections, 6)
     for steps, (samples, targets, target_meta) in enumerate(
         tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
@@ -54,7 +54,9 @@ def evaluate(
 
         # Extract target labels and convert target boxes to xyxy; extract image paths for visualization
         labels += targets[:, 1].tolist()
-        image_paths.append(target_meta[0]["image_path"])
+        image_paths += [meta["image_path"] for meta in target_meta]
+
+        #breakpoint()
 
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
         targets[:, 2:] *= img_size
@@ -80,10 +82,13 @@ def evaluate(
         # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
 
-        # nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
+
+        # NOTE: yolo predicts (cx, cy, w, h, obj, cls_0, ..., num_classes) 
+        #       but nms() converts boxes to (x1, y1, x2, y2, obj, cls)
+        #nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds
-
+        
         ################### START HERE COMPARE WITH ULTRALYTICS ################
 
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]

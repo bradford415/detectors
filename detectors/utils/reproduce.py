@@ -27,6 +27,11 @@ def model_info(model):
     log.info("Model params: %.2f M", (model_size / 1024 / 1024))
 
 
+def count_parameters(model):
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    log.info("Model params: %.2f M", (num_params / 1024 / 1024))
+
+
 def save_configs(
     config_dicts: Iterable[Dict], save_names: Iterable[str], output_path: Path
 ):

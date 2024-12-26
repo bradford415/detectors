@@ -1,7 +1,10 @@
 import datetime
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict
+
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import torch
 import yaml
@@ -42,6 +45,8 @@ def main(base_config_path: str, model_config_path: str):
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
 
+    dev_mode = base_config["dev_mode"]
+
     # Initialize paths
     output_path = (
         Path(base_config["output_dir"])
@@ -58,6 +63,10 @@ def main(base_config_path: str, model_config_path: str):
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
+    if dev_mode:
+        log.info("NOTE: executing in dev mode")
+        base_config["test"]["batch_size"] = 2
+
     log.info("initializing...")
     log.info("outputs beings saved to %s\n", str(output_path))
 
@@ -70,21 +79,31 @@ def main(base_config_path: str, model_config_path: str):
     test_kwargs = {
         "batch_size": base_config["test"]["batch_size"],
         "shuffle": False,
+        "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
     }
 
-    if use_cuda:
+    # Set device specific characteristics
+    use_cpu = False
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
         log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
         for gpu in range(len(base_config["cuda"]["gpus"])):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
+    elif torch.mps.is_available():
+        base_config["dataset"]["root"] = base_config["dataset"]["root_mac"]
+        device = torch.device("mps")
+        log.info("Using: %s", device)
+    else:
+        use_cpu = True
+        device = torch.device("cpu")
+        log.info("Using CPU")
 
-        cuda_kwargs = {
-            "num_workers": base_config["dataset"]["num_workers"],
+    if not use_cpu:
+        gpu_kwargs = {
             "pin_memory": True,
         }
 
-        test_kwargs.update(cuda_kwargs)
-    else:
-        log.info("Using CPU")
+        test_kwargs.update(gpu_kwargs)
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_test = dataset_map[base_config["dataset_name"]](
@@ -92,9 +111,7 @@ def main(base_config_path: str, model_config_path: str):
     )
 
     dataloader_test = DataLoader(
-        dataset_test,
-        collate_fn=collate_fn,
-        drop_last=True,
+        dataset_test, collate_fn=collate_fn, drop_last=True, **test_kwargs
     )
 
     anchors = model_config["priors"]["anchors"]
@@ -144,7 +161,7 @@ def main(base_config_path: str, model_config_path: str):
 
     if base_config["plot_detections"]:
         plot_all_detections(
-            image_detections, classes=dataset_test.class_names, output_dir=save_dir
+            image_detections, classes=dataset_test.class_names, output_dir=save_dir, img_size=416
         )
 
 

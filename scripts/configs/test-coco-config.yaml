@@ -20,8 +20,9 @@ plot_detections: True
 # Parameters for the dataset class
 dataset:
 
-  # Path to the root of the dataset
+  # Path to the root of the dataset; detects which path to use based on device
   root: "/mnt/d/Datasets/coco" # windows path
+  root_mac: "/Users/bsele/datasets/coco" # mac path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
@@ -31,10 +32,7 @@ test:
   batch_size: 4
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2024_12_12-09_25_42_PM/checkpoints/best_mAP_0-78.pt" #"/home/bselee/programming/detectors/output/train/development/2024_11_20-05_28_25_PM/checkpoint0130.pt"
-
-validation:
-  batch_size: 4
+  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_23-01_18_25_PM/checkpoints/best_mAP_0-36.pt
 
 # GPU parameters
 cuda:

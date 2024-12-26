@@ -172,7 +172,7 @@ def main(base_config_path: str, model_config_path):
     model = detectors_map[detector_name](**model_components)
 
     # Compute and log the number of params in the model
-    reproduce.model_info(model)
+    reproduce.count_parameters(model)
 
     # model = Darknet("scripts/configs/yolov4.cfg")
     model.to(device)

@@ -44,7 +44,7 @@ scheduler_map = {
 log = logging.getLogger(__name__)
 
 
-def main(train_config_path: str, epochs: int = 2):
+def main(train_config_path: str, num_images: int = 100, epochs: int = 2):
     """Entrypoint for the project
 
     Args:
@@ -55,7 +55,10 @@ def main(train_config_path: str, epochs: int = 2):
         base_config = yaml.safe_load(f)
 
     # Initialize paths
-    output_path = Path("outputs/visualize-dataloaders") / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
+    output_path = (
+        Path("output/visualize-dataloaders")
+        / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
+    )
 
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
@@ -89,25 +92,50 @@ def main(train_config_path: str, epochs: int = 2):
     dataloader_train = DataLoader(
         dataset_train,
         collate_fn=collate_fn,
+        batch_size=1,
         drop_last=True,
+        shuffle=True,
     )
     dataloader_val = DataLoader(
         dataset_val,
         collate_fn=collate_fn,
+        batch_size=1,
         drop_last=True,
+        shuffle=False,
     )
 
     class_names = dataset_train.class_names
 
+    log.info("plotting train images")
+
     # Visualize train loader
     for epoch in range(1, epochs + 1):
-        for steps, (samples, targets, annotations) in enumerate(dataloader_train, 1):
-            visualize_norm_img_tensors(samples, targets, annotations, class_names, output_path / "dataloader-train"/ f"epoch-{epoch}")
+        for step, (samples, targets, annotations) in enumerate(dataloader_train, 1):
+            visualize_norm_img_tensors(
+                samples,
+                targets,
+                annotations,
+                step,
+                class_names,
+                output_path / "dataloader-train" / f"epoch-{epoch}",
+            )
+            log.info("saved image %d/%d", step, len(dataloader_train))
+            if step == num_images:
+                break
 
     # Visualize val loader
-    for steps, (samples, targets, annotations) in enumerate(dataloader_train, 1):
-        visualize_norm_img_tensors(samples, targets, annotations, class_names, output_path / "dataloader-val")
-
+    for step, (samples, targets, annotations) in enumerate(dataloader_val, 1):
+        visualize_norm_img_tensors(
+            samples,
+            targets,
+            annotations,
+            step,
+            class_names,
+            output_path / "dataloader-val",
+        )
+        log.info("saved image %d/%d", step, len(dataloader_val))
+        if step == num_images:
+            break
 
 
 if __name__ == "__main__":

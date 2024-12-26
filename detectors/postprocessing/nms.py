@@ -13,7 +13,7 @@ def non_max_suppression(
     """Performs Non-Maximum Suppression (NMS) on inference results
 
     Args:
-        predictions:TODO: this is wrong; Model output predictions (B, num_preds, num_class+5); num_preds is the number of
+        predictions: Model output predictions (B, num_preds, num_class+5); num_preds is the number of
                      predictions across across all output scales; predictions from yolo are (cx, cy, w, h)
                      and are converted to (tl_x, tl_y, br_x, br_y) in this function
 

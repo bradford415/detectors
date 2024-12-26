@@ -231,7 +231,7 @@ class Yolov3Head(nn.Module):
 
             # Upsample then concat the intermediate feature maps from backbone
             if isinstance(layer, Upsample):
-                #breakpoint()
+                # breakpoint()
                 x = torch.cat([x, route_connection.pop()], dim=1)
 
         return yolo_outputs
@@ -267,7 +267,7 @@ class Yolov3(nn.Module):
         img_size = x.shape[2]  # used to calcuate the output stride
 
         out, inter2, inter1 = self.backbone(x)
-        #breakpoint()
+        # breakpoint()
         yolo_outputs = self.head(out, inter2, inter1, img_size=img_size)
 
         # during inference, concatentate all predictions from every scale

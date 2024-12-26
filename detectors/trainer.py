@@ -85,7 +85,7 @@ class Trainer:
 
         last_best_path = None
 
-        scaler = torch.amp.GradScaler(self.deivce.type)
+        scaler = torch.amp.GradScaler(self.device.type)
 
         best_ap = 0.0
         train_loss = []

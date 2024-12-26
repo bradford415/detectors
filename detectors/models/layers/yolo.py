@@ -464,6 +464,7 @@ class YoloLayerNew(nn.Module):
         Returns:
             during inference:
                 1. scales all predictions for each grid cell for every anchor (b, nx*ny*num_anchors, 5 + num_classes)
+                   where 5 = (cx, cy, h, w, objectness)
             during training:
                 1. reshapes x (b, num_anchors*(num_classes+5), ny, nx) -> (b, num_anchors, ny, nx, (5+num_classes))
         """
