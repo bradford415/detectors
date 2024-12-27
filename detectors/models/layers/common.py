@@ -33,7 +33,7 @@ class ConvNormLRelu(nn.Module):
             conv_bias: Whether to use a bias in Conv2D; typically this is false if BatchNorm is the following layer
         """
         super().__init__()
-        _conv = nn.Conv2d(
+        self.conv = nn.Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
@@ -41,10 +41,8 @@ class ConvNormLRelu(nn.Module):
             padding=padding,
             bias=conv_bias,
         )
-        _bn = nn.BatchNorm2d(num_features=out_channels)
-        _leaky_relu = nn.LeakyReLU(negative_slope=leaky_slope)
-
-        self.sequential = nn.Sequential(_conv, _bn, _leaky_relu)
+        self.bn = nn.BatchNorm2d(num_features=out_channels)
+        self.leaky_relu = nn.LeakyReLU(negative_slope=leaky_slope)
 
     def forward(self, x):
         """Forward pass through the module
@@ -52,7 +50,9 @@ class ConvNormLRelu(nn.Module):
         Args:
             x: Input data
         """
-        x = self.sequential(x)
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.leaky_relu(x)
         return x
 
 

@@ -58,6 +58,9 @@ def main(base_config_path: str, model_config_path):
 
     dev_mode = base_config["dev_mode"]
 
+    if base_config["train"]["checkpoint_path"] is not None and base_config["train"]["backbone_weights"] is not None:
+        raise ValueError("checkpoint_path and backbone_weights cannot both have a value. Set one of the values to 'null'.")
+
     # Initialize paths
     output_path = (
         Path(base_config["output_dir"])
@@ -159,6 +162,11 @@ def main(base_config_path: str, model_config_path):
     else:
         backbone_params = {}
     backbone = backbone_map[backbone_name](**backbone_params)
+
+    if base_config["train"]["backbone_weights"] is not None:
+        log.info("\nloading pretrained weights into the backbone\n")
+        bb_weights = torch.load(base_config["train"]["backbone_weights"], weights_only=True, map_location=torch.device(device))
+        backbone.load_state_dict(bb_weights["state_dict"], strict=False) # "state_dict" is the key to model state_dict for the pretrained weights I found
 
     # detector args
     model_components = {

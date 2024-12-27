@@ -508,7 +508,7 @@ class YoloLayerNew(nn.Module):
             )  # w/h
 
             # Scale objectness and class confidence predictions to [0, 1]
-            head_output[..., 4:] = head_output[..., 4:].sigmoid()  # conf, cls
+            head_output[..., 4:] = head_output[..., 4:].sigmoid()  # object_confidence and cls_predictions
 
             # Reshape to (b, nx*ny*num_anchors, num_classes+5);
             # this allows us to concatenate all the yolo layers along dim=1 since

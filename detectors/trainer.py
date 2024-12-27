@@ -250,11 +250,14 @@ class Trainer:
 
             if (steps) % self.log_train_steps == 0:
                 log.info(
-                    "epoch: %-10d iter: %d/%-10d train loss: %-10.4f",
+                    "epoch: %-10d iter: %d/%-12d train_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f",
                     epoch,
                     steps,
                     len(dataloader_train),
                     total_loss.item(),
+                    loss_components[0],
+                    loss_components[1],
+                    loss_components[2],
                 )
 
         return np.array(epoch_loss).mean()

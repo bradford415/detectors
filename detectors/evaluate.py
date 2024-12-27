@@ -141,11 +141,12 @@ def load_model_checkpoint(
         the epoch to start training on
     """
     # Load the torch weights
+    breakpoint()
     weights = torch.load(checkpoint_path, map_location=device, weights_only=True)
 
     # load the state dictionaries for the necessary training modules
     if model is not None:
-        model.load_state_dict(weights["model"])
+        model.load_state_dict(weights["model"], strict=False)
     if optimizer is not None:
         optimizer.load_state_dict(weights["optimizer"])
     if lr_scheduler is not None:
@@ -153,3 +154,4 @@ def load_model_checkpoint(
     start_epoch = weights["epoch"]
 
     return start_epoch
+

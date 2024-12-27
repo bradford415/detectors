@@ -1,3 +1,5 @@
+# Source: https://github.com/developer0hye/PyTorch-Darknet53/blob/master/model.py
+# NOTE: Architecture must match exactly to use the pretrained weights; this includes layer names
 import numpy as np
 import torch
 import torch.nn as nn
@@ -6,6 +8,12 @@ import torch.nn.functional as F
 from detectors.models.layers.common import ConvNormLRelu
 from detectors.models.layers.yolo import YoloLayer
 from detectors.utils.box_ops import get_region_boxes
+
+def conv_batch(in_channels, out_channels, kernel_size=3, padding=1, stride=1):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
+        nn.BatchNorm2d(out_channels),
+        nn.LeakyReLU())
 
 
 class DarkResidualBlock(nn.Module):
@@ -24,8 +32,8 @@ class DarkResidualBlock(nn.Module):
         super().__init__()
         out_ch = in_ch // 2
 
-        self.layer1 = ConvNormLRelu(in_channels=in_ch, out_channels=out_ch)
-        self.layer2 = ConvNormLRelu(in_channels=out_ch, out_channels=in_ch)
+        self.layer1 = conv_batch(in_channels=in_ch, out_channels=out_ch, kernel_size=1, padding=0)
+        self.layer2 = conv_batch(in_channels=out_ch, out_channels=in_ch)
 
     def forward(self, x):
         """Forward pass through residual block
@@ -34,7 +42,7 @@ class DarkResidualBlock(nn.Module):
             x: input feature maps (b, c, h, w)
 
         Return:
-            a feature map of the same size as the input (b, c, h , w)
+            a feature map of the same size as the input (b, c, h, w)
         """
         residual = x
 
@@ -46,7 +54,6 @@ class DarkResidualBlock(nn.Module):
 
 class DarkNet53(nn.Module):
     """DarkNet53 used as the feature extractor in Yolo3
-
 
     Implementation is based on: https://github.com/developer0hye/PyTorch-Darknet53/blob/master/model.py
 
@@ -65,29 +72,29 @@ class DarkNet53(nn.Module):
 
         self.final_num_chs = 1024
 
-        self.conv1 = ConvNormLRelu(in_channels=3, out_channels=32, stride=1, padding=1)
-        self.conv2 = ConvNormLRelu(in_channels=32, out_channels=64, stride=2, padding=1)
-        self.residual_blocks1 = self._make_blocks(
+        self.conv1 = conv_batch(in_channels=3, out_channels=32, stride=1, padding=1)
+        self.conv2 = conv_batch(in_channels=32, out_channels=64, stride=2, padding=1)
+        self.residual_block1 = self._make_blocks(
             block=block, in_channels=64, num_blocks=1
         )
 
-        self.conv3 = ConvNormLRelu(in_channels=64, out_channels=128, stride=2)
-        self.residual_blocks2 = self._make_blocks(
+        self.conv3 = conv_batch(in_channels=64, out_channels=128, stride=2)
+        self.residual_block2 = self._make_blocks(
             block=block, in_channels=128, num_blocks=2
         )
 
-        self.conv4 = ConvNormLRelu(in_channels=128, out_channels=256, stride=2)
-        self.residual_blocks3 = self._make_blocks(
+        self.conv4 = conv_batch(in_channels=128, out_channels=256, stride=2)
+        self.residual_block3 = self._make_blocks(
             block=block, in_channels=256, num_blocks=8
         )
 
-        self.conv5 = ConvNormLRelu(in_channels=256, out_channels=512, stride=2)
-        self.residual_blocks4 = self._make_blocks(
+        self.conv5 = conv_batch(in_channels=256, out_channels=512, stride=2)
+        self.residual_block4 = self._make_blocks(
             block=block, in_channels=512, num_blocks=8
         )
 
-        self.conv6 = ConvNormLRelu(in_channels=512, out_channels=1024, stride=2)
-        self.residual_blocks5 = self._make_blocks(
+        self.conv6 = conv_batch(in_channels=512, out_channels=1024, stride=2)
+        self.residual_block5 = self._make_blocks(
             block=block, in_channels=self.final_num_chs, num_blocks=4
         )
 
@@ -99,19 +106,19 @@ class DarkNet53(nn.Module):
         """
         out = self.conv1(x)
         out = self.conv2(out)
-        out = self.residual_blocks1(out)
+        out = self.residual_block1(out)
 
         out = self.conv3(out)
-        out = self.residual_blocks2(out)
+        out = self.residual_block2(out)
 
         out = self.conv4(out)
-        inter_1 = self.residual_blocks3(out)
+        inter_1 = self.residual_block3(out)
 
         out = self.conv5(inter_1)
-        inter_2 = self.residual_blocks4(out)
+        inter_2 = self.residual_block4(out)
 
         out = self.conv6(inter_2)
-        out = self.residual_blocks5(out)
+        out = self.residual_block5(out)
 
         # NOTE: classification layers removed
 
