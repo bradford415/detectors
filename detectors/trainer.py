@@ -119,7 +119,7 @@ class Trainer:
                 model, criterion, dataloader_val, class_names=class_names
             )
 
-            plot_loss(train_loss, save_dir=str())
+            plot_loss(train_loss, save_dir=str(self.output_dir))
 
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
