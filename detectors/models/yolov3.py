@@ -275,6 +275,8 @@ class Yolov3(nn.Module):
         if not self.training:
             # (b,(grid_h*grid_w*num_anchors)*num_scales, 5 + num_classes)
             # TODO: verify this shape
-            yolo_outputs = torch.cat(yolo_outputs, dim=1)
+            train_outputs, inference_outputs = zip(*yolo_outputs)
+            inference_outputs = torch.cat(inference_outputs, dim=1)
+            yolo_outputs = (train_outputs, inference_outputs)
 
         return yolo_outputs

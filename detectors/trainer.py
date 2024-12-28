@@ -161,7 +161,7 @@ class Trainer:
             # Current epoch time (train/val)
             one_epoch_time = time.time() - one_epoch_start_time
             one_epoch_time_str = str(datetime.timedelta(seconds=int(one_epoch_time)))
-            log.info("\nEpoch time  (h:mm:ss): %s", one_epoch_time_str)
+            log.info("\nEpoch time (h:mm:ss): %s", one_epoch_time_str)
 
         # Entire training time
         total_time = time.time() - total_train_start_time
@@ -259,6 +259,7 @@ class Trainer:
                     loss_components[1],
                     loss_components[2],
                 )
+            break
 
         return np.array(epoch_loss).mean()
 
@@ -289,6 +290,7 @@ class Trainer:
             model,
             dataloader_val,
             class_names,
+            criterion=criterion,
             output_path=self.output_dir,
             device=self.device,
         )

@@ -86,7 +86,7 @@ def main(base_config_path: str, model_config_path: str):
     use_cpu = False
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
+        log.info("Using %d GPxU(s): ", len(base_config["cuda"]["gpus"]))
         for gpu in range(len(base_config["cuda"]["gpus"])):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
     elif torch.mps.is_available():

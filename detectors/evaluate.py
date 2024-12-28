@@ -21,7 +21,7 @@ def evaluate(
     model: nn.Module,
     dataloader_test: Iterable,
     class_names: List,
-    img_size: int = 416,
+    #img_size: int = 416,
     criterion: Optional[nn.Module] = None,
     output_path: Optional[str] = None,
     device: torch.device = torch.device("cpu"),
@@ -49,21 +49,20 @@ def evaluate(
         []
     )  # holds a tensor of predictions for each image; (num_detections, 6)
     all_losses = torch.zeros(4, dtype=torch.float32)
+
     for steps, (samples, targets, target_meta) in enumerate(
         tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
+        img_size = samples.shape[2]
+
         # NOTE: I don't think we need to move targets to gpu during eval
         samples = samples.to(device)
+        targets = targets.to(device)
 
         # Extract target labels and convert target boxes to xyxy; extract image paths for visualization
         labels += targets[:, 1].tolist()
         image_paths += [meta["image_path"] for meta in target_meta]
-
-        # breakpoint()
-
-        targets[:, 2:] = xywh2xyxy(targets[:, 2:])
-        targets[:, 2:] *= img_size
-
+        
         # targets = targets.to(device)
 
         # # Extract object labels from all samples in the batch into a 1d python list
@@ -83,10 +82,13 @@ def evaluate(
 
         # Transfer preds to CPU for post processing
         # predictions = misc.to_cpu(predictions)
-
+        #breakpoint()
         if criterion is not None:
-            _, loss_components = criterion(train_output)
+            _, loss_components = criterion(train_output, targets, model) 
             all_losses += loss_components
+
+        targets[:, 2:] = xywh2xyxy(targets[:, 2:])
+        targets[:, 2:] *= img_size
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
         # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
@@ -99,19 +101,24 @@ def evaluate(
         final_preds += nms_preds
 
         ################### START HERE COMPARE WITH ULTRALYTICS ################
+        targets = targets.to("cpu")
 
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
     # TODO: Test if val loss is implemented correctly
+    log.info("Validation losses:")
     log.info(
-        "val_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f",
+        "val_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f\n",
         all_losses[3] / steps,
         all_losses[0] / steps,
         all_losses[1] / steps,
         all_losses[2] / steps,
     )
 
+
+    ## TODO plot val loss - can probably just use the function
+    
     # No detections over whole validation set
     if len(sample_metrics) == 0:
         log.info("---- No detections over whole validation set ----")
