@@ -433,8 +433,8 @@ class YoloLayerNew(nn.Module):
 
         self.num_anchors = len(anchors)
 
-        self.mse_loss = nn.MSELoss()
-        self.bce_loss = nn.BCELoss()
+        # self.mse_loss = nn.MSELoss()
+        # self.bce_loss = nn.BCELoss()
 
         # Flatten anchors to 1d python list then convert to tensor (anchor_pairs, 2)
         anchors = torch.tensor(list(chain(*anchors))).float().view(-1, 2)
@@ -489,6 +489,9 @@ class YoloLayerNew(nn.Module):
 
         # During inference
         if not self.training:
+
+            train_output = head_output.detach().clone()
+
             # breakpoint()
             if self.grid.shape[2:4] != head_output.shape[2:4]:
                 # create grid of x, y coords (1, 1, ny, nx, 2) where 2 = (x, y) positions in the grid
@@ -508,12 +511,16 @@ class YoloLayerNew(nn.Module):
             )  # w/h
 
             # Scale objectness and class confidence predictions to [0, 1]
-            head_output[..., 4:] = head_output[..., 4:].sigmoid()  # object_confidence and cls_predictions
+            head_output[..., 4:] = head_output[
+                ..., 4:
+            ].sigmoid()  # object_confidence and cls_predictions
 
             # Reshape to (b, nx*ny*num_anchors, num_classes+5);
             # this allows us to concatenate all the yolo layers along dim=1 since
             # each layer returns a different scale
             head_output = head_output.reshape(batch_size, -1, self.num_output)
+
+            head_output = (train_output, head_output)
 
         return head_output
 

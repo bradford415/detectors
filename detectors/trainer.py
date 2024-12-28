@@ -254,7 +254,7 @@ class Trainer:
                     epoch,
                     steps,
                     len(dataloader_train),
-                    total_loss.item(),
+                    loss_components[3],
                     loss_components[0],
                     loss_components[1],
                     loss_components[2],

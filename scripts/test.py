@@ -161,7 +161,10 @@ def main(base_config_path: str, model_config_path: str):
 
     if base_config["plot_detections"]:
         plot_all_detections(
-            image_detections, classes=dataset_test.class_names, output_dir=save_dir, img_size=416
+            image_detections,
+            classes=dataset_test.class_names,
+            output_dir=save_dir,
+            img_size=416,
         )
 
 

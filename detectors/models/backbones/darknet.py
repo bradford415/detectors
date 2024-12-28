@@ -9,11 +9,20 @@ from detectors.models.layers.common import ConvNormLRelu
 from detectors.models.layers.yolo import YoloLayer
 from detectors.utils.box_ops import get_region_boxes
 
+
 def conv_batch(in_channels, out_channels, kernel_size=3, padding=1, stride=1):
     return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
+        nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=False,
+        ),
         nn.BatchNorm2d(out_channels),
-        nn.LeakyReLU())
+        nn.LeakyReLU(),
+    )
 
 
 class DarkResidualBlock(nn.Module):
@@ -32,7 +41,9 @@ class DarkResidualBlock(nn.Module):
         super().__init__()
         out_ch = in_ch // 2
 
-        self.layer1 = conv_batch(in_channels=in_ch, out_channels=out_ch, kernel_size=1, padding=0)
+        self.layer1 = conv_batch(
+            in_channels=in_ch, out_channels=out_ch, kernel_size=1, padding=0
+        )
         self.layer2 = conv_batch(in_channels=out_ch, out_channels=in_ch)
 
     def forward(self, x):

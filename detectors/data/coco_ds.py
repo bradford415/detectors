@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import albumentations as A
+import cv2
 import numpy as np
 import torch
 import torch.utils.data
@@ -177,7 +178,7 @@ def make_coco_transforms(dataset_split):
         raise ValueError(f"unknown dataset split {dataset_split}")
 
 
-def make_coco_transforms_album(dataset_split):
+def make_coco_transforms_album(dataset_split, image_size: int = 416):
     """Initialize transforms for the coco dataset using the Albumentations library
 
     Args:
@@ -199,12 +200,14 @@ def make_coco_transforms_album(dataset_split):
     if dataset_split == "train":
         album_transforms = A.Compose(
             [
-                # # Rescale an image so that maximum side is equal to image_size
-                # A.LongestMaxSize(max_size=image_size),
-                # # Pad remaining areas with zeros
-                # A.PadIfNeeded(
-                #     min_height=image_size, min_width=image_size, border_mode=cv2.BORDER_CONSTANT
-                # ),
+                # Rescale an image so that maximum side is equal to image_size
+                A.LongestMaxSize(max_size=image_size),
+                # Pad remaining areas with zeros
+                A.PadIfNeeded(
+                    min_height=image_size,
+                    min_width=image_size,
+                    border_mode=cv2.BORDER_CONSTANT,
+                ),
                 A.ColorJitter(
                     brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5, p=0.5
                 ),
@@ -219,6 +222,13 @@ def make_coco_transforms_album(dataset_split):
     elif dataset_split == "val":
         return A.Compose(
             [
+                A.LongestMaxSize(max_size=image_size),
+                # Pad remaining areas with zeros
+                A.PadIfNeeded(
+                    min_height=image_size,
+                    min_width=image_size,
+                    border_mode=cv2.BORDER_CONSTANT,
+                ),
                 normalize_album,
             ],
             bbox_params=A.BboxParams(

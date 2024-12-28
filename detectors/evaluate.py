@@ -22,6 +22,7 @@ def evaluate(
     dataloader_test: Iterable,
     class_names: List,
     img_size: int = 416,
+    criterion: Optional[nn.Module] = None,
     output_path: Optional[str] = None,
     device: torch.device = torch.device("cpu"),
 ) -> Tuple[Tuple, List]:
@@ -29,8 +30,7 @@ def evaluate(
 
     Args:
         model: Model to train
-        criterion: Loss function; only used to inspect the loss on the val set,
-                    not used for ba ropagation
+        criterion: TODO
         dataloader_val: Dataloader for the validation set
         device: Device to run the model on
 
@@ -45,7 +45,10 @@ def evaluate(
     labels = []
     sample_metrics = []  # List of tuples (true positives, cls_confs, cls_labels)
     image_paths = []
-    final_preds = [] # holds a tensor of predictions for each image; (num_detections, 6)
+    final_preds = (
+        []
+    )  # holds a tensor of predictions for each image; (num_detections, 6)
+    all_losses = torch.zeros(4, dtype=torch.float32)
     for steps, (samples, targets, target_meta) in enumerate(
         tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
@@ -56,7 +59,7 @@ def evaluate(
         labels += targets[:, 1].tolist()
         image_paths += [meta["image_path"] for meta in target_meta]
 
-        #breakpoint()
+        # breakpoint()
 
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
         targets[:, 2:] *= img_size
@@ -73,26 +76,41 @@ def evaluate(
 
         # (b, num_preds, 5 + num_classes) where 5 is (tl_x, tl_y, br_x, br_y, objectness)
 
-        predictions = model(samples)
+        eval_outputs = model(samples)
+
+        train_output = eval_outputs[0]
+        predictions = eval_outputs[1]
 
         # Transfer preds to CPU for post processing
         # predictions = misc.to_cpu(predictions)
+
+        if criterion is not None:
+            _, loss_components = criterion(train_output)
+            all_losses += loss_components
 
         # TODO: define these thresholds in the config file under postprocessing maybe?
         # TODO: this is wrong I'm pretty sure; list (b,) of tensor predictions (max_nms_preds, 6)
         # where 6 = (tl_x, tl_y, br_x, br_y, conf, cls)
 
-
-        # NOTE: yolo predicts (cx, cy, w, h, obj, cls_0, ..., num_classes) 
+        # NOTE: yolo predicts (cx, cy, w, h, obj, cls_0, ..., num_classes)
         #       but nms() converts boxes to (x1, y1, x2, y2, obj, cls)
-        #nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
+        # nms_preds = non_max_suppression(predictions, conf_thres=0.01, iou_thres=0.5)
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds
-        
+
         ################### START HERE COMPARE WITH ULTRALYTICS ################
 
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
+
+    # TODO: Test if val loss is implemented correctly
+    log.info(
+        "val_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f",
+        all_losses[3] / steps,
+        all_losses[0] / steps,
+        all_losses[1] / steps,
+        all_losses[2] / steps,
+    )
 
     # No detections over whole validation set
     if len(sample_metrics) == 0:
@@ -141,7 +159,6 @@ def load_model_checkpoint(
         the epoch to start training on
     """
     # Load the torch weights
-    breakpoint()
     weights = torch.load(checkpoint_path, map_location=device, weights_only=True)
 
     # load the state dictionaries for the necessary training modules
@@ -154,4 +171,3 @@ def load_model_checkpoint(
     start_epoch = weights["epoch"]
 
     return start_epoch
-

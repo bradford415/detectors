@@ -92,14 +92,14 @@ def main(train_config_path: str, num_images: int = 100, epochs: int = 2):
     dataloader_train = DataLoader(
         dataset_train,
         collate_fn=collate_fn,
-        batch_size=1,
+        batch_size=4,
         drop_last=True,
         shuffle=True,
     )
     dataloader_val = DataLoader(
         dataset_val,
         collate_fn=collate_fn,
-        batch_size=1,
+        batch_size=4,
         drop_last=True,
         shuffle=False,
     )

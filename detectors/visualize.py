@@ -10,10 +10,10 @@ import torch
 from matplotlib.ticker import NullLocator
 from PIL import Image
 
+from detectors.data.collate_functions import resize
 from detectors.data.transforms import Unnormalize
 from detectors.utils.box_ops import rescale_boxes
 from detectors.utils.misc import to_cpu
-from detectors.data.collate_functions import resize
 
 matplotlib.use("Agg")
 
@@ -108,7 +108,7 @@ def visualize_norm_img_tensors(
         ax.imshow(image)
         plt.axis("off")
         fig.savefig(
-            f"{output_dir}/{int(step)}_original.jpg",
+            f"{output_dir}/{int(step)}_original.png",
             bbox_inches="tight",
             pad_inches=0.0,
         )
@@ -210,7 +210,9 @@ def visualize_dataloader(
         plt.close()
 
 
-def plot_all_detections(img_detections, classes: list[str], output_dir: Path, img_size: Optional[int] = None):
+def plot_all_detections(
+    img_detections, classes: list[str], output_dir: Path, img_size: Optional[int] = None
+):
     output_dir.mkdir(parents=True, exist_ok=True)
     for index, (image_path, detections) in enumerate(img_detections):
         plot_detections(
@@ -218,11 +220,17 @@ def plot_all_detections(img_detections, classes: list[str], output_dir: Path, im
             detections,
             classes,
             save_name=output_dir / f"detection_{index}.jpg",
-            img_size=img_size
+            img_size=img_size,
         )
 
 
-def plot_detections(image_path: str, detections, classes: List[str], save_name: str, img_size: Optional[int] = None):
+def plot_detections(
+    image_path: str,
+    detections,
+    classes: List[str],
+    save_name: str,
+    img_size: Optional[int] = None,
+):
     """Visualizes the augmented images just before the input of the model; this helps
     manually verify the data augmentation on the images and labels is accurate
 

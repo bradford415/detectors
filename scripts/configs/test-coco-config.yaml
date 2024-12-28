@@ -32,8 +32,7 @@ test:
   batch_size: 4
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_23-01_18_25_PM/checkpoints/best_mAP_0-36.pt
-
+  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_27-08_22_44_AM/checkpoints/best_mAP_0-84.pt
 # GPU parameters
 cuda:
 
