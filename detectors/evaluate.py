@@ -49,7 +49,7 @@ def evaluate(
         []
     )  # holds a tensor of predictions for each image; (num_detections, 6)
     all_losses = torch.zeros(4, dtype=torch.float32)
-
+    val_loss = torch.tensor([0.0], dtype=torch.float32)
     for steps, (samples, targets, target_meta) in enumerate(
         tqdm(dataloader_test, desc="Evaluating", ncols=100)
     ):
@@ -82,7 +82,6 @@ def evaluate(
 
         # Transfer preds to CPU for post processing
         # predictions = misc.to_cpu(predictions)
-        #breakpoint()
         if criterion is not None:
             _, loss_components = criterion(train_output, targets, model) 
             all_losses += loss_components
@@ -106,15 +105,15 @@ def evaluate(
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]
         sample_metrics += get_batch_statistics(nms_preds, targets, iou_threshold=0.5)
 
-    # TODO: Test if val loss is implemented correctly
-    log.info("Validation losses:")
-    log.info(
-        "val_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f\n",
-        all_losses[3] / steps,
-        all_losses[0] / steps,
-        all_losses[1] / steps,
-        all_losses[2] / steps,
-    )
+    if criterion is not None:
+        log.info("\nValidation losses:")
+        log.info(
+            "val_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f\n",
+            all_losses[3] / steps,
+            all_losses[0] / steps,
+            all_losses[1] / steps,
+            all_losses[2] / steps,
+        )
 
 
     ## TODO plot val loss - can probably just use the function
@@ -141,7 +140,9 @@ def evaluate(
     # Pair the image paths with the final predictions to visualize
     image_detections = list(zip(image_paths, final_preds))
 
-    return metrics_output, image_detections
+    val_loss = all_losses[3] / steps
+
+    return metrics_output, image_detections, val_loss
 
 
 def load_model_checkpoint(

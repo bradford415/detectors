@@ -115,11 +115,12 @@ class Trainer:
             ############# TODO MODIFY SO WE CAN PLOT THE VAL LOSS AS WELL #######################
 
             # TODO: probably save metrics output into csv
-            metrics_output, image_detections = self._evaluate(
+            metrics_output, image_detections, epoch_val_loss = self._evaluate(
                 model, criterion, dataloader_val, class_names=class_names
             )
+            val_loss.append(epoch_val_loss)
 
-            plot_loss(train_loss, save_dir=str(self.output_dir))
+            plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
 
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
@@ -259,7 +260,6 @@ class Trainer:
                     loss_components[1],
                     loss_components[2],
                 )
-            break
 
         return np.array(epoch_loss).mean()
 
@@ -286,7 +286,7 @@ class Trainer:
 
         # evaluate() is used by both val and test set; this can be customized in the future if needed
         # but for now validation and test behave the same
-        metrics_output, detections = evaluate(
+        metrics_output, detections, val_loss = evaluate(
             model,
             dataloader_val,
             class_names,
@@ -295,7 +295,7 @@ class Trainer:
             device=self.device,
         )
 
-        return metrics_output, detections
+        return metrics_output, detections, val_loss
 
     def _save_model(
         self,

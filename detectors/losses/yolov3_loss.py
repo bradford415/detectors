@@ -123,7 +123,6 @@ class Yolov3Loss(nn.Module):
         lbox *= 0.05
         lobj *= 1.0
         lcls *= 0.5
-        breakpoint()
 
         # Merge losses
         loss = lbox + lobj + lcls
