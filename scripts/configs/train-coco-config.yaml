@@ -42,11 +42,11 @@ train:
 
   # Path of weights file (.pt) to resume training; 
   # use `null` to train a new model from scratch
-  checkpoint_path: #/Users/bsele/programming/detectors/output/train/development/2024_12_26-07_25_34_PM/checkpoints/best_mAP_0-73.pt
+  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_28-08_14_46_PM/checkpoints/best_mAP_1-02.pt #/Users/bsele/programming/detectors/output/train/development/2024_12_26-07_25_34_PM/checkpoints/best_mAP_0-73.pt
 
   # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
   # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet
-  backbone_weights: "/Users/bsele/pretrained-weights/darknet53/model_best.pth"
+  backbone_weights: null #"/Users/bsele/pretrained-weights/darknet53/model_best.pth"
 
 validation:
   batch_size: 4

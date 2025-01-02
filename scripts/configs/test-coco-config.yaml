@@ -3,7 +3,7 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: True
+dev_mode: False
 
 # Base directory for output files; do not change this 
 output_dir: "output/test"
@@ -32,7 +32,7 @@ test:
   batch_size: 4
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_27-08_22_44_AM/checkpoints/best_mAP_0-84.pt
+  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_28-08_14_46_PM/checkpoints/best_mAP_1-02.pt
 # GPU parameters
 cuda:
 

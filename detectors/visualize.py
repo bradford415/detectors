@@ -246,12 +246,15 @@ def plot_detections(
                   were scaled to,
     """
     img_pil = Image.open(image_path).convert("RGB")
+    
+    # TODO: might need to remove this since I'm now keeping the aspect ratio when resizing
     if img_size is not None:
         img_pil = img_pil.resize(size=(img_size, img_size))
+    
     img = np.array(img_pil)
 
     plt.figure()
-    fig, ax = plt.subplots(1)
+    fig, ax = plt.subplots(1) 
 
     ax.imshow(img)
 
