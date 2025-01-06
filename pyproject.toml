@@ -18,6 +18,7 @@ fire = "*"
 torch = "*"
 torchvision = "*"
 tqdm = "*"
+pandas = "*"
 pycocotools = "*"
 
 # Linters/formatters

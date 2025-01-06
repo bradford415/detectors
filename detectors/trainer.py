@@ -6,6 +6,7 @@ from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
+import pandas as pd
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
@@ -90,9 +91,9 @@ class Trainer:
         best_ap = 0.0
         train_loss = []
         val_loss = []
+        epoch_mAP = []
         for epoch in range(start_epoch, epochs + 1):
             model.train()
-            ## TODO: Implement tensorboard as shown here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/pytorchyolo/utils/logger.py#L6
 
             # Track the time it takes for one epoch (train and val)
             one_epoch_start_time = time.time()
@@ -112,18 +113,21 @@ class Trainer:
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
-            ############# TODO MODIFY SO WE CAN PLOT THE VAL LOSS AS WELL #######################
-
             # TODO: probably save metrics output into csv
             metrics_output, image_detections, epoch_val_loss = self._evaluate(
                 model, criterion, dataloader_val, class_names=class_names
             )
-            val_loss.append(epoch_val_loss)
+            val_loss.append(epoch_val_loss.item())
 
             plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
 
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
+            epoch_mAP.append(mAP)
+            
+            # Create csv file of training stats per epoch
+            train_dict = {"epoch": list(np.arange(start_epoch, epoch+1)), "train_loss": train_loss, "val_loss": val_loss, "mAP": epoch_mAP}
+            pd.DataFrame(train_dict).to_csv(self.output_dir / "train_stats.csv", index=False)
 
             # Save the model every ckpt_epochs
             if (epoch) % ckpt_epochs == 0:

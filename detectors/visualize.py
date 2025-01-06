@@ -74,7 +74,7 @@ def visualize_norm_img_tensors(
             color = bbox_colors[int(np.where(unique_classes == int(label))[0])]
             # Create a Rectangle patch
             bbox = patches.Rectangle(
-                (tl_x, tl_y), w, h, linewidth=2, edgecolor=color, facecolor="none"
+                (int(tl_x), int(tl_y)), int(w), int(h), linewidth=2, edgecolor=color, facecolor="none"
             )
             # Add the bbox to the plot
             # TODO: need to figure out if I need to clip these boxes because sometimes the figure is too large

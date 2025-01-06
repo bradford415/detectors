@@ -11,6 +11,7 @@ os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 import torch
 import yaml
 from fire import Fire
+import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -25,26 +26,13 @@ from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
 from detectors.visualize import visualize_norm_img_tensors
 
-detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
-
-optimizer_map = {
-    "adam": torch.optim.Adam,
-    "adamw": torch.optim.AdamW,
-    "sgd": torch.optim.SGD,
-}
-
-scheduler_map = {
-    "step_lr": torch.optim.lr_scheduler.StepLR,
-    "lambda_lr": torch.optim.lr_scheduler.LambdaLR,  # Multiply the initial lr by a factor determined by a user-defined function; it does NOT multiply the factor by the current lr, always the initial lr
-}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
 
-
-def main(train_config_path: str, num_images: int = 1000, epochs: int = 2):
+def main(train_config_path: str):
     """Entrypoint for the project
 
     Args:
@@ -55,10 +43,7 @@ def main(train_config_path: str, num_images: int = 1000, epochs: int = 2):
         base_config = yaml.safe_load(f)
 
     # Initialize paths
-    output_path = (
-        Path("output/visualize-dataloaders")
-        / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
-    )
+    output_path = Path("output/visuals")
 
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
@@ -86,56 +71,23 @@ def main(train_config_path: str, num_images: int = 1000, epochs: int = 2):
     dataset_val = dataset_map[base_config["dataset_name"]](
         dataset_split="val", dev_mode=False, **dataset_kwargs
     )
+    
+    # number of images for each label; at least one label is in the image
+    class_labels = dataset_train.coco.getCatIds()
+    class_count = [len(dataset_train.coco.getImgIds(catIds=[label])) for label in class_labels]
+    #class_count = [count for count in class_count if count != 0]
 
-    # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
-    # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
-    dataloader_train = DataLoader(
-        dataset_train,
-        collate_fn=collate_fn,
-        batch_size=4,
-        drop_last=True,
-        shuffle=True,
-    )
-    dataloader_val = DataLoader(
-        dataset_val,
-        collate_fn=collate_fn,
-        batch_size=4,
-        drop_last=True,
-        shuffle=False,
-    )
-
-    class_names = dataset_train.class_names
-
-    log.info("plotting train images")
-
-    # Visualize train loader
-    for epoch in range(1, epochs + 1):
-        for step, (samples, targets, annotations) in enumerate(dataloader_train, 1):
-            visualize_norm_img_tensors(
-                samples,
-                targets,
-                annotations,
-                step,
-                class_names,
-                output_path / "dataloader-train" / f"epoch-{epoch}",
-            )
-            log.info("saved image %d/%d", step, len(dataloader_train))
-            if step == num_images:
-                break
-
-    # Visualize val loader
-    for step, (samples, targets, annotations) in enumerate(dataloader_val, 1):
-        visualize_norm_img_tensors(
-            samples,
-            targets,
-            annotations,
-            step,
-            class_names,
-            output_path / "dataloader-val",
-        )
-        log.info("saved image %d/%d", step, len(dataloader_val))
-        if step == num_images:
-            break
+    
+    _, ax = plt.subplots(1, figsize=(14, 4))
+    
+    ax.bar(class_labels, class_count)
+    ax.set_xticks(class_labels)
+    ax.set_xticklabels(dataset_train.class_names, rotation=90)
+    
+    ax.set_xlabel("label")
+    ax.set_ylabel("number of images")
+    
+    plt.savefig(output_path / "train_distribution.jpg", bbox_inches="tight")
 
 
 if __name__ == "__main__":

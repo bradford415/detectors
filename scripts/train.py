@@ -229,11 +229,9 @@ def main(base_config_path: str, model_config_path):
     # Initialize training objects
     optimizer, lr_scheduler = _init_training_objects(
         model_params=model.parameters(),
-        optimizer=learning_params["optimizer"],
-        scheduler=learning_params["lr_scheduler"],
-        learning_rate=learning_params["learning_rate"],
-        weight_decay=learning_params["weight_decay"],
+        **learning_params
     )
+    #breakpoint()
 
     trainer = Trainer(
         output_dir=str(output_path),
@@ -270,17 +268,26 @@ def main(base_config_path: str, model_config_path):
 def _init_training_objects(
     model_params: Iterable,
     optimizer: str = "sgd",
-    scheduler: Optional[str] = "step_lr",
+    lr_scheduler: Optional[str] = "step_lr",
     learning_rate: float = 1e-4,
     weight_decay: float = 1e-4,
+    momentum: Optional[float] = None,
     lr_drop: int = 200,
-):
-    optimizer = optimizer_map[optimizer](
-        model_params, lr=learning_rate, weight_decay=weight_decay
-    )
+    ):
+    if optimizer == "adam":
+        optimizer = optimizer_map[optimizer](
+            model_params, lr=learning_rate, weight_decay=weight_decay
+        )
+    elif optimizer == "sgd":
+        optimizer = optimizer_map[optimizer](
+            model_params, lr=learning_rate, weight_decay=weight_decay, momentum=momentum, nesterov=True
+        )
+    else:
+        raise ValueError("unknown optimizer")
+    
 
-    if scheduler is not None:
-        lr_scheduler = scheduler_map[scheduler](
+    if lr_scheduler is not None:
+        lr_scheduler = scheduler_map[lr_scheduler](
             optimizer, schedulers.burnin_schedule_modified
         )
     else:
