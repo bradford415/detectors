@@ -78,7 +78,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
         # Substantially reduces the dataset size to quickly test code
         if dev_mode:
-            self.ids = self.ids[:32]
+            self.ids = self.ids[:128]
 
         # Display coco information of the current dataset; this should be placed at the end of the __init__()
         coco_stats(self, split)

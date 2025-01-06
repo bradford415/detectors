@@ -46,17 +46,17 @@ def burnin_schedule_modified(i):
     """
 
     # batch_size of 64 (original yolov3 implementation)
-    # burn_in = 1000
-    # steps = [400000, 450000]
-    # scales = [0.1, 0.01]
+    burn_in = 1000
+    steps = [400000, 450000]
+    scales = [0.1, 0.01]
     
     # My logic for choosing the step intervals based on the papers batch size of 64:
     # 64*400000 = 25,600,000 samples -> 25600000 / 16 = 1,600,000 (~216 epochs) therefore we should reduce the lr after 1.6m steps
     # 64*450000 = 28,800,000 samples -> 28800000 / 16 = 1,800,000 ()
     # batch_size of 16
-    burn_in = 4000
-    steps = [1600000, 1800000]
-    scales = [0.1, 0.01]
+    # burn_in = 4000
+    # steps = [1600000, 1800000]
+    # scales = [0.1, 0.01]
 
     if i < burn_in:
         factor = i / burn_in

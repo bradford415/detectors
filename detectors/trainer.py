@@ -48,6 +48,7 @@ class Trainer:
         dataloader_val: data.DataLoader,
         optimizer: torch.optim.Optimizer,
         class_names: list[str],
+        subdivisions: int,
         start_epoch: int = 1,
         epochs: int = 100,
         ckpt_epochs: int = 10,
@@ -106,6 +107,7 @@ class Trainer:
                 optimizer,
                 scheduler,
                 epoch,
+                subdivisions,
                 scaler,
             )
             train_loss.append(epoch_train_loss)
@@ -185,6 +187,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
+        subdivisions: int, 
         scaler: torch.amp,
     ):
         """Train one epoch
@@ -209,8 +212,6 @@ class Trainer:
             #     for t in targets
             # ]
 
-            optimizer.zero_grad()
-
             with torch.autocast(
                 device_type=self.device.type,
                 dtype=torch.float16,
@@ -229,23 +230,38 @@ class Trainer:
 
                 total_loss, loss_components = criterion(bbox_preds, targets, model)
 
+                # multiply loss by the mini batch size to account for split gradients; I'm not entirely sure how this works
+                # but it was mentioned here: https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/818#issuecomment-1484223518
+                total_loss *= samples.shape[0]
+
             # Calculate gradients and updates weights
             if self.enable_amp:
                 scaler.scale(total_loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
             else:
                 total_loss.backward()
-                optimizer.step()
 
             epoch_loss.append(total_loss.detach().cpu())
+
+            # Update the gradients once all the subdivisions have finished accumulating gradients and update lr_scheduler
+            # TODO: verify this is accurate
+            if steps % subdivisions == 0:
+                # Calculate gradients and updates weights
+                if self.enable_amp:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
+                optimizer.zero_grad()
+
+                # NOTE: occasionally scaler.step will be skipped and torch will throw a warning that scheduler.step
+                #       is being called first; I couldn't find a great solution but I think it's safe to ignore
+                if scheduler is not None:
+                    scheduler.step()
 
             # Calling scheduler step increments a counter which is passed to the lambda function;
             # if .step() is called after every batch, then it will pass the current step;
             # if .step() is called after every epoch, then it will pass the epoch number;
             # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
-            if scheduler is not None:
-                scheduler.step()
 
             if (steps) % 100 == 0:
                 log.info(

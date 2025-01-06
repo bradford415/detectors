@@ -51,4 +51,4 @@ def save_configs(
 
     for config_dict, save_name in zip(config_dicts, save_names):
         with open(output_path / save_name, "w") as f:
-            json.dump(config_dict, f)
+            json.dump(config_dict, f, indent=4)

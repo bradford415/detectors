@@ -82,20 +82,27 @@ def main(base_config_path: str, model_config_path):
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
-    if dev_mode:
-        log.info("NOTE: executing in dev mode")
-        base_config["train"]["batch_size"] = 2
-        base_config["validation"]["batch_size"] = 2
-
     log.info("initializing...\n")
     log.info("writing outputs to %s", str(output_path))
 
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
 
+    subdivisions = base_config["train"]["subdivisions"]
+    mini_batch_size = base_config["train"]["batch_size"] // subdivisions
+
+    if base_config["train"]["batch_size"] % subdivisions != 0:
+        raise ValueErorr("batch_size must be divisible by subdivisions")
+
+    if dev_mode:
+        log.info("NOTE: executing in dev mode")
+        mini_batch_size = 4
+        subdivisions = 2
+        base_config["validation"]["batch_size"] = 2
+
     # Set gpu parameters
     train_kwargs = {
-        "batch_size": base_config["train"]["batch_size"],
+        "batch_size": mini_batch_size,
         "shuffle": True,
         "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
     }
@@ -257,6 +264,7 @@ def main(base_config_path: str, model_config_path):
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
+        "subdivisions": subdivisions,
         "start_epoch": train_args["start_epoch"],
         "epochs": train_args["epochs"],
         "ckpt_epochs": train_args["ckpt_epochs"],
