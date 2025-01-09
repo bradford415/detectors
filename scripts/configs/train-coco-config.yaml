@@ -3,7 +3,7 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: True
+dev_mode: False
 
 # Base directory for output files; do not change this 
 output_dir: "output/train"
@@ -21,7 +21,7 @@ log_train_steps: 20
 dataset:
   
   # Path to the root of the dataset; detects which path to use based on device
-  root: "/home/jovyan/autofocus-dssi/coco" #"/mnt/d/Datasets/coco" # windows path
+  root: "/mnt/d/Datasets/coco" # windows path
   root_mac: "/Users/bsele/datasets/coco" # mac path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
@@ -36,7 +36,7 @@ train:
   # do not fit into memory; although, I believe batch norm statistics will only be computed on the mini-batch size
   # Ex: 64/4 = 16 mini-batch size
   batch_size: 64
-  subdivisions: 2 # TODO: implement this in code
+  subdivisions: 4
 
   # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
   start_epoch: 1
@@ -47,11 +47,11 @@ train:
 
   # Path of weights file (.pt) to resume training; 
   # use `null` to train a new model from scratch
-  checkpoint_path: #/Users/bsele/programming/detectors/output/train/development/2024_12_28-08_14_46_PM/checkpoints/best_mAP_1-02.pt #/Users/bsele/programming/detectors/output/train/development/2024_12_26-07_25_34_PM/checkpoints/best_mAP_0-73.pt
+  checkpoint_path: #"/home/bselee/programming/detectors/output/train/development/2025_01_06-07_14_05_PM/checkpoints/best_mAP_34-36.pt"
 
   # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
   # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet
-  backbone_weights: null #"/mnt/d/model-registry/pretrained-weights/darknet53/model_best.pth" #"/Users/bsele/pretrained-weights/darknet53/model_best.pth"
+  backbone_weights: "/mnt/d/model-registry/pretrained-weights/darknet53/model_best.pth" #"/Users/bsele/pretrained-weights/darknet53/model_best.pth"
 
 validation:
   batch_size: 4

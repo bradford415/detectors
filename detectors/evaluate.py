@@ -99,7 +99,6 @@ def evaluate(
         nms_preds = non_max_suppression(predictions, conf_thres=0.1, iou_thres=0.5)
         final_preds += nms_preds
 
-        ################### START HERE COMPARE WITH ULTRALYTICS ################
         targets = targets.to("cpu")
 
         # [[TPs, predicted_scores, pred_labels], ..., num_val_images]

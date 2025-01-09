@@ -13,7 +13,7 @@ from torch.utils import data
 
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.utils import misc
-from detectors.visualize import plot_loss, visualize_norm_img_tensors
+from detectors.visualize import plot_loss, plot_mAP, visualize_norm_img_tensors
 
 log = logging.getLogger(__name__)
 
@@ -121,11 +121,12 @@ class Trainer:
             )
             val_loss.append(epoch_val_loss.item())
 
-            plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
-
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
             epoch_mAP.append(mAP)
+            
+            plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
+            plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
             
             # Create csv file of training stats per epoch
             train_dict = {"epoch": list(np.arange(start_epoch, epoch+1)), "train_loss": train_loss, "val_loss": val_loss, "mAP": epoch_mAP}
@@ -262,7 +263,6 @@ class Trainer:
             # if .step() is called after every batch, then it will pass the current step;
             # if .step() is called after every epoch, then it will pass the epoch number;
             # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
-
             if (steps) % 100 == 0:
                 log.info(
                     "Current learning_rate: %s\n",
@@ -281,7 +281,7 @@ class Trainer:
                     loss_components[2],
                 )
 
-        return np.array(epoch_loss).mean()
+        return np.array(epoch_loss).mean() / samples.shape[0] / subdivisions
 
     @torch.no_grad()
     def _evaluate(

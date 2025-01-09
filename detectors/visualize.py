@@ -323,6 +323,23 @@ def plot_loss(train_loss: list[float], val_loss: list[float], save_dir: str):
 
     fig.savefig(save_name, bbox_inches="tight")
     plt.close()
+    
+    
+def plot_mAP(val_mAP: list[float], save_dir: str):
+    """Plots the validation mAP per epoch"""
+    save_name = Path(save_dir) / "mAP_curve.jpg"
+
+    x = np.arange(len(val_mAP)) + 1
+    fig, ax = plt.subplots(1)
+    ax.plot(x, val_mAP)
+
+    plt.title("validation mAP per epoch")
+    ax.set_xlabel("epoch")
+    ax.set_ylabel("mAP")
+
+    fig.savefig(save_name, bbox_inches="tight")
+    plt.close()
+    
 
 
 def visualize_batch(

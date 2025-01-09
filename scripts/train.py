@@ -90,9 +90,11 @@ def main(base_config_path: str, model_config_path):
 
     subdivisions = base_config["train"]["subdivisions"]
     mini_batch_size = base_config["train"]["batch_size"] // subdivisions
+    
+    log.info("\nbatch_size: %-5d subdivisions: %-5d mini_batch_size: %d", base_config["train"]["batch_size"], subdivisions, mini_batch_size)
 
     if base_config["train"]["batch_size"] % subdivisions != 0:
-        raise ValueErorr("batch_size must be divisible by subdivisions")
+        raise ValueError("batch_size must be divisible by subdivisions")
 
     if dev_mode:
         log.info("NOTE: executing in dev mode")

@@ -27,7 +27,7 @@ def burnin_schedule(i):
 
 
 def burnin_schedule_modified(i):
-    """Function for the Lambda learning rate scheduler defined by YoloV3 and V4.
+    """Function for the Lambda learning rate scheduler defined by YoloV3.
     The learning rate starts very low (close to 0) until it reaches the `burn_in` at 1000 steps
     and increases until it reaches the initial learning rate (0.0001)
 
@@ -45,10 +45,16 @@ def burnin_schedule_modified(i):
            scheduler.step is called outside the train/val dataloader
     """
 
-    # batch_size of 64 (original yolov3 implementation)
+    # Default steps in the yolo config batch_size of 64 (original yolov3 implementation)
+    # burn_in = 1000
+    # steps = [400000, 450000] # ~216 epochs and ~243 epochs
+    # scales = [0.1, 0.01]
+    
+    # Default steps in the yolo config batch_size of 64 (original yolov3 implementation)
     burn_in = 1000
-    steps = [400000, 450000]
+    steps = [80000, 100000] # ~43 epochs and ~54 epochs (1848 steps per epoch for batch 64)
     scales = [0.1, 0.01]
+    
     
     # My logic for choosing the step intervals based on the papers batch size of 64:
     # 64*400000 = 25,600,000 samples -> 25600000 / 16 = 1,600,000 (~216 epochs) therefore we should reduce the lr after 1.6m steps
