@@ -235,7 +235,7 @@ class Trainer:
                 # but it was mentioned here: https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/818#issuecomment-1484223518
                 total_loss *= samples.shape[0]
 
-            # Calculate gradients and updates weights
+            # Calculate gradients
             if self.enable_amp:
                 scaler.scale(total_loss).backward()
             else:
