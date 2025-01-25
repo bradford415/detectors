@@ -15,18 +15,25 @@ bash scripts/bash/download_coco.sh
 TODO
 
 ## Training a model
+This project is designed to use the configuration specified in `scripts/configs/`, but for ease of use the CLI arguments specified below will overwrite the main default config parameters for quick setup.
 
-### Setting up the configuration files
-Change the `root` parameter in `scripts/config/train-coco-config.yaml` to the path of the dataset root. For the coco dataset, this will be the path to the directory containing the `images` and `annotations` dirs.
+### Training from scratch
 ```bash
-dataset:
-  root: "/path/to/dataset/root/coco"
+python scripts/train.py --dataset_root "/path/to/coco"
 ```
 
-Begin training by specifying the train configuration file and the desired model configuration file to use 
+### Training from scratch with a pre-trained backbone
 ```bash
-python scripts/train.py scripts/configs/train-coco-config.yaml scripts/configs/yolov4/model-base.yaml
+python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --backbone_weights "/path/to/backbone_weights.pt"
 ```
+
+### Resume training from a checkpoint
+```bash
+python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path "/path/to/checkpoint_weights.pt"
+```
+
+## Inferencing
+TODO
 
 ## Notes
 Section which simplifies and clarifies object detection concepts and architecture flows.
