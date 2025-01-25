@@ -41,13 +41,23 @@ scheduler_map = {
 log = logging.getLogger(__name__)
 
 
-def main(base_config_path: str, model_config_path):
+def main(
+    base_config_path: str = "scripts/configs/train-coco-default.yaml",
+    model_config_path: str = "scripts/configs/yolov3/model-dn53.yaml",
+    dataset_root: Optional[str] = None,
+    backbone_weights: Optional[str] = None,
+    checkpoint_path: Optional[str] = None,
+):
     """Entrypoint for the project
 
     Args:
-        base_config_path: path to the desired configuration file
-        model_config_path: path to the detection model configuration file
-
+        base_config_path: path to the desired training configuration file; by default the train-coco-default.yaml file is used which
+                          trains from scratch (i.e., no pretrained backbone weights or detector weights)
+        model_config_path: path to the detection model configuration file; by default the yolov3 base model with a DarkNet53 backbone is used
+        dataset_root: path to the the root directory of the dataset; for coco, this is the path to the dir containing the `images` and `annotations` dirs
+        backbone_weights: path to the backbone weights; this can be useful when training from scratch
+        checkpoint_path: path to the weights of the entire detector model; this can be used to resume training or inference;
+                         if this parameter is not None, the backbone_weights will be ignored
     """
     # Load configuration files
     with open(base_config_path, "r") as f:
@@ -55,6 +65,18 @@ def main(base_config_path: str, model_config_path):
 
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
+    
+    # Override configuration parameters if CLI arguments are provided; this allows external users
+    # to easily run the project without messing with the configuration files
+    if dataset_root is not None:
+        base_config["dataset"]["root"] = dataset_root
+    
+    if checkpoint_path is not None:
+        base_config["train"]["checkpoint_path"] = checkpoint_path    
+        base_config["train"]["backbone_weights"] = None
+    elif backbone_weights is not None:
+        base_config["train"]["backbone_weights"] = backbone_weights    
+        
 
     dev_mode = base_config["dev_mode"]
 
@@ -84,14 +106,22 @@ def main(base_config_path: str, model_config_path):
 
     log.info("initializing...\n")
     log.info("writing outputs to %s", str(output_path))
+    
+    if base_config["train"]["checkpoint_path"] is None and base_config["train"]["backbone_weights"] is None:
+        log.info("\nNOTE: training from scratch; no pretrained weights provided")  
 
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
 
     subdivisions = base_config["train"]["subdivisions"]
     mini_batch_size = base_config["train"]["batch_size"] // subdivisions
-    
-    log.info("\nbatch_size: %-5d subdivisions: %-5d mini_batch_size: %d", base_config["train"]["batch_size"], subdivisions, mini_batch_size)
+
+    log.info(
+        "\nbatch_size: %-5d subdivisions: %-5d mini_batch_size: %d",
+        base_config["train"]["batch_size"],
+        subdivisions,
+        mini_batch_size,
+    )
 
     if base_config["train"]["batch_size"] % subdivisions != 0:
         raise ValueError("batch_size must be divisible by subdivisions")
@@ -185,7 +215,7 @@ def main(base_config_path: str, model_config_path):
             map_location=torch.device(device),
         )
         backbone.load_state_dict(
-            bb_weights["state_dict"], strict=False
+            bb_weights["state_dict"], strict=False 
         )  # "state_dict" is the key to model state_dict for the pretrained weights I found
 
     # detector args
@@ -237,10 +267,9 @@ def main(base_config_path: str, model_config_path):
 
     # Initialize training objects
     optimizer, lr_scheduler = _init_training_objects(
-        model_params=model.parameters(),
-        **learning_params
+        model_params=model.parameters(), **learning_params
     )
-    #breakpoint()
+    # breakpoint()
 
     trainer = Trainer(
         output_dir=str(output_path),
@@ -283,18 +312,21 @@ def _init_training_objects(
     weight_decay: float = 1e-4,
     momentum: Optional[float] = None,
     lr_drop: int = 200,
-    ):
+):
     if optimizer == "adam":
         optimizer = optimizer_map[optimizer](
             model_params, lr=learning_rate, weight_decay=weight_decay
         )
     elif optimizer == "sgd":
         optimizer = optimizer_map[optimizer](
-            model_params, lr=learning_rate, weight_decay=weight_decay, momentum=momentum, nesterov=True
+            model_params,
+            lr=learning_rate,
+            weight_decay=weight_decay,
+            momentum=momentum,
+            nesterov=True,
         )
     else:
         raise ValueError("unknown optimizer")
-    
 
     if lr_scheduler is not None:
         lr_scheduler = scheduler_map[lr_scheduler](

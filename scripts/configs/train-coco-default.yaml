@@ -1,4 +1,6 @@
 # Base config file which stores the default parameters which apply to all model configurations
+# this default configuration is used for easy-to-train parameters by external users of this project;
+# for example, training from scratch so the user does not need to download weights
 ---
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
@@ -21,8 +23,8 @@ log_train_steps: 20
 dataset:
   
   # Path to the root of the dataset; detects which path to use based on device
-  root: "/mnt/d/Datasets/coco" # windows path
-  root_mac: "/Users/bsele/datasets/coco" # mac path
+  root: # windows path
+  root_mac: # mac path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
@@ -43,15 +45,15 @@ train:
   epochs: 300
 
   # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-  ckpt_epochs: 2
+  ckpt_epochs: 3
 
   # Path of weights file (.pt) to resume training; 
   # use `null` to train a new model from scratch
-  checkpoint_path: #"/home/bselee/programming/detectors/output/train/development/2025_01_06-07_14_05_PM/checkpoints/best_mAP_34-36.pt"
+  checkpoint_path: 
 
   # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
   # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet
-  backbone_weights: "/mnt/d/model-registry/pretrained-weights/darknet53/model_best.pth" #"/Users/bsele/pretrained-weights/darknet53/model_best.pth"
+  backbone_weights:
 
 validation:
   batch_size: 4
@@ -66,7 +68,6 @@ cuda:
 reproducibility:
   seed: 42
 
-
 # Params for training objects
 
 # Adam optimizer parameters defined here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/config/yolov3.cfg
@@ -74,7 +75,7 @@ learning_config_1:
   optimizer: "adam"
   learning_rate: 0.001 #0.0001 #1e-4
 
-  # L2 regulartization penalty to add to the loss function: 
+  # L2 regulartization penalty to add to the loss function:
   weight_decay: 0.0005
 
   lr_scheduler: "lambda_lr"

@@ -1,0 +1,92 @@
+# Base config file which stores the default parameters which apply to all model configurations
+---
+
+# Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
+# to quickly run the code as well as sets num_workers=0
+dev_mode: False
+
+# Base directory for output files; do not change this 
+output_dir: "output/train"
+
+# Experiment name; this will be used for the output directory; use "development" when developing
+exp_name: "development"
+
+# Name of dataset; must be one of the names in the dataset_map dict
+dataset_name: "CocoDetection"
+
+# Log the train progress every n steps
+log_train_steps: 20
+
+# Parameters for the dataset class
+dataset:
+  
+  # Path to the root of the dataset; detects which path to use based on device
+  root: "/mnt/d/Datasets/coco" # windows path
+  root_mac: "/Users/bsele/datasets/coco" # mac path
+
+  # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
+  num_workers: 4
+
+train:
+  # Configurations for learning parameters such as the optmizier and lr scheduler
+  learning_config: "learning_config_2"
+
+  # batch_size will be split into mini-batches of size batch_size/subdivision; gradients will be accumulated until 
+  # the full batch_size is reached then the optimizer will update the weights; this is useful for large batch sizes that
+  # do not fit into memory; although, I believe batch norm statistics will only be computed on the mini-batch size
+  # Ex: 64/4 = 16 mini-batch size
+  batch_size: 64
+  subdivisions: 4
+
+  # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
+  start_epoch: 1
+  epochs: 300
+
+  # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+  ckpt_epochs: 3
+
+  # Path of weights file (.pt) to resume training; 
+  # use `null` to train a new model from scratch
+  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2025_01_24-08_19_55_PM/checkpoints/checkpoint0075.pt" #"/home/bselee/programming/detectors/output/train/development/2025_01_06-07_14_05_PM/checkpoints/best_mAP_34-36.pt"
+
+  # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
+  # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet
+  backbone_weights: # "/mnt/d/model-registry/pretrained-weights/darknet53/model_best.pth"
+
+validation:
+  batch_size: 4
+
+# GPU parameters
+cuda:
+  # List of GPU devices to use
+  gpus: [0]
+
+
+# Reproducibility information
+reproducibility:
+  seed: 42
+
+
+# Params for training objects
+
+# Adam optimizer parameters defined here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/config/yolov3.cfg
+learning_config_1:
+  optimizer: "adam"
+  learning_rate: 0.001 #0.0001 #1e-4
+
+  # L2 regulartization penalty to add to the loss function:
+  weight_decay: 0.0005
+
+  lr_scheduler: "lambda_lr"
+
+# Flova
+learning_config_2:
+  optimizer: "sgd"
+  learning_rate: 0.01
+
+  weight_decay: 0.0005
+  momentum: 0.9
+
+  lr_scheduler: "lambda_lr"
+
+

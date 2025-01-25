@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
-import torch
 import pandas as pd
+import torch
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
@@ -124,13 +124,20 @@ class Trainer:
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
             epoch_mAP.append(mAP)
-            
+
             plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
             plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
-            
+
             # Create csv file of training stats per epoch
-            train_dict = {"epoch": list(np.arange(start_epoch, epoch+1)), "train_loss": train_loss, "val_loss": val_loss, "mAP": epoch_mAP}
-            pd.DataFrame(train_dict).to_csv(self.output_dir / "train_stats.csv", index=False)
+            train_dict = {
+                "epoch": list(np.arange(start_epoch, epoch + 1)),
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "mAP": epoch_mAP,
+            }
+            pd.DataFrame(train_dict).to_csv(
+                self.output_dir / "train_stats.csv", index=False
+            )
 
             # Save the model every ckpt_epochs
             if (epoch) % ckpt_epochs == 0:
@@ -188,7 +195,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
-        subdivisions: int, 
+        subdivisions: int,
         scaler: torch.amp,
     ):
         """Train one epoch

@@ -489,7 +489,6 @@ class YoloLayerNew(nn.Module):
 
         # During inference
         if not self.training:
-
             train_output = head_output.detach().clone()
 
             # breakpoint()

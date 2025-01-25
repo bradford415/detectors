@@ -8,10 +8,10 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
+import matplotlib.pyplot as plt
 import torch
 import yaml
 from fire import Fire
-import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -26,11 +26,11 @@ from detectors.trainer import Trainer
 from detectors.utils import reproduce, schedulers
 from detectors.visualize import visualize_norm_img_tensors
 
-
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
+
 
 def main(train_config_path: str):
     """Entrypoint for the project
@@ -71,22 +71,23 @@ def main(train_config_path: str):
     dataset_val = dataset_map[base_config["dataset_name"]](
         dataset_split="val", dev_mode=False, **dataset_kwargs
     )
-    
+
     # number of images for each label; at least one label is in the image
     class_labels = dataset_train.coco.getCatIds()
-    class_count = [len(dataset_train.coco.getImgIds(catIds=[label])) for label in class_labels]
-    #class_count = [count for count in class_count if count != 0]
+    class_count = [
+        len(dataset_train.coco.getImgIds(catIds=[label])) for label in class_labels
+    ]
+    # class_count = [count for count in class_count if count != 0]
 
-    
     _, ax = plt.subplots(1, figsize=(14, 4))
-    
+
     ax.bar(class_labels, class_count)
     ax.set_xticks(class_labels)
     ax.set_xticklabels(dataset_train.class_names, rotation=90)
-    
+
     ax.set_xlabel("label")
     ax.set_ylabel("number of images")
-    
+
     plt.savefig(output_path / "train_distribution.jpg", bbox_inches="tight")
 
 

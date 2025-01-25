@@ -33,7 +33,7 @@ def burnin_schedule_modified(i):
 
     After steps[0] number of steps, the learning rate is multiplied by a factor of scales[0]
     After steps[1] number of steps, the learning rate is multiplied by a factor of scales[1]
-    
+
     For example if the initial learning rate is 0.0001, after steps[0] the new lr = 0.0001 * 0.1 = 0.00001
     and after steps[1] the new lr is 0.0001 * 0.01 = 0.000001
 
@@ -47,15 +47,17 @@ def burnin_schedule_modified(i):
 
     # Default steps in the yolo config batch_size of 64 (original yolov3 implementation)
     # burn_in = 1000
-    # steps = [400000, 450000] # ~216 epochs and ~243 epochs
+    # steps = [400000, 450000] # ~261 epochs and ~243 epochs
     # scales = [0.1, 0.01]
-    
+
     # Default steps in the yolo config batch_size of 64 (original yolov3 implementation)
     burn_in = 1000
-    steps = [80000, 100000] # ~43 epochs and ~54 epochs (1848 steps per epoch for batch 64)
+    steps = [
+        100000,
+        130000,
+    ]  # ~54 epochs and ~70 epochs (1848 steps per epoch for batch 64)
     scales = [0.1, 0.01]
-    
-    
+
     # My logic for choosing the step intervals based on the papers batch size of 64:
     # 64*400000 = 25,600,000 samples -> 25600000 / 16 = 1,600,000 (~216 epochs) therefore we should reduce the lr after 1.6m steps
     # 64*450000 = 28,800,000 samples -> 28800000 / 16 = 1,800,000 ()

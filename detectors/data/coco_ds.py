@@ -120,7 +120,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
             image = augs["image"]
 
             bboxes = torch.tensor(augs["bboxes"])
-            #breakpoint()
+            # breakpoint()
 
             # tl_x, tl_y, br_x, br_y -> cx, cy, w, h
             bboxes = box_xyxy_to_cxcywh(bboxes)

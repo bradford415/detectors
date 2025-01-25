@@ -153,7 +153,7 @@ def main(base_config_path: str, model_config_path: str):
         "output_path": output_path,
         "device": device,
     }
-    batch_metrics, image_detections, val_loss= evaluate(
+    batch_metrics, image_detections, val_loss = evaluate(
         model, dataloader_test, dataset_test.class_names, **evaluation_args
     )
 
@@ -164,7 +164,7 @@ def main(base_config_path: str, model_config_path: str):
             image_detections,
             classes=dataset_test.class_names,
             output_dir=save_dir,
-            #img_size=416,
+            # img_size=416,
         )
 
 

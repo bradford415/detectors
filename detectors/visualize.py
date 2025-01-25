@@ -61,7 +61,6 @@ def visualize_norm_img_tensors(
         ax.imshow(image)
 
         for img_idx, label, cx, cy, w, h in targets[targets[:, 0] == img_index]:
-
             # box coords are normalize [0,1] so we need to scale them to the input size
             cx *= img_w
             cy *= img_h
@@ -74,7 +73,12 @@ def visualize_norm_img_tensors(
             color = bbox_colors[int(np.where(unique_classes == int(label))[0])]
             # Create a Rectangle patch
             bbox = patches.Rectangle(
-                (int(tl_x), int(tl_y)), int(w), int(h), linewidth=2, edgecolor=color, facecolor="none"
+                (int(tl_x), int(tl_y)),
+                int(w),
+                int(h),
+                linewidth=2,
+                edgecolor=color,
+                facecolor="none",
             )
             # Add the bbox to the plot
             # TODO: need to figure out if I need to clip these boxes because sometimes the figure is too large
@@ -161,7 +165,6 @@ def visualize_dataloader(
         ax[0].imshow(image)
 
         for img_idx, label, cx, cy, w, h in targets[targets[:, 0] == img_index]:
-
             # box coords are normalize [0,1] so we need to scale them to the input size
             cx *= img_w
             cy *= img_h
@@ -246,15 +249,15 @@ def plot_detections(
                   were scaled to,
     """
     img_pil = Image.open(image_path).convert("RGB")
-    
+
     # TODO: might need to remove this since I'm now keeping the aspect ratio when resizing
     if img_size is not None:
         img_pil = img_pil.resize(size=(img_size, img_size))
-    
+
     img = np.array(img_pil)
 
     plt.figure()
-    fig, ax = plt.subplots(1) 
+    fig, ax = plt.subplots(1)
 
     ax.imshow(img)
 
@@ -323,8 +326,8 @@ def plot_loss(train_loss: list[float], val_loss: list[float], save_dir: str):
 
     fig.savefig(save_name, bbox_inches="tight")
     plt.close()
-    
-    
+
+
 def plot_mAP(val_mAP: list[float], save_dir: str):
     """Plots the validation mAP per epoch"""
     save_name = Path(save_dir) / "mAP_curve.jpg"
@@ -339,7 +342,6 @@ def plot_mAP(val_mAP: list[float], save_dir: str):
 
     fig.savefig(save_name, bbox_inches="tight")
     plt.close()
-    
 
 
 def visualize_batch(

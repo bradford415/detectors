@@ -21,7 +21,7 @@ def evaluate(
     model: nn.Module,
     dataloader_test: Iterable,
     class_names: List,
-    #img_size: int = 416,
+    # img_size: int = 416,
     criterion: Optional[nn.Module] = None,
     output_path: Optional[str] = None,
     device: torch.device = torch.device("cpu"),
@@ -62,7 +62,7 @@ def evaluate(
         # Extract target labels and convert target boxes to xyxy; extract image paths for visualization
         labels += targets[:, 1].tolist()
         image_paths += [meta["image_path"] for meta in target_meta]
-        
+
         # targets = targets.to(device)
 
         # # Extract object labels from all samples in the batch into a 1d python list
@@ -83,7 +83,7 @@ def evaluate(
         # Transfer preds to CPU for post processing
         # predictions = misc.to_cpu(predictions)
         if criterion is not None:
-            _, loss_components = criterion(train_output, targets, model) 
+            _, loss_components = criterion(train_output, targets, model)
             all_losses += loss_components
 
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
@@ -114,9 +114,8 @@ def evaluate(
             all_losses[2] / steps,
         )
 
-
     ## TODO plot val loss - can probably just use the function
-    
+
     # No detections over whole validation set
     if len(sample_metrics) == 0:
         log.info("---- No detections over whole validation set ----")

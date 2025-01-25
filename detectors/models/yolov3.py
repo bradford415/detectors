@@ -222,7 +222,6 @@ class Yolov3Head(nn.Module):
 
         yolo_outputs = []
         for layer in self.layers:
-
             if isinstance(layer, ScalePrediction):
                 yolo_outputs.append(layer(x, img_size))
                 continue
