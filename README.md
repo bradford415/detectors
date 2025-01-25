@@ -14,7 +14,6 @@ bash scripts/bash/download_coco.sh
 ## Environment setup
 TODO
 
-
 ## Training a model
 
 ### Setting up the configuration files
