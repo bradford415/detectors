@@ -44,6 +44,11 @@ python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path 
 ## Inferencing
 TODO
 
+## Results
+
+### YoloV3
+TODO
+
 ## Notes
 Section which simplifies and clarifies object detection concepts and architecture flows.
 
