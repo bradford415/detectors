@@ -65,18 +65,17 @@ def main(
 
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
-    
+
     # Override configuration parameters if CLI arguments are provided; this allows external users
     # to easily run the project without messing with the configuration files
     if dataset_root is not None:
         base_config["dataset"]["root"] = dataset_root
-    
+
     if checkpoint_path is not None:
-        base_config["train"]["checkpoint_path"] = checkpoint_path    
+        base_config["train"]["checkpoint_path"] = checkpoint_path
         base_config["train"]["backbone_weights"] = None
     elif backbone_weights is not None:
-        base_config["train"]["backbone_weights"] = backbone_weights    
-        
+        base_config["train"]["backbone_weights"] = backbone_weights
 
     dev_mode = base_config["dev_mode"]
 
@@ -106,9 +105,12 @@ def main(
 
     log.info("initializing...\n")
     log.info("writing outputs to %s", str(output_path))
-    
-    if base_config["train"]["checkpoint_path"] is None and base_config["train"]["backbone_weights"] is None:
-        log.info("\nNOTE: training from scratch; no pretrained weights provided")  
+
+    if (
+        base_config["train"]["checkpoint_path"] is None
+        and base_config["train"]["backbone_weights"] is None
+    ):
+        log.info("\nNOTE: training from scratch; no pretrained weights provided")
 
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
@@ -215,7 +217,7 @@ def main(
             map_location=torch.device(device),
         )
         backbone.load_state_dict(
-            bb_weights["state_dict"], strict=False 
+            bb_weights["state_dict"], strict=False
         )  # "state_dict" is the key to model state_dict for the pretrained weights I found
 
     # detector args

@@ -399,6 +399,8 @@ class Unnormalize:
         if not self.inplace:
             tensor = tensor.clone()
 
+        # Change shape to broadcast; i.e., for mean = [0.5, 0.4, 0.3] (3,) 
+        # becomes (3, 1, 1) to broadcast across spatial dimensions
         if mean.ndim == 1:
             mean = mean.view(-1, 1, 1)
         if std.ndim == 1:
