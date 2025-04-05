@@ -1,0 +1,36 @@
+from collections.abc import Iterable
+
+from detectors.solvers import optimizer_map, scheduler_map
+
+
+def build_solvers(
+    model_params: Iterable,
+    optimizer_params: dict[str, any],
+    scheduler_params: dict[str, any],
+):
+    """Builds the optimizer and learning rate scheduler based on the provided parameters
+    from solver.config
+
+    Args:
+        optimizer_params: the parameters used to build the optimizer
+        scheduler_params: the parameters used to build the learning rate scheduler
+        optimizer: the optimizer used during training
+    """
+    optimizer_name = optimizer_params.name
+    scheduler_name = scheduler_params.name
+
+    optimizer_params = optimizer_params.params
+    scheduler_params = scheduler_params.params
+
+    # Build optimizer
+    if optimizer_name in optimizer_map:
+        optimizer = optimizer_map[optimizer_name](model_params, **optimizer_params)
+    else:
+        raise ValueError(f"Unknown optimizer: {optimizer_name}")
+
+    if scheduler_name in scheduler_map:
+        scheduler = scheduler_map[scheduler_name](optimizer, **scheduler_params)
+    else:
+        raise ValueError(f"Unknown lr_scheduler: {scheduler_name}")
+
+    return optimizer, scheduler

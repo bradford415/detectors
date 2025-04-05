@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+from detectors.solvers import schedulers
+
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import torch
@@ -22,7 +24,7 @@ from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
 from detectors.trainer import Trainer
-from detectors.utils import reproduce, schedulers
+from detectors.utils import reproduce
 from detectors.visualize import visualize_norm_img_tensors
 
 detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}

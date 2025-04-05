@@ -230,7 +230,6 @@ class Yolov3Head(nn.Module):
 
             # Upsample then concat the intermediate feature maps from backbone
             if isinstance(layer, Upsample):
-                # breakpoint()
                 x = torch.cat([x, route_connection.pop()], dim=1)
 
         return yolo_outputs

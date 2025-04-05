@@ -1,4 +1,4 @@
-def burnin_schedule(i):
+def burnin_schedule_original(i):
     """Function for the Lambda learning rate scheduler defined by YoloV3 and V4.
     The learning rate starts very low (close to 0) until it reaches the `burn_in` at 1000 steps
     and increases until it reaches 0.0001
@@ -26,23 +26,26 @@ def burnin_schedule(i):
     return factor
 
 
-def burnin_schedule_modified(i):
+def burn_in_schedule(current_step, burn_in, steps_thresholds=(100000, 130000)):
     """Function for the Lambda learning rate scheduler defined by YoloV3.
-    The learning rate starts very low (close to 0) until it reaches the `burn_in` at 1000 steps
-    and increases until it reaches the initial learning rate (0.0001)
 
-    After steps[0] number of steps, the learning rate is multiplied by a factor of scales[0]
-    After steps[1] number of steps, the learning rate is multiplied by a factor of scales[1]
+    How the burn_inschedule works:
+        - The learning rate starts very low (close to 0) until it reaches the `burn_in` at 1000 steps
+           and increases until it reaches the initial learning rate (0.0001)
+        -  After steps_thresholds[0] number of steps, the learning rate is multiplied by a factor of scales[0]
+        -  After steps_thresholds[1] number of steps, the learning rate is multiplied by a factor of scales[1]
 
     For example if the initial learning rate is 0.0001, after steps[0] the new lr = 0.0001 * 0.1 = 0.00001
     and after steps[1] the new lr is 0.0001 * 0.01 = 0.000001
 
-
     Mofidied from: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/b139d49a99b8866d8d4a7cf75a80b1d982abf6f7/pytorchyolo/train.py#L173
 
     Args:
-        i: Step number if scheduler.step is called in the dataloader loop; epcoh number if
-           scheduler.step is called outside the train/val dataloader
+        current_step: Step number if scheduler.step is called in the dataloader loop; epcoh number if
+                      scheduler.step is called outside the train/val dataloader
+        steps_thresholds: two step thresholds to multiply the learning rate by a factor once
+                          the steps reach the threshold; default is about ~54 epochs and ~70 epochs (1848 steps per epoch for batch 64)
+        burn_in: number of steps to linearly increase the learning rate from 0 to the initial learning rate
     """
 
     # Default steps in the yolo config batch_size of 64 (original yolov3 implementation)
@@ -52,10 +55,6 @@ def burnin_schedule_modified(i):
 
     # Default steps in the yolo config batch_size of 64 (original yolov3 implementation)
     burn_in = 1000
-    steps = [
-        100000,
-        130000,
-    ]  # ~54 epochs and ~70 epochs (1848 steps per epoch for batch 64)
     scales = [0.1, 0.01]
 
     # My logic for choosing the step intervals based on the papers batch size of 64:
@@ -66,11 +65,11 @@ def burnin_schedule_modified(i):
     # steps = [1600000, 1800000]
     # scales = [0.1, 0.01]
 
-    if i < burn_in:
-        factor = i / burn_in
-    elif i < steps[0]:
+    if current_step < burn_in:
+        factor = current_step / burn_in
+    elif current_step < steps_thresholds[0]:
         factor = 1.0
-    elif i < steps[1]:
+    elif current_step < steps_thresholds[1]:
         factor = scales[0]
     else:
         factor = scales[1]

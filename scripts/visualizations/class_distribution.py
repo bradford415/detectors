@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+from detectors.solvers import schedulers
+
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import matplotlib.pyplot as plt
@@ -23,7 +25,7 @@ from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
 from detectors.trainer import Trainer
-from detectors.utils import reproduce, schedulers
+from detectors.utils import reproduce
 from detectors.visualize import visualize_norm_img_tensors
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}

@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+from detectors.solvers import schedulers
+
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import torch
@@ -16,26 +18,15 @@ from detectors.data.coco_ds import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
 from detectors.losses import loss_map
-from detectors.models import Yolov3, Yolov4
+from detectors.models import detectors_map
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
+from detectors.solvers import solver_configs
+from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
-from detectors.utils import reproduce, schedulers
-
-detectors_map: Dict[str, Any] = {"yolov3": Yolov3, "yolov4": Yolov4}
+from detectors.utils import reproduce
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
-
-optimizer_map = {
-    "adam": torch.optim.Adam,
-    "adamw": torch.optim.AdamW,
-    "sgd": torch.optim.SGD,
-}
-
-scheduler_map = {
-    "step_lr": torch.optim.lr_scheduler.StepLR,
-    "lambda_lr": torch.optim.lr_scheduler.LambdaLR,  # Multiply the initial lr by a factor determined by a user-defined function; it does NOT multiply the factor by the current lr, always the initial lr
-}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -196,6 +187,7 @@ def main(
     anchors = model_config["priors"]["anchors"]
 
     # number of anchors per scale
+    # TODO: make this less yolo specific
     num_anchors = len(anchors[0])
 
     # strip away the outer list to make it a 2d python list
@@ -248,6 +240,7 @@ def main(
     # )
 
     # initalize loss with specific args
+    # TODO: consider putting this in the solver config
     if detector_name == "yolov3":
         criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
     else:
@@ -258,20 +251,14 @@ def main(
     log.info("\tbackbone: %s", backbone_name)
     log.info("\tdetector: %s", model_config["detector"])
 
-    # criterion = Yolo_loss(device=device, batch=base_config["train"]["batch_size"], n_classes=80)
-
     # Extract the train arguments from base config
     train_args = base_config["train"]
 
-    # Extract the learning parameters such as lr, optimizer params and lr scheduler
-    learning_config = train_args["learning_config"]
-    learning_params = base_config[learning_config]
-
-    # Initialize training objects
-    optimizer, lr_scheduler = _init_training_objects(
-        model_params=model.parameters(), **learning_params
+    # Extract solver configs and build the solvers
+    solver_config = solver_configs[base_config["train"]["solver_config"]]()
+    optimizer, lr_scheduler = build_solvers(
+        model.parameters(), solver_config.optimizer, solver_config.lr_scheduler
     )
-    # breakpoint()
 
     trainer = Trainer(
         output_dir=str(output_path),
@@ -304,40 +291,6 @@ def main(
         "checkpoint_path": train_args["checkpoint_path"],
     }
     trainer.train(**trainer_args)
-
-
-def _init_training_objects(
-    model_params: Iterable,
-    optimizer: str = "sgd",
-    lr_scheduler: Optional[str] = "step_lr",
-    learning_rate: float = 1e-4,
-    weight_decay: float = 1e-4,
-    momentum: Optional[float] = None,
-    lr_drop: int = 200,
-):
-    if optimizer == "adam":
-        optimizer = optimizer_map[optimizer](
-            model_params, lr=learning_rate, weight_decay=weight_decay
-        )
-    elif optimizer == "sgd":
-        optimizer = optimizer_map[optimizer](
-            model_params,
-            lr=learning_rate,
-            weight_decay=weight_decay,
-            momentum=momentum,
-            nesterov=True,
-        )
-    else:
-        raise ValueError("unknown optimizer")
-
-    if lr_scheduler is not None:
-        lr_scheduler = scheduler_map[lr_scheduler](
-            optimizer, schedulers.burnin_schedule_modified
-        )
-    else:
-        lr_scheduler = None
-
-    return optimizer, lr_scheduler
 
 
 if __name__ == "__main__":

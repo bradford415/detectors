@@ -60,8 +60,7 @@ require:
 install_reqs: ## Install for linux only; we also need to upgrade pip to support editable installation with only pyproject.toml file; cu118 has a bug with CNNs I think so use cu11
 	${activate}
 	${python} -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu117  
-	${python} -m pip install -r ${REQUIREMENTS}
-	${python} -m pip install -e . --no-deps
+	${python} -m pip install -e .
 
 install_reqs_windows:
 	${activate_windows}
