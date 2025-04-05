@@ -12,7 +12,16 @@ bash scripts/bash/download_coco.sh
 ```
 
 ## Environment setup
+
+__linux__
 TODO
+
+__mac__
+```bash
+python -m venv .venv
+source .venv/bin/activate
+make install_reqs
+```
 
 ## Training a model
 This project is designed to use the configuration specified in `scripts/configs/`, but for ease of use the CLI arguments specified below will overwrite the main default config parameters for quick setup.
