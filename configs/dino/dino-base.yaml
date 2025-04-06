@@ -10,3 +10,4 @@ backbone: "resnet50"
 
 # TODO
 params:
+  num_feature_levels: 4
