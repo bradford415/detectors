@@ -45,9 +45,11 @@ python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path 
 TODO
 
 ## Results
+| Detector / Backbone | Pretrained  | Dataset  | Best mAP / Epoch |
+|---------------------|-------------|----------|------------------|
+| YoloV3 / DarkNet53  | Scratch     | COCO     | 39.2% / 59       |
+| YoloV3 / DarkNet53  | ImageNet    | COCO     | 40.3% / 46       |
 
-### YoloV3
-TODO
 
 ## Notes
 Section which simplifies and clarifies object detection concepts and architecture flows.
