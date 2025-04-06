@@ -1,0 +1,12 @@
+# The base configuration file for the DINO model
+# Filename convention: 
+#   - TODO
+
+# Currently based on the config: https://github.com/IDEA-Research/DINO/blob/main/config/DINO/DINO_4scale.py
+---
+detector: "dino"
+
+backbone: "resnet50"
+
+# TODO
+params:

@@ -2,12 +2,12 @@
 import json
 import logging
 import random
-from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Sequence
 
 import numpy as np
 import torch
+import yaml
 
 log = logging.getLogger(__name__)
 
@@ -33,15 +33,18 @@ def count_parameters(model):
 
 
 def save_configs(
-    config_dicts: Iterable[Dict], save_names: Iterable[str], output_path: Path
+    config_dicts: Sequence[tuple[dict, str]],
+    solver_dict: tuple[dict, str],
+    save_names: Sequence[str],
+    output_path: Path,
 ):
-    """Save configuration dictionaries as json files in the output; this allows
+    """Save configuration dictionaries as yaml files in the output; this allows
     reproducibility of the model by saving the parameters used
 
     Args:
         config_dicts: Dictionaries containing the configuration parameters used to
                       to run the script (e.g., the base config and the model config)
-        save_names: File names to save the reproducibility results as; must end with .json
+        save_names: File names to save the reproducibility results as; must end with .yaml
         output_path: Output directory to save the configuration files; it's recommened to have the
                      final dir named "reproduce"
     """
@@ -51,4 +54,11 @@ def save_configs(
 
     for config_dict, save_name in zip(config_dicts, save_names):
         with open(output_path / save_name, "w") as f:
-            json.dump(config_dict, f, indent=4)
+            yaml.dump(
+                config_dict, f, indent=4, sort_keys=False, default_flow_style=False
+            )
+
+    # Save solver parameters (optimizer, lr_scheduler, etc.)
+    param_dict, save_name = solver_dict
+    with open(output_path / save_name, "w") as f:
+        json.dump(param_dict, f, indent=4)

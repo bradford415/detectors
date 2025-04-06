@@ -123,7 +123,7 @@ class Trainer:
 
             precision, recall, AP, f1, ap_class = metrics_output
             mAP = AP.mean()
-            epoch_mAP.append(mAP)
+            epoch_mAP.append(mAP * 100)
 
             plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
             plot_mAP(epoch_mAP, save_dir=str(self.output_dir))

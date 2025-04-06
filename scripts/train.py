@@ -87,6 +87,17 @@ def main(
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
 
+    # Save configuration files and parameters
+    reproduce.save_configs(
+        config_dicts=[
+            (base_config, "base_config.yaml"),
+            (model_config, "model_config.yaml"),
+        ],
+        solver_dict=(solver_config.to_dict(), "solver_config.json"),
+        save_names=["base_config.yaml", "model_config.yaml"],
+        output_path=output_path / "reproduce",
+    )
+
     # Configure logger that prints to a log file and stdout
     logging.basicConfig(
         level=logging.INFO,
@@ -267,13 +278,6 @@ def main(
     )
 
     ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
-
-    # Save configuration files
-    reproduce.save_configs(
-        config_dicts=[base_config, model_config],
-        save_names=["base_config.json", "model_config.json"],
-        output_path=output_path / "reproduce",
-    )
 
     # Build trainer args used for the training
     trainer_args = {
