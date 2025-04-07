@@ -37,9 +37,9 @@ class CocoDetection(torchvision.datasets.CocoDetection):
     │  │  ├─ train_images.jpg
     │  ├─ val_2017
     │  │  ├─ train_images.jpg
-    │  ├─ annotations
-    │  │  ├─ instances_train2017.json
-    │  │  ├─ instances_val2017.json
+    ├─ annotations
+    │  ├─ instances_train2017.json
+    │  ├─ instances_val2017.json
 
     Inside "coco_minitrain_25k" create another directory named "annotations" and place the
     "instances_minitrain2017.json" and "instances_val2017.json" inside.

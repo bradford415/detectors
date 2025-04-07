@@ -38,7 +38,13 @@ class DINO(nn.Module):
         self.aux_loss = aux_loss
 
         if num_features_levels > 1:
-            
+            pass
 
     def forward(self, x):
         pass
+    
+    
+def build_dino(*, backbone: nn.Module, transformer: nn.Module, num_classes: int, num_queries: int, num_heads: int):
+    """Build the DINO detector"""
+    
+    

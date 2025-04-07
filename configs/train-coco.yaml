@@ -19,9 +19,9 @@ log_train_steps: 20
 
 # Parameters for the dataset class
 dataset:
-  
+
   # Path to the root of the dataset; detects which path to use based on device
-  root: "/mnt/d/Datasets/coco" # windows path
+  root: "/mnt/d/datasets/coco" # windows path
   root_mac: "/Users/bsele/datasets/coco" # mac path
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
