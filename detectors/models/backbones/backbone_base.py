@@ -5,15 +5,32 @@ from torch import nn
 class BackboneBase(nn.Module):
     """Base class for backbone networks, specifially for the DINO detector"""
 
-    def __init__(self, backbone: nn.Module, train_backbone: bool, num_channels: int, return_interm_indices: list):
+    def __init__(
+        self,
+        backbone: nn.Module,
+        train_backbone: bool,
+        num_channels: int,
+        return_interm_indices: list,
+    ):
         super().__init__()
         for name, parameter in backbone.named_parameters():
-            if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+            if (
+                not train_backbone
+                or "layer2" not in name
+                and "layer3" not in name
+                and "layer4" not in name
+            ):
                 parameter.requires_grad_(False)
 
         return_layers = {}
         for idx, layer_index in enumerate(return_interm_indices):
-            return_layers.update({"layer{}".format(5 - len(return_interm_indices) + idx): "{}".format(layer_index)})
+            return_layers.update(
+                {
+                    "layer{}".format(5 - len(return_interm_indices) + idx): "{}".format(
+                        layer_index
+                    )
+                }
+            )
 
         # if len:
         #     if use_stage1_feature:
@@ -35,3 +52,7 @@ class BackboneBase(nn.Module):
             out[name] = NestedTensor(x, mask)
 
         return out
+
+
+def build_backbone():
+    return 0

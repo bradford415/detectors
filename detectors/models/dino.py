@@ -42,9 +42,14 @@ class DINO(nn.Module):
 
     def forward(self, x):
         pass
-    
-    
-def build_dino(*, backbone: nn.Module, transformer: nn.Module, num_classes: int, num_queries: int, num_heads: int):
+
+
+def build_dino(
+    *,
+    backbone: nn.Module,
+    transformer: nn.Module,
+    num_classes: int,
+    num_queries: int,
+    num_heads: int
+):
     """Build the DINO detector"""
-    
-    

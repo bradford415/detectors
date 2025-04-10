@@ -129,7 +129,9 @@ class Yolov3Loss(nn.Module):
 
         return loss, torch.cat((lbox, lobj, lcls, loss)).detach().cpu()
 
-    def _build_targets(self, preds, targets, model) -> tuple[
+    def _build_targets(
+        self, preds, targets, model
+    ) -> tuple[
         list[torch.Tensor],
         list[torch.Tensor],
         list[tuple[torch.Tensor]],
