@@ -94,7 +94,6 @@ def main(
             (model_config, "model_config.yaml"),
         ],
         solver_dict=(solver_config.to_dict(), "solver_config.json"),
-        save_names=["base_config.yaml", "model_config.yaml"],
         output_path=output_path / "reproduce",
     )
 

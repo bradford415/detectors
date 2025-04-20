@@ -35,7 +35,6 @@ def count_parameters(model):
 def save_configs(
     config_dicts: Sequence[tuple[dict, str]],
     solver_dict: tuple[dict, str],
-    save_names: Sequence[str],
     output_path: Path,
 ):
     """Save configuration dictionaries as yaml files in the output; this allows
@@ -48,11 +47,10 @@ def save_configs(
         output_path: Output directory to save the configuration files; it's recommened to have the
                      final dir named "reproduce"
     """
-    assert len(config_dicts) == len(save_names)
 
     output_path.mkdir(parents=True, exist_ok=True)
 
-    for config_dict, save_name in zip(config_dicts, save_names):
+    for config_dict, save_name in config_dicts:
         with open(output_path / save_name, "w") as f:
             yaml.dump(
                 config_dict, f, indent=4, sort_keys=False, default_flow_style=False
