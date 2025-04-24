@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+from detectors.models.layers.positional import PositionEmbeddingSineHW
+
 
 class BackboneBase(nn.Module):
     """Base class for backbone networks, specifially for the DINO detector"""
@@ -54,5 +56,29 @@ class BackboneBase(nn.Module):
         return out
 
 
-def build_backbone():
+def build_backbone(
+    hidden_dim: int,
+    temperature_h: int = 40,
+    temperature_w: int = 40,
+    normalize: bool = True,
+):
+    """Build the backbone class specfiically for the DINO detector.
+
+    Args:
+        hidden_dim: TODO
+        temperature_h: The height temperature of the positional embedding equation (attention is all you need)
+        temperature_w The width temperature of the positional embedding equation (attention is all you need)
+        normalize: whether to normalize and scale positional coordinates from [0, 2pi)
+    """
+    # Initalize the positional embedding module to create positional embeddings
+    # for the images patches (output of backbone) before passing into the transformer encoder
+    positional_embedding = PositionEmbeddingSineHW(
+        num_pos_feats=hidden_dim // 2,
+        temperature_h=temperature_h,
+        temperature_w=temperature_w,
+        normalize=normalize,
+    )
+    
+    ################# START HERE continue on with building the backbone ##############
+
     return 0

@@ -30,15 +30,16 @@ class PositionEmbeddingSineHW(nn.Module):
         normalize=False,
         scale=None,
     ):
-        """TODO
+        """Initialize the Postional Embedding Module
 
         Args:
             num_pos_feats: embedding size of each positional embedding;
                            this is typically half of the token embedding dim (the input to the encoder)
-            temperature_h: tuemperature for height; a lower temperature means positions change more rapidly
+            temperature_h: temperature for height; a lower temperature means positions change more rapidly
             temperature_w: temperature for width; a lower temperature means positions change more rapidly
-            normalize:
-            scale:
+            normalize: whether to row normalize and col normalize the positional coordinates (right before creating embeddings)
+                       from [0, 2pi)
+            scale: goes hand-in-hand with normalize; the values are first normalized to [0, 1) and then multiplied by scale [0, 2pi)
         """
         super().__init__()
         self.num_pos_feats = num_pos_feats
@@ -131,3 +132,13 @@ class PositionEmbeddingSineHW(nn.Module):
         pos = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
 
         return pos
+
+
+def build_positional_encodings():
+    """Builds 2d posiitional encodings for the images patches/tokens passed into the encoder;
+    the images patches correspond to the feature map of the backbone network
+
+    Args:
+        num_pos_feats:
+
+    """

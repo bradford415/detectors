@@ -8,6 +8,22 @@ detector: "dino"
 
 backbone: "resnet50"
 
+backbone_params:
+  return_levels: [1, 2, 3]
+
+positional_embedding_params:
+  # The height and width temperature of the positional embedding equation (attention is all you need);
+  # see models.layers.positional for more details
+  pe_temperature_h: 40
+  pe_temperature_w: 40
+
+  # row/col normalize the poisitonal coordinates [0, 2pi)
+  normalize: True
+
+
+
 # TODO
-params:
+detector_params:
   num_feature_levels: 4
+
+  hidden_dim: 256
