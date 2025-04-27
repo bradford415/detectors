@@ -163,12 +163,17 @@ class ResNet(nn.Module):
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
+        
+        # base channels for each resnet "level" (resnet has 4 levels); the final output
+        # channel will be multiplied by self.expansion (4 for bottleneck and 1 for basicblock)
+        self.base_chs = [64, 128, 256, 512]
 
         self.final_num_chs = 1024 // 2
 
         self.remove_top = remove_top
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
+        print(f"Using norm layer: {norm_layer} - remove this once verified")
         self._norm_layer = norm_layer
 
         self.inplanes = 64
@@ -190,15 +195,15 @@ class ResNet(nn.Module):
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer1 = self._make_layer(block, self.base_chs[0], layers[0])
         self.layer2 = self._make_layer(
-            block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]
+            block, self.base_chs[1], layers[1], stride=2, dilate=replace_stride_with_dilation[0]
         )
         self.layer3 = self._make_layer(
-            block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1]
+            block, self.base_chs[2], layers[2], stride=2, dilate=replace_stride_with_dilation[1]
         )
         self.layer4 = self._make_layer(
-            block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2]
+            block, self.base_chs[3], layers[3], stride=2, dilate=replace_stride_with_dilation[2]
         )
 
         if not remove_top:
@@ -230,6 +235,17 @@ class ResNet(nn.Module):
         stride: int = 1,
         dilate: bool = False,
     ) -> nn.Sequential:
+        """Make a resnet "level"; resnets typically have 4 levels
+        
+        Args:
+            block: the type of block to use for the resnet; resnet50 and greater use
+                   Bottleneck blocks while resnet34 and lower use BasicBlock
+            planes: the number of base output channels in the block; the final number of output channels
+                    will be multiplied
+            blocks: the number of blocks in the "level"
+            
+            
+        """
         norm_layer = self._norm_layer
         downsample = None
         previous_dilation = self.dilation
@@ -281,15 +297,14 @@ class ResNet(nn.Module):
         block2 = self.layer2(block1)
         block3 = self.layer3(block2)
         out = self.layer4(block3)
-        # breakpoint()
 
         if not self.remove_top:
             out = self.avgpool(out)
             out = torch.flatten(x, 1)
             out = self.fc(out)
 
-        # return block2, block3, out
-        return out, block3, block2
+        #return out, block3, block2 
+        return  block1, block2, block3, out  # NOTE: swapping this for DINO, this will mess up YoloV3
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
@@ -311,10 +326,13 @@ def _resnet(
     layers: List[int],
     pretrain: bool = True,
     remove_top: bool = True,
+    norm_layer: nn.Module = nn.BatchNorm2d,
     progress: bool = True,
     **kwargs: Any,
 ) -> ResNet:
-    model = ResNet(block, layers, remove_top=remove_top, **kwargs)
+    model = ResNet(
+        block, layers, remove_top=remove_top, norm_layer=norm_layer, **kwargs
+    )
 
     if pretrain:
         state_dict = torch.hub.load_state_dict_from_url(
@@ -358,10 +376,21 @@ def resnet18(
 
 
 def resnet50(
-    pretrain=True, remove_top=True, progress: bool = True, **kwargs: Any
+    pretrain=True,
+    remove_top=True,
+    progress: bool = True,
+    norm_layer=nn.BatchNorm2d,
+    **kwargs: Any,
 ) -> ResNet:
     """ResNet-50 from `Deep Residual Learning for Image Recognition <https://arxiv.org/abs/1512.03385>`__."""
 
     return _resnet(
-        "resnet50", Bottleneck, [3, 4, 6, 3], pretrain, remove_top, progress, **kwargs
+        "resnet50",
+        Bottleneck,
+        [3, 4, 6, 3],
+        pretrain,
+        remove_top,
+        norm_layer=norm_layer,
+        progress=progress,
+        **kwargs,
     )

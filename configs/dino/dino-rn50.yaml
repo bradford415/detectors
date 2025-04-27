@@ -1,6 +1,6 @@
-# The base configuration file for the DINO model
+# Configuration file for the DINO detector
 # Filename convention: 
-#   - TODO
+#   - {detector}-{backbone}.yaml
 
 # Currently based on the config: https://github.com/IDEA-Research/DINO/blob/main/config/DINO/DINO_4scale.py
 ---
@@ -10,6 +10,8 @@ backbone: "resnet50"
 
 backbone_params:
   return_levels: [1, 2, 3]
+  backbone_freeze_keywords: TODO see if I need this
+
 
 positional_embedding_params:
   # The height and width temperature of the positional embedding equation (attention is all you need);
@@ -19,8 +21,6 @@ positional_embedding_params:
 
   # row/col normalize the poisitonal coordinates [0, 2pi)
   normalize: True
-
-
 
 # TODO
 detector_params:

@@ -28,18 +28,11 @@ dataset:
   num_workers: 4
 
 train:
-  # Configurations for learning parameters such as the optmizier and lr scheduler
-  learning_config: "learning_config_2"
-
-  # batch_size will be split into mini-batches of size batch_size/subdivision; gradients will be accumulated until 
-  # the full batch_size is reached then the optimizer will update the weights; this is useful for large batch sizes that
-  # do not fit into memory; although, I believe batch norm statistics will only be computed on the mini-batch size
-  # Ex: 64/4 = 16 mini-batch size
-  batch_size: 64
-  subdivisions: 4
-
-  # The epoch to start on; starting at 1 makes calculations for logging and checkpointing more intuitive
-  start_epoch: 1
+  # TODO: replace subdivisons (above) with effective_batch_size
+  # batches & epochs
+  batch_size: 32
+  effective_batch_size: 1024  # batch_size * gradient_accumulation_steps
+  validation_batch_size: 32
   epochs: 300
 
   # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
@@ -51,10 +44,30 @@ train:
 
   # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
   # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet
-  backbone_weights: # "/mnt/d/model-registry/pretrained-weights/darknet53/model_best.pth"
+  backbone_weights:
 
-validation:
-  batch_size: 4
+
+# solver params: optimzer, lr scheduler, etc.
+sovler:
+
+  # TODO: adapt this for DINO; currently copied pasted from classifiers
+  optimizer:
+    # The optimizer to use; must be one of the names in the optimizer_map dict
+    name: "adamw"
+    
+    params:
+      lr: 0.0001
+      backbone_lr: 1e-5 # lr for only the backbone
+      weight_decay: 0.05
+
+  lr_scheduler:
+    name: "warmup_cosine_decay"
+    step_lr_on: "epochs" # step the lr after n "epochs" or "steps"
+    
+    params:
+      warmup_epochs: 5 # linear warmup for this many epochs
+      warmup_min_lr: 1e-6
+      # Note: total_steps is set by number of epochs
 
 # GPU parameters
 cuda:
@@ -65,28 +78,4 @@ cuda:
 # Reproducibility information
 reproducibility:
   seed: 42
-
-
-# Params for training objects
-
-# Adam optimizer parameters defined here: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/config/yolov3.cfg
-learning_config_1:
-  optimizer: "adam"
-  learning_rate: 0.001 #0.0001 #1e-4
-
-  # L2 regulartization penalty to add to the loss function:
-  weight_decay: 0.0005
-
-  lr_scheduler: "lambda_lr"
-
-# Flova
-learning_config_2:
-  optimizer: "sgd"
-  learning_rate: 0.01
-
-  weight_decay: 0.0005
-  momentum: 0.9
-
-  lr_scheduler: "lambda_lr"
-
 
