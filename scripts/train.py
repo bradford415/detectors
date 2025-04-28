@@ -21,10 +21,10 @@ from detectors.losses import loss_map
 from detectors.models import detectors_map
 from detectors.models.backbones import backbone_map
 from detectors.models.backbones.darknet import Darknet
-from detectors.solvers import solver_configs
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
 from detectors.utils import reproduce
+from detectors.utils.script import initialize_anchors
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
@@ -93,7 +93,7 @@ def main(
             (base_config, "base_config.yaml"),
             (model_config, "model_config.yaml"),
         ],
-        solver_dict=(solver_config.to_dict(), "solver_config.json"),
+        # solver_dict=(solver_config.to_dict(), "solver_config.json"),
         output_path=output_path / "reproduce",
     )
 
@@ -116,33 +116,42 @@ def main(
     # Apply reproducibility seeds
     reproduce.reproducibility(**base_config["reproducibility"])
 
-    subdivisions = base_config["train"]["subdivisions"]
-    mini_batch_size = base_config["train"]["batch_size"] // subdivisions
+    # Extract training and val params
+    train_args = base_config["train"]
 
-    log.info(
-        "\nbatch_size: %-5d subdivisions: %-5d mini_batch_size: %d",
-        base_config["train"]["batch_size"],
-        subdivisions,
-        mini_batch_size,
-    )
+    batch_size = train_args["batch_size"]
+    effective_bs = train_args["effective_batch_size"]
+    epochs = train_args["epochs"]
 
-    if base_config["train"]["batch_size"] % subdivisions != 0:
-        raise ValueError("batch_size must be divisible by subdivisions")
+    val_batch_size = train_args["batch_size"]
+
+    if effective_bs % batch_size == 0 and effective_bs >= batch_size:
+        grad_accum_steps = effective_bs // batch_size
+    else:
+        raise ValueError(
+            "grad_accum_bs must be divisible by batch_size and greater than or equal to batch_size"
+        )
 
     if dev_mode:
         log.info("NOTE: executing in dev mode")
-        mini_batch_size = 4
-        subdivisions = 2
-        base_config["validation"]["batch_size"] = 2
+        batch_size = 4
+        grad_accum_steps = 2
+
+    log.info(
+        "\neffective_batch_size: %-5d grad_accum_steps: %-5d batch_size: %d",
+        effective_bs,
+        grad_accum_steps,
+        batch_size,
+    )
 
     # Set gpu parameters
     train_kwargs = {
-        "batch_size": mini_batch_size,
+        "batch_size": batch_size,
         "shuffle": True,
         "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
     }
     val_kwargs = {
-        "batch_size": base_config["validation"]["batch_size"],
+        "batch_size": val_batch_size,
         "shuffle": False,
         "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
     }
@@ -194,14 +203,16 @@ def main(
         **val_kwargs,
     )
 
-    anchors = model_config["priors"]["anchors"]
+    detector_name = model_config["detector"]
 
-    # number of anchors per scale
-    # TODO: make this less yolo specific
-    num_anchors = len(anchors[0])
+    if "dino" in detector_name:
+        from detectors.models.backbones.backbone import build_backbone
 
-    # strip away the outer list to make it a 2d python list
-    anchors = [anchor for anchor_scale in anchors for anchor in anchor_scale]
+        issa_backbone = build_backbone()
+    breakpoint()
+
+    if "yolo" in detector_name:  # TODO: should just put this in a create_model.py file
+        anchors, num_anchors = initialize_anchors(base_config["priors"]["anchors"])
 
     # Initalize the detector backbone; typically some feature extractor
     backbone_name = model_config["backbone"]["name"]
@@ -230,7 +241,6 @@ def main(
     }
 
     # Initialize detection model and transfer to GPU
-    detector_name = model_config["detector"]
     model = detectors_map[detector_name](**model_components)
 
     # Compute and log the number of params in the model
@@ -241,16 +251,8 @@ def main(
 
     ## TODO: Apply weights init maybe
 
-    # For the YoloV4Loss function, if the batch size is different than the
-    # TODO: probably make a function to select the loss
-    # criterion = Yolov4Loss(
-    #     anchors=model_config["priors"]["anchors"],
-    #     batch_size=base_config["train"]["batch_size"],
-    #     device=device,
-    # )
-
     # initalize loss with specific args
-    # TODO: consider putting this in the solver config
+    # TODO:
     if detector_name == "yolov3":
         criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
     else:
@@ -265,9 +267,9 @@ def main(
     train_args = base_config["train"]
 
     # Extract solver configs and build the solvers
-    solver_config = solver_configs[base_config["train"]["solver_config"]]()
+    solver_config = base_config["solver"]
     optimizer, lr_scheduler = build_solvers(
-        model.parameters(), solver_config.optimizer, solver_config.lr_scheduler
+        model.parameters(), solver_config["optimizer"], solver_config["lr_scheduler"]
     )
 
     trainer = Trainer(
@@ -275,8 +277,6 @@ def main(
         device=device,
         log_train_steps=base_config["log_train_steps"],
     )
-
-    ## TODO: Implement checkpointing somewhere around here (or maybe in Trainer)
 
     # Build trainer args used for the training
     trainer_args = {
@@ -287,7 +287,7 @@ def main(
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
-        "subdivisions": subdivisions,
+        "grad_accum_steps": grad_accum_steps,
         "start_epoch": train_args["start_epoch"],
         "epochs": train_args["epochs"],
         "ckpt_epochs": train_args["ckpt_epochs"],

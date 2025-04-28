@@ -3,6 +3,8 @@ import math
 import torch
 from torch import nn
 
+from detectors.data import NestedTensor
+
 
 class PositionEmbeddingSineHW(nn.Module):
     """Create 2D positional embeddings for the images patches/tokens passed into the encoder; the images patches

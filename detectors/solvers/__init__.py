@@ -1,3 +1,5 @@
+import torch
+
 from .config import *
 from .schedulers import *
 

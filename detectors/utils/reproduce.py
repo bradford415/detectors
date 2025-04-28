@@ -3,7 +3,7 @@ import json
 import logging
 import random
 from pathlib import Path
-from typing import Dict, Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 import torch
@@ -34,8 +34,8 @@ def count_parameters(model):
 
 def save_configs(
     config_dicts: Sequence[tuple[dict, str]],
-    solver_dict: tuple[dict, str],
     output_path: Path,
+    solver_dict: Optional[tuple[dict, str]] = None,
 ):
     """Save configuration dictionaries as yaml files in the output; this allows
     reproducibility of the model by saving the parameters used
@@ -56,7 +56,8 @@ def save_configs(
                 config_dict, f, indent=4, sort_keys=False, default_flow_style=False
             )
 
-    # Save solver parameters (optimizer, lr_scheduler, etc.)
-    param_dict, save_name = solver_dict
-    with open(output_path / save_name, "w") as f:
-        json.dump(param_dict, f, indent=4)
+    if solver_dict is not None:
+        # Save solver parameters (optimizer, lr_scheduler, etc.)
+        param_dict, save_name = solver_dict
+        with open(output_path / save_name, "w") as f:
+            json.dump(param_dict, f, indent=4)

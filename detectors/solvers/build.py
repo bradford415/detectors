@@ -5,8 +5,8 @@ from detectors.solvers import optimizer_map, scheduler_map
 
 def build_solvers(
     model_params: Iterable,
-    optimizer_params: dict[str, any],
-    scheduler_params: dict[str, any],
+    optimizer_config: dict[str, any],
+    scheduler_config: dict[str, any],
 ):
     """Builds the optimizer and learning rate scheduler based on the provided parameters
     from solver.config
@@ -16,11 +16,11 @@ def build_solvers(
         scheduler_params: the parameters used to build the learning rate scheduler
         optimizer: the optimizer used during training
     """
-    optimizer_name = optimizer_params.name
-    scheduler_name = scheduler_params.name
+    optimizer_name = optimizer_config["name"]
+    scheduler_name = scheduler_config["name"]
 
-    optimizer_params = optimizer_params.params
-    scheduler_params = scheduler_params.params
+    optimizer_params = optimizer_config["params"]
+    scheduler_params = scheduler_config["params"]
 
     # Build optimizer
     if optimizer_name in optimizer_map:

@@ -3,9 +3,12 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from detectors.data import NestedTensor
 from detectors.models.backbones import backbone_map
 from detectors.models.layers.positional import PositionEmbeddingSineHW
 from detectors.utils.distributed import is_main_process
+
+supported_backbones = ["resnet50"]
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -65,11 +68,11 @@ class FrozenBatchNorm2d(torch.nn.Module):
 
 class BackboneBase(nn.Module):
     """Base class to prepare ResNet backbone networks, specifially for the DINO detector.
-    
+
     In theory, this could be used for any backbone but there's a decent amount of hardcoded
     logic.
     """
-    ##################### START HERE ######################
+
     def __init__(
         self,
         backbone: nn.Module,
@@ -82,7 +85,7 @@ class BackboneBase(nn.Module):
         Args:
             backbone: the backbone network to use as the feature extractor to the detector;
                       for dino this is typically a resnet or swin
-            bb_out_chs: the number of output channels for each feature map level of the backbone 
+            bb_out_chs: the number of output channels for each feature map level of the backbone
                         that was specified by bb_level_inds;
             bb_level_inds: the indices of backbone levels to fuse into the the detector;
                             i.e., heiarchicial features to extract from the backbone;
@@ -95,7 +98,7 @@ class BackboneBase(nn.Module):
         super().__init__()
         # Loop through all parameters in the backbone and freeze:
         #   1. all parameters if train_backbone is False (freezes the entire backbone)
-        #   2. if train_backbone is True, only layer2, layer3, and layer4 (deep layers) 
+        #   2. if train_backbone is True, only layer2, layer3, and layer4 (deep layers)
         #      are trainable and conv1, bn1, and layer1 (the early layers) of the resnet are frozen.
         #
         # The idea behind freezing the early layers is that they learn more generic features
@@ -104,37 +107,22 @@ class BackboneBase(nn.Module):
         # accuracy without over fitting; see models.backbones.resnet.ResNet
         # to see these layers; the default case in this code is to use #2
         for name, parameter in backbone.named_parameters():
-            if (
-                not train_backbone
-                or ("layer2" not in name
-                and "layer3" not in name
-                and "layer4" not in name)
+            if not train_backbone or (
+                "layer2" not in name and "layer3" not in name and "layer4" not in name
             ):
                 parameter.requires_grad_(False)
 
-        # return_layers = {}
-        # for idx, layer_index in enumerate(bb_level_inds):
-        #     return_layers.update(
-        #         {
-        #             "layer{}".format(5 - len(return_interm_indices) + idx): "{}".format(
-        #                 layer_index
-        #             )
-        #         }
-        #     )
-
-        # Assign the backbone and its number of output channels to the BackboneBase class
         self.backbone = backbone
         self.bb_out_chs = bb_out_chs
         self.bb_level_inds = bb_level_inds
-    
 
     def forward(self, tensor_list: NestedTensor) -> dict[str, NestedTensor]:
         """Extract features with the backbone and resize the input mask
         to match the spatial dimensions of each feature map
-        
+
         Args:
             TODO
-            
+
         Returns:
             TODO
         """
@@ -143,25 +131,22 @@ class BackboneBase(nn.Module):
 
         assert len(feature_maps) == 4
 
-        # Extract only the desired feature maps     
+        # Extract only the desired feature maps
         feature_maps = np.array(feature_maps)[self.bb_level_inds]
-        
+
         assert len(feature_maps) == len(self.bb_level_inds)
-        
-        
-        # Resize the input mask to match the spatial size of the feature map; 
-        # the mask is currently the shape of the input tensor (tensor input to the back) and needs to be resized for each feature map 
+
+        # Resize the input mask to match the spatial size of the feature map;
+        # the mask is currently the shape of the input tensor (tensor input to the back) and needs to be resized for each feature map
         nested_feature_maps: dict[str, NestedTensor] = {}
         for name, x in feature_maps.items():
             orig_mask = tensor_list.mask
-            
+
             assert orig_mask is not None
-            
+
             # resize mask to match the spatial dimensions of the feature map
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
             nested_feature_maps[name] = NestedTensor(x, mask)
-            
-        ############ START HERE, implement NesetedTensor then finish build_backbone and try to initialize !!!!
 
         return nested_feature_maps
 
@@ -176,7 +161,7 @@ class Backbone(BackboneBase):
         self,
         backbone_name: str,
         train_backbone: bool,
-        bb_level_inds: list,
+        bb_level_inds: list[int],
         batch_norm=FrozenBatchNorm2d,
     ):
         """Initialize the backbone network
@@ -194,52 +179,48 @@ class Backbone(BackboneBase):
                         while training the detector; i.e., only uses the bn statistics from
                         the pretrained backbone
         """
-        if len(bb_level_inds) != 4:
-            raise ValueError(
-                "resnet and swin only have 4 levels"
-            )
-        
-        supported_backbones = ["resnet50"]
+        if len(bb_level_inds) > 4 or max(bb_level_inds) >= 4:
+            raise ValueError("resnet and swin only have 4 levels and are 0-indexed")
 
         if backbone_name in supported_backbones:
             backbone = backbone_map[backbone_name](
-                # Only download the pretrained weights with the main process; the other processes
-                # will load the weights in a later step
-                pretrained=is_main_process(), 
+                # Only download the pretrained weights with the main process; the other 
+                # processes will load the weights in a later step
+                pretrain=is_main_process(),
                 remove_top=True,  # remove the classification head
                 norm_layer=batch_norm,
             )
         else:
             raise NotImplementedError(f"currently only supports {supported_backbones}")
-        
+
         # num_channels = 512 if name in ('resnet18', 'resnet34') else 2048
         assert backbone_name not in (
             "resnet18",
             "resnet34",
         ), "Only resnet50 and resnet101 are available."
-        #assert return_interm_indices in [[0, 1, 2, 3], [1, 2, 3], [3]]
-        
+        # assert return_interm_indices in [[0, 1, 2, 3], [1, 2, 3], [3]]
+
         # Extract the number of output channels for each level of the backbone;
         # resnet has base_chs = [64, 128, 256, 512] and for resnet50 and greater these
-        # base channels are multiplied by an expansion factor of 4; 
+        # base channels are multiplied by an expansion factor of 4;
         # see models.backbones.resnet.base_chs for more info
         bb_output_chs = backbone.base_chs
-        
+
         if backbone_name in {"resnet50", "resnet101"}:
             expansion = 4
             bb_output_chs = [ch * expansion for ch in bb_output_chs]
-        else: 
+        else:
             # expansion = 1 for rn 34 and rn 18
             raise NotImplementedError(f"Backbone {supported_backbones} not implemented")
-            
+
         # Thefore for resnet50 and greater bb_output_chs = [256, 512, 1024, 2048]
-        
+
         # Extract the number of output channels for each level of the backbone specified;
         bb_output_chs = np.array(bb_output_chs)[bb_level_inds]
-        
+
         # NOTE: DETR only uses the final output of the backbone while dino fuses
         #       multiple level outputs (intermediate layers)
-        
+
         # Initialize the backbone base class; NOTE: is this class really needed?
         super().__init__(backbone, train_backbone, bb_output_chs, bb_level_inds)
 
@@ -250,6 +231,7 @@ def build_backbone(
     temperature_h: int = 40,
     temperature_w: int = 40,
     normalize: bool = True,
+    bb_level_inds: list[int] = [1, 2, 3],
 ):
     """Build the backbone class specfiically for the DINO detector.
 
@@ -269,13 +251,19 @@ def build_backbone(
     )
 
     ################# START HERE continue on with building the backbone ##############
-    # build the resnet backbone
-    backbone = Backbone(
-        backbone_name=backbone_name,
-        return_interm_indices=[2, 3, 4],
-        train_backbone=True,
-        batch_norm=FrozenBatchNorm2d,  # do not update the bn statistics while training; only use the pretrained bn statistics
-    )
-    # TODO: build the swin backbone at a later point
+    # build the resnet backbone; NOTE: the Backbone class is very specific to resnet
+    if "resnet" in backbone_name:
+        backbone = Backbone(
+            backbone_name=backbone_name,
+            train_backbone=True,
+            bb_level_inds=bb_level_inds,
+            batch_norm=FrozenBatchNorm2d,  # do not update the bn statistics while training; only use the pretrained bn statistics
+        )
+    elif "swin" in backbone_name:
+        # TODO: build the swin backbone at a later point
+        raise NotImplementedError
+    else:
+        raise ValueError(f"Backbone {backbone_name} not implemented")
+    
 
     return 0

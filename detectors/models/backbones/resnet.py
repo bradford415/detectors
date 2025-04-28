@@ -163,7 +163,7 @@ class ResNet(nn.Module):
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
-        
+
         # base channels for each resnet "level" (resnet has 4 levels); the final output
         # channel will be multiplied by self.expansion (4 for bottleneck and 1 for basicblock)
         self.base_chs = [64, 128, 256, 512]
@@ -197,13 +197,25 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, self.base_chs[0], layers[0])
         self.layer2 = self._make_layer(
-            block, self.base_chs[1], layers[1], stride=2, dilate=replace_stride_with_dilation[0]
+            block,
+            self.base_chs[1],
+            layers[1],
+            stride=2,
+            dilate=replace_stride_with_dilation[0],
         )
         self.layer3 = self._make_layer(
-            block, self.base_chs[2], layers[2], stride=2, dilate=replace_stride_with_dilation[1]
+            block,
+            self.base_chs[2],
+            layers[2],
+            stride=2,
+            dilate=replace_stride_with_dilation[1],
         )
         self.layer4 = self._make_layer(
-            block, self.base_chs[3], layers[3], stride=2, dilate=replace_stride_with_dilation[2]
+            block,
+            self.base_chs[3],
+            layers[3],
+            stride=2,
+            dilate=replace_stride_with_dilation[2],
         )
 
         if not remove_top:
@@ -236,15 +248,15 @@ class ResNet(nn.Module):
         dilate: bool = False,
     ) -> nn.Sequential:
         """Make a resnet "level"; resnets typically have 4 levels
-        
+
         Args:
             block: the type of block to use for the resnet; resnet50 and greater use
                    Bottleneck blocks while resnet34 and lower use BasicBlock
             planes: the number of base output channels in the block; the final number of output channels
                     will be multiplied
             blocks: the number of blocks in the "level"
-            
-            
+
+
         """
         norm_layer = self._norm_layer
         downsample = None
@@ -303,8 +315,13 @@ class ResNet(nn.Module):
             out = torch.flatten(x, 1)
             out = self.fc(out)
 
-        #return out, block3, block2 
-        return  block1, block2, block3, out  # NOTE: swapping this for DINO, this will mess up YoloV3
+        # return out, block3, block2
+        return (
+            block1,
+            block2,
+            block3,
+            out,
+        )  # NOTE: swapping this for DINO, this will mess up YoloV3
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
