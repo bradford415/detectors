@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch import Tensor
 from torch import nn
 from torch.nn import functional as F
 
@@ -222,10 +223,57 @@ class Backbone(BackboneBase):
         #       multiple level outputs (intermediate layers)
 
         # Initialize the backbone base class; NOTE: is this class really needed?
-        super().__init__(backbone, train_backbone, bb_output_chs, bb_level_inds)
+        super().__init__(backbone, bb_output_chs, bb_level_inds, train_backbone)
 
 
-def build_backbone(
+class Joiner(nn.Sequential):
+    """Propagate the input images through the backbone, extract intermediate outputs,
+        and create positional encodings for each feature map obtained by the backbone
+    """
+    def __init__(self, backbone: nn.Module, position_embedding: PositionEmbeddingSineHW):
+        """Initialize the Joiner module which inherits from Sequenital
+
+        i.e., Sequential takes nn.Modules as inputs and calls them one after another
+
+        Args:
+        
+        """
+        #self[0] = backbone and self[1] position_embedding
+        super().__init__(backbone, position_embedding)
+
+    def forward(self, tensor_list: NestedTensor) -> tuple[list[NestedTensor], list[Tensor]]:
+        """Propagate the input images through the backbone, extract intermediate outputs,
+        and create positional encodings for each feature map obtained by the backbone
+        
+        Args:
+            tensor_list: a NestedTensor of the input tensor and padding mask
+            
+        Returns:
+            a tuple of
+                1. a list of intermediate feature_maps extracted from the backbone
+                2. a list of positional encodings for each feature map
+        """
+        # self[0] = backbone; pass the nested tensor into the Backbone
+        # and return the intermediate and final feature_maps specified by bb_level_inds
+        feature_maps = self[0](tensor_list)
+        
+        # a list to store just the nested tensors; TODO: again, might not need to do this with my implementation
+        feat_maps_list: list[NestedTensor] = []
+
+        # stores the positional encodings for each feature map
+        feat_maps_positionals = []
+
+        for name, feat_map in feature_maps.items(): # since my backbone returns a list, I don't think I need items
+            feat_maps_list.append(feat_map)
+
+            # Calculate the positional encodings for each intermediate output;
+            # self[1] = positional embedding module
+            feat_maps_positionals.append(self[1](feat_map).to(feat_map.tensors.dtype))
+
+        return feat_maps_list, feat_maps_positionals
+
+
+def build_dino_backbone(
     backbone_name: str = "resnet50",
     hidden_dim: int = 256,
     temperature_h: int = 40,
@@ -250,7 +298,6 @@ def build_backbone(
         normalize=normalize,
     )
 
-    ################# START HERE continue on with building the backbone ##############
     # build the resnet backbone; NOTE: the Backbone class is very specific to resnet
     if "resnet" in backbone_name:
         backbone = Backbone(
@@ -264,6 +311,12 @@ def build_backbone(
         raise NotImplementedError
     else:
         raise ValueError(f"Backbone {backbone_name} not implemented")
-    
 
-    return 0
+    # Module which calls the backbone, extracts the feature maps, and creates
+    # positional embeddings for each feature map
+    model = Joiner(backbone, positional_embedding)
+
+    # Assign the number of output_ channels per feature map to the model
+    model.bb_out_chs: list[int] =  backbone.bb_out_chs
+
+    return model

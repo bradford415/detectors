@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+from detectors.models.backbones.backbone import build_dino_backbone
+
 
 class DINO(nn.Module):
     """Cross-attention dector module that performs object detection"""
@@ -46,10 +48,24 @@ class DINO(nn.Module):
 
 def build_dino(
     *,
-    backbone: nn.Module,
+    backbone_args: dict[str, any],
     transformer: nn.Module,
     num_classes: int,
     num_queries: int,
     num_heads: int
 ):
-    """Build the DINO detector"""
+    """Build the DINO detector
+    
+    Args:
+        backbone_args: parameters specifically for the build_backbone() function;
+                       see models.backbones.backbone.build_backbone() for parameter descriptions
+        
+    """
+    
+    backbone = build_dino_backbone(**backbone_args)
+    
+    transformer = 
+    
+    
+    
+
