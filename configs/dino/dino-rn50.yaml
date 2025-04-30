@@ -25,22 +25,50 @@ positional_embedding_params:
 denoising_params:
 
 # TODO
-detector_params:
+dino_params:
   # Model architecture params
   num_feature_levels: 4
 
   hidden_dim: 256
 
+  # Number of learned_object_queries are inputinto the decoder; maximum number of object 
+  # predictions dino will produce (each a bounding box and class)
+  num_queries: 900
+
+  query_dim: 4
+  random_refpoints_xy: False
+  fix_refpoints_hw: -1 # comment the options
+  num_feature_levels: 4
+  num_heads: 8
+
+
+
   # Other DINO params (maybe put these under their own key)
   # TODO: commment and decide which key to put this in
-  match_unstable_error: True
-
-  # TODO rename and see if I can just use the number of classes in the dataset
-  dn_labelbook_size: 91
+  match_unstable_error: True # I don't think this is used at all
 
   # TODO; comment
   dec_pred_class_embed_share: True
   dec_pred_bbox_embed_share: True
+
+  two_stage_type: "standard" # comment options if they exist
+  two_stage_bbox_embed_share: False
+  two_stage_class_embed_share: False
+
+  decoder_sa_type: "sa" # ['sa', 'ca_label', 'ca_content']
+  num_patterns: 0
+
+  dn_number: 100
+  dn_box_noise_scale: 0.4
+  dn_label_noise_ratio: 0.5
+  # TODO rename and see if I can just use the number of classes in the dataset
+  dn_labelbook_size: 91
+
+
+
+
+
+  
 
 
 
