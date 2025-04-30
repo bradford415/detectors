@@ -50,7 +50,12 @@ class DINO(nn.Module):
 def build_dino(
     *,
     backbone_args: dict[str, any],
-    transformer: nn.Module,
+    transformer_args: dict[str, any],
+    dino_args:
+    match_unstable_error: bool
+    dn_labelbook_size: int,
+
+    # dino args below (should probably make these a dino_args var)
     num_classes: int,
     num_queries: int,
     num_heads: int
@@ -60,12 +65,13 @@ def build_dino(
     Args:
         backbone_args: parameters specifically for the build_backbone() function;
                        see models.backbones.backbone.build_backbone() for parameter descriptions
+        transformer_args: TODO
         
     """
     
     backbone = build_dino_backbone(**backbone_args)
     
-    transformer = build_deformable_transformer()
+    transformer = build_deformable_transformer(**transformer_args)
     
     
     
