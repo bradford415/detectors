@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from detectors.models.backbones.backbone import build_dino_backbone
+from detectors.
 
 
 class DINO(nn.Module):
@@ -64,7 +65,7 @@ def build_dino(
     
     backbone = build_dino_backbone(**backbone_args)
     
-    transformer = 
+    transformer = build_deformable_transformer()
     
     
     
