@@ -22,8 +22,25 @@ positional_embedding_params:
   # row/col normalize the poisitonal coordinates [0, 2pi)
   normalize: True
 
+denoising_params:
+
 # TODO
 detector_params:
+  # Model architecture params
   num_feature_levels: 4
 
   hidden_dim: 256
+
+  # Other DINO params (maybe put these under their own key)
+  # TODO: commment and decide which key to put this in
+  match_unstable_error: True
+
+  # TODO rename and see if I can just use the number of classes in the dataset
+  dn_labelbook_size: 91
+
+  # TODO; comment
+  dec_pred_class_embed_share: True
+  dec_pred_bbox_embed_share: True
+
+
+
