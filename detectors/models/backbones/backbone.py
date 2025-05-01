@@ -1,7 +1,6 @@
 import numpy as np
 import torch
-from torch import Tensor
-from torch import nn
+from torch import Tensor, nn
 from torch.nn import functional as F
 
 from detectors.data import NestedTensor
@@ -185,7 +184,7 @@ class Backbone(BackboneBase):
 
         if backbone_name in supported_backbones:
             backbone = backbone_map[backbone_name](
-                # Only download the pretrained weights with the main process; the other 
+                # Only download the pretrained weights with the main process; the other
                 # processes will load the weights in a later step
                 pretrain=is_main_process(),
                 remove_top=True,  # remove the classification head
@@ -228,26 +227,31 @@ class Backbone(BackboneBase):
 
 class Joiner(nn.Sequential):
     """Propagate the input images through the backbone, extract intermediate outputs,
-        and create positional encodings for each feature map obtained by the backbone
+    and create positional encodings for each feature map obtained by the backbone
     """
-    def __init__(self, backbone: nn.Module, position_embedding: PositionEmbeddingSineHW):
+
+    def __init__(
+        self, backbone: nn.Module, position_embedding: PositionEmbeddingSineHW
+    ):
         """Initialize the Joiner module which inherits from Sequenital
 
         i.e., Sequential takes nn.Modules as inputs and calls them one after another
 
         Args:
-        
+
         """
-        #self[0] = backbone and self[1] position_embedding
+        # self[0] = backbone and self[1] position_embedding
         super().__init__(backbone, position_embedding)
 
-    def forward(self, tensor_list: NestedTensor) -> tuple[list[NestedTensor], list[Tensor]]:
+    def forward(
+        self, tensor_list: NestedTensor
+    ) -> tuple[list[NestedTensor], list[Tensor]]:
         """Propagate the input images through the backbone, extract intermediate outputs,
         and create positional encodings for each feature map obtained by the backbone
-        
+
         Args:
             tensor_list: a NestedTensor of the input tensor and padding mask
-            
+
         Returns:
             a tuple of
                 1. a list of intermediate feature_maps extracted from the backbone
@@ -256,14 +260,19 @@ class Joiner(nn.Sequential):
         # self[0] = backbone; pass the nested tensor into the Backbone
         # and return the intermediate and final feature_maps specified by bb_level_inds
         feature_maps = self[0](tensor_list)
-        
+
         # a list to store just the nested tensors; TODO: again, might not need to do this with my implementation
         feat_maps_list: list[NestedTensor] = []
 
         # stores the positional encodings for each feature map
         feat_maps_positionals = []
 
-        for name, feat_map in feature_maps.items(): # since my backbone returns a list, I don't think I need items
+        for (
+            name,
+            feat_map,
+        ) in (
+            feature_maps.items()
+        ):  # since my backbone returns a list, I don't think I need items
             feat_maps_list.append(feat_map)
 
             # Calculate the positional encodings for each intermediate output;
@@ -316,7 +325,7 @@ def build_dino_backbone(
     # positional embeddings for each feature map
     model = Joiner(backbone, positional_embedding)
 
-    # Assign the number of output_ channels per feature map to the model
-    model.bb_out_chs: list[int] =  backbone.bb_out_chs
+    # Assign the number of output_channels per feature map to the model
+    model.bb_out_chs: list[int] = backbone.bb_out_chs
 
     return model

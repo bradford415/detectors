@@ -24,12 +24,12 @@ positional_embedding_params:
 
 denoising_params:
 
-# TODO
+# TODO: group these better
 dino_params:
   # Model architecture params
   num_feature_levels: 4
 
-  hidden_dim: 256
+  hidden_dim: 256 # TODO: might move to transformer parameters
 
   # Number of learned_object_queries are inputinto the decoder; maximum number of object 
   # predictions dino will produce (each a bounding box and class)
@@ -44,8 +44,6 @@ dino_params:
 
 
   # Other DINO params (maybe put these under their own key)
-  # TODO: commment and decide which key to put this in
-  match_unstable_error: True # I don't think this is used at all
 
   # TODO; comment
   dec_pred_class_embed_share: True
@@ -58,11 +56,11 @@ dino_params:
   decoder_sa_type: "sa" # ['sa', 'ca_label', 'ca_content']
   num_patterns: 0
 
-  dn_number: 100
-  dn_box_noise_scale: 0.4
-  dn_label_noise_ratio: 0.5
+  denoise_number: 100
+  denoise_box_noise_scale: 0.4
+  denoise_label_noise_ratio: 0.5
   # TODO rename and see if I can just use the number of classes in the dataset
-  dn_labelbook_size: 91
+  denoise_labelbook_size: 91
 
 
 
