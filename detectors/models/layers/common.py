@@ -67,3 +67,54 @@ class Upsample(nn.Module):
     def forward(self, x: torch.Tensor):
         x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
         return x
+
+
+class MLP(nn.Module):
+    """Very simple MLP/FFN used by DINO"""
+
+    def __init__(
+        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int
+    ):
+        """Initalize the MLP
+
+        Args:
+            input_dim: the number of input dimension to the MLP
+            hidden_dim: the number of hidden dimensions for the MLP
+            output_dim: the number of output dimensions for the last linear layer in the MLP
+            num_layers: the number of linear layers in the MLP
+        """
+        super().__init__()
+        self.num_layers = num_layers
+
+        # self.layers = nn.ModuleList(nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim]))
+
+        self.layers = nn.ModuleList()
+
+        # for n layers, we'll have n-1 hidden_dim in the output of the layers
+        hidden_dims = [hidden_dim] * (num_layers - 1)
+
+        # Build the MLP with num_layers linear layers
+        in_chs = [input_dim] + hidden_dims
+        out_chs = hidden_dims + [output_dim]
+        for in_ch, out_ch in zip(in_chs, out_chs):
+            self.layers.append(nn.Linear(in_features=in_ch, out_features=out_ch))
+
+    def forward(self, x):
+        """Forward pass through the MLP
+
+        Args:
+            x: input tensors
+
+        returns:
+            TODO put shape
+        """
+        for index, layer in enumerate(self.layers):
+            x = layer(x)
+
+            # ReLU activation on every linear layer output except the last one
+            if index < self.num_layers - 1:
+                x = F.relu(x)
+            else:
+                x = layer(x)
+
+        return x
