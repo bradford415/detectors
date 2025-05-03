@@ -35,11 +35,14 @@ dino_params:
   # predictions dino will produce (each a bounding box and class)
   num_queries: 900
 
+  num_feature_levels: 4
+  num_heads: 8
+
+  # TODO: Comment
   query_dim: 4
   random_refpoints_xy: False
   fix_refpoints_hw: -1 # comment the options
-  num_feature_levels: 4
-  num_heads: 8
+
 
 
 
@@ -49,11 +52,14 @@ dino_params:
   dec_pred_class_embed_share: True
   dec_pred_bbox_embed_share: True
 
+  # TODO: comment
   two_stage_type: "standard" # comment options if they exist
+  two_stage_add_query_num: 0
   two_stage_bbox_embed_share: False
   two_stage_class_embed_share: False
 
-  decoder_sa_type: "sa" # ['sa', 'ca_label', 'ca_content']
+  # TODO: comment
+  decoder_self_attn_type: "sa" # ["sa", "ca_label", "ca_content"]
   num_patterns: 0
 
   denoise_number: 100
