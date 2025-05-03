@@ -3,6 +3,8 @@ from typing import Dict, Tuple
 import torch
 from torch.nn import functional as F
 
+from detectors.data.data import NestedTensor
+
 
 def resize(image, size):
     image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
@@ -110,6 +112,33 @@ def collate_fn(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> Non
     targets = torch.cat(targets, 0)
     # This is what will be returned in the main train for loop (samples, targets)
     return images, targets, annotations
+
+
+def collate_fn_nested_tensor(
+    batch: list[tuple[torch.tensor, dict]],
+) -> tuple[NestedTensor, tuple[dict]]:
+    """Collate function used for detr-based detectors
+
+    Args:
+        batch: a list of samples where len() is batch_size and each element is a tuple of:
+                   1. image tensor (c, h, w)
+                   2. dictionary of keys:
+                          ['boxes', 'labels', 'image_id', 'area', 'iscrowd', 'orig_size', 'size']
+
+    Returns:
+        a tuple of:
+            1. a NestedTensor object
+            2. a tuple of dictionaries corresponding to the labels & metadata for the tensors
+               in the NestedTensor.tensors
+    """
+    # Create a list of two elements where:
+    #   - batch[0] = tuple of image tensors
+    #   - batch[1] = dict which correspond to the labels of the image tensors
+    batch = list(zip(*batch))
+
+    # Create a nested tensor from the tuple of tensors
+    batch[0] = NestedTensor.nested_tensor_from_tensor_list(batch[0])
+    return tuple(batch)
 
 
 def collate_fn_test(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -> None:

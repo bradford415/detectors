@@ -21,8 +21,12 @@ from torch import Tensor, nn
 from util.misc import inverse_sigmoid
 
 from .ops.modules import MSDeformAttn
-from .utils import (MLP, _get_activation_fn, gen_encoder_output_proposals,
-                    gen_sineembed_for_position)
+from .utils import (
+    MLP,
+    _get_activation_fn,
+    gen_encoder_output_proposals,
+    gen_sineembed_for_position,
+)
 
 
 class DeformableTransformer(nn.Module):

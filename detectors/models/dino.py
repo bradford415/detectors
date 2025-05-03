@@ -5,14 +5,13 @@ import torch
 from torch import nn
 
 from detectors.data.data import NestedTensor
-from detectors.models.backbones.backbone import build_dino_backbone
+from detectors.models.backbones.backbone import Joiner, build_dino_backbone
 from detectors.models.layers.common import MLP
-from detectors.models.layers.deformable_transformer import \
-    build_deformable_transformer
+from detectors.models.layers.deformable_transformer import build_deformable_transformer
 
 
 class DINO(nn.Module):
-    """Cross-attention dector module that performs object detection"""
+    """Cross-attention detector module that performs object detection"""
 
     def __init__(
         self,
@@ -248,13 +247,21 @@ class DINO(nn.Module):
             "The default DINO parameters does not call this method so I'm leaving it out for now to simplify the code; will add back if need"
         )
 
-    def forward(self, samples: NestedTensor):
+    def forward(
+        self, samples: NestedTensor, targets: list = None
+    ):  # TODO: verify the input is NestedTensor
         """Forward pass through the DINO module
 
         Args:
-            x: input images to the model
+            samples: input images with padding masks to the model;
+                     images (b, c, h, w), masks (b, h, w) where True -> padded pixel
+            targets: TODO
         """
-        pass
+        # Create a NestedTensor if the input is a list or Tensor
+        if isinstance(samples, (list, torch.Tensor)):
+            samples = nested_tensor_from_tensor_list(samples)
+
+        features, poss = self.backbone(samples)
 
 
 def build_dino(
@@ -277,4 +284,4 @@ def build_dino(
 
     transformer = build_deformable_transformer(**transformer_args)
 
-    model = DINO(**dino_args)  # TODO pass args be keyword here probably
+    model: Joiner = DINO(**dino_args)  # TODO pass args be keyword here probably
