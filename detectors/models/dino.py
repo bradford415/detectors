@@ -3,6 +3,7 @@ import math
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from detectors.data.data import NestedTensor
 from detectors.models.backbones.backbone import Joiner, build_dino_backbone
@@ -11,7 +12,15 @@ from detectors.models.layers.deformable_transformer import build_deformable_tran
 
 
 class DINO(nn.Module):
-    """Cross-attention detector module that performs object detection"""
+    """Cross-attention detector module that performs object detection
+    
+    Types of queries:
+        * Denoising (DN) queries: auxiliary input queries added during training that are intentionally 
+                                  "noised" versions of ground-truth object boxes and labels; they learn to 
+                                  make predictions based on anchors which have GT boxes nearby; 
+                                  contrastive denoising (CDN) rejects useless anchors (i.e., no object)
+                                  TODO: understand what these "anchors" are
+    """
 
     def __init__(
         self,
@@ -78,7 +87,7 @@ class DINO(nn.Module):
         self.num_queries = num_queries
         self.hidden_dim = _hidden_dim
         self.num_heads = num_heads
-        self.bb_num_feature_levels = num_feature_levels
+        self.num_feature_levels = num_feature_levels
         self.aux_loss = aux_loss
 
         # TODO: figure out what this is for
@@ -248,20 +257,95 @@ class DINO(nn.Module):
         )
 
     def forward(
-        self, samples: NestedTensor, targets: list = None
+        self, samples: NestedTensor, targets: list[dict] = None
     ):  # TODO: verify the input is NestedTensor
         """Forward pass through the DINO module
 
         Args:
-            samples: input images with padding masks to the model;
-                     images (b, c, h, w), masks (b, h, w) where True -> padded pixel
-            targets: TODO
+            samples: a NestedTensor to feed into the model; NestedTensor's have:
+                        1. tensors representing images (b, c, h, w)
+                        2. binary padding mask (b, h, w) where 1 is the location of
+                           padding and 0 is the location of real pixels
+            targets: dictionaries of labels for each image in the batch; most notably with keys:
+                        boxes: (num_objects, 4) normalized [0, 1] and in [cx, cy, w, h] format TODO verify this form
+                        labels: (num_objects,) the class id for each object
+                        other coco metadata
         """
-        # Create a NestedTensor if the input is a list or Tensor
-        if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
+        # Extract features through the backbone and build positional embeddings;
+        # features -> list of NestedTensors for each feature_map level
+        # pos_encodings -> positional encodings for each feature_map lavel
+        features, pos_encodings = self.backbone(samples)
 
-        features, poss = self.backbone(samples)
+        # Extract and project the feature maps and padding masks from the NestedTensors
+        feature_maps = []
+        masks = []
+        for level, feat_map in enumerate(features):
+            img_tens, mask = feat_map.decompose()
+
+            img_tens = self.input_proj[level](img_tens)
+            feature_maps.append(img_tens)
+            masks.append(mask)
+
+            assert mask is not None
+
+        # Create additional feature maps until we have self.num_feature_levels feature maps;
+        # these additional feat_maps will be downsampled by 2 from the lowest resolution
+        # feature_map extracted from the backbone (default create 1 additional feature_map)
+        if self.num_feature_levels > len(feature_maps):
+            _len_srcs = len(feature_maps)
+            for level in range(_len_srcs, self.num_feature_levels):
+
+                if level == _len_srcs:  # first iteration of loop
+                    # create the first additional feat_map w/ the lowest resolution
+                    # feat_map extracted from the backbone
+                    new_feat_map = self.input_proj[level](features[-1].tensors)
+                else:
+                    # create the remaining additional feat_maps with the most recently
+                    # created feat_map
+                    new_feat_map = self.input_proj[level](feature_maps[-1])
+
+                # Create a binary padding mask for the newly created feature_map
+                img_mask = samples.mask  # (b, h, w)
+                new_mask = F.interpolate(
+                    img_mask[None, ...].float(),
+                    size=new_feat_map.shape[-2:],
+                    mode="nearest",
+                ).to(torch.bool)[0]
+
+                # Create positional embeddings for the newly created feature_map
+                # Reminder: self.backbone is type Joiner() which inherits from nn.Sequential so
+                #           self.backbone[0]=backbone_model & self.backbone[1] -> PositonalEncoding module
+                pos_l = self.backbone[1](NestedTensor(new_feat_map, new_mask)).to(
+                    new_feat_map.dtype
+                )
+                feature_maps.append(new_feat_map)
+                masks.append(new_mask)
+                pos_encodings.append(pos_l)
+
+        assert (
+            len(feature_maps) == self.num_feature_levels
+            and len(masks) == self.num_feature_levels
+            and len(pos_encodings) == self.num_feature_levels
+        )
+
+        ################# START HERE ######################
+        if self.denoise_number > 0 or targets is not None:
+            input_query_label, input_query_bbox, attn_mask, dn_meta = prepare_for_cdn(
+                denoise_args=(
+                    targets,
+                    self.denoise_number,
+                    self.denoise_label_noise_ratio,
+                    self.denoise_box_noise_scale,
+                ),
+                training=self.training,
+                num_queries=self.num_queries,
+                num_classes=self.num_classes,
+                hidden_dim=self.hidden_dim,
+                label_enc=self.label_enc,
+            )
+        else:
+            assert targets is None
+            input_query_bbox = input_query_label = attn_mask = dn_meta = None
 
 
 def build_dino(

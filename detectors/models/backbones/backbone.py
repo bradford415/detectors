@@ -77,7 +77,7 @@ class BackboneBase(nn.Module):
         self,
         backbone: nn.Module,
         bb_out_chs: list[int],
-        bb_level_inds: list,
+        bb_level_inds: list[int],
         train_backbone: bool = True,
     ):
         """Initialize the ResNet backbone base class
@@ -121,10 +121,17 @@ class BackboneBase(nn.Module):
         to match the spatial dimensions of each feature map
 
         Args:
-            TODO
+            tensor_list: a NestedTensor of input images and masks
 
         Returns:
-            TODO
+            a dictionary of nested tensors for each feature_map level with the padding
+            mask interpolated to match the spatial resolution of the feature_map level;
+            for example, if bb_level_inds=[1,2,3] the return dict will have:
+                dict = {
+                    "1": NestedTensor highest feature_map spatial resolution
+                    "2": NestedTensor medium feature_map spatial resolution
+                    "3": NestedTensor lowest feature_map spatial resolution
+                }
         """
         # Extract features from the input images through the backbone network
         feature_maps = self.backbone(tensor_list.tensors)
@@ -139,14 +146,17 @@ class BackboneBase(nn.Module):
         # Resize the input mask to match the spatial size of the feature map;
         # the mask is currently the shape of the input tensor (tensor input to the back) and needs to be resized for each feature map
         nested_feature_maps: dict[str, NestedTensor] = {}
-        for name, x in feature_maps.items():
+        # TODO: Ill most definitely have to modify this bc I didn't use intermediatlayergetter
+        for name, feature_map in feature_maps.items():
             orig_mask = tensor_list.mask
 
             assert orig_mask is not None
 
-            # resize mask to match the spatial dimensions of the feature map
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            nested_feature_maps[name] = NestedTensor(x, mask)
+            # resize padding mask to match the spatial dimensions of the feature map
+            mask = F.interpolate(
+                orig_mask[None].float(), size=feature_map.shape[-2:]
+            ).to(torch.bool)[0]
+            nested_feature_maps[name] = NestedTensor(feature_map, mask)
 
         return nested_feature_maps
 
@@ -272,7 +282,7 @@ class Joiner(nn.Sequential):
             feat_map,
         ) in (
             feature_maps.items()
-        ):  # since my backbone returns a list, I don't think I need items
+        ):  # TODO since my backbone returns a list, I don't think I need items
             feat_maps_list.append(feat_map)
 
             # Calculate the positional encodings for each intermediate output;

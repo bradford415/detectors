@@ -100,6 +100,7 @@ class NestedTensor:
 
     @property
     def shape(self):
+        """Returns the shape of the tensors and masks"""
         return {"tensors.shape": self.tensors.shape, "mask.shape": self.mask.shape}
 
     @classmethod
