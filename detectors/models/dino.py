@@ -13,13 +13,19 @@ from detectors.models.layers.deformable_transformer import build_deformable_tran
 
 class DINO(nn.Module):
     """Cross-attention detector module that performs object detection
-    
+
     Types of queries:
-        * Denoising (DN) queries: auxiliary input queries added during training that are intentionally 
-                                  "noised" versions of ground-truth object boxes and labels; they learn to 
-                                  make predictions based on anchors which have GT boxes nearby; 
-                                  contrastive denoising (CDN) rejects useless anchors (i.e., no object)
-                                  TODO: understand what these "anchors" are
+        - Denoising (DN): auxiliary input queries added during training that are intentionally
+                          "noised" versions of ground-truth object boxes and labels; they learn to
+                          make predictions based on anchors which have GT boxes nearby;
+                          contrastive denoising (CDN) rejects useless anchors (i.e., no object);
+                          TODO: understand what these "anchors" are
+                          There are two types of denoising queries:
+                            - positive queries are slightly noised gt boxes & labels; the model
+                              is expected to recover the correct box & lable from this noise
+                            - negative queries are incorrect labels or heavily noised boxes that do
+                              not match any object and the model should not output any confident
+                              prediction for these
     """
 
     def __init__(
