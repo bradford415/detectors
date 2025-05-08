@@ -84,6 +84,7 @@ class DINO(nn.Module):
                                     `sa` -> use standard self-attn among object queries
 
         """
+        # Dimension of the transformer model; TODO: flesh this out more
         _hidden_dim = transformer.d_model
 
         self.backbone = backbone
@@ -96,8 +97,10 @@ class DINO(nn.Module):
         self.num_feature_levels = num_feature_levels
         self.aux_loss = aux_loss
 
-        # TODO: figure out what this is for
-        self.label_encoding = nn.Embedding(denoise_labelbook_size + 1, _hidden_dim)
+        # Used to embed the denoised_queries for all GT labels in the batch; 
+        # see models.components.denoising.setup_contrastive_denoising for more info
+        # TODO: see if I can replace denoise_lablebook_size w/ num_classes
+        self.label_encoding = nn.Embedding(denoise_labelbook_size + 1, _hidden_dim) # + 1 for no object I think
 
         # Query dimensions TODO flesh out more
         self.query_dim = query_dim

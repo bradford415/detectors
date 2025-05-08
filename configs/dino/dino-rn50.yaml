@@ -62,9 +62,19 @@ dino_params:
   decoder_self_attn_type: "sa" # ["sa", "ca_label", "ca_content"]
   num_patterns: 0
 
+  # Number of denoising_queries for an image; will be evenly distributed to each GT object 
+  # in the image based on the num_objects for the image w/ the most objects in the batch; therefore 
+  # images in the batch w/ less objects will have more denoise queries per GT; additionally, 
+  # denoise_number will be multiplied by 2 use positive and negative queries; 
+  # e.g., if the image with the higheset num_objects is 6, there will be at least 
+  # (100//6)*2 = 32 denoise queries per GT object
   denoise_number: 100
-  denoise_box_noise_scale: 0.4
-  denoise_label_noise_ratio: 0.5
+
+  # NOTE: the bash script overrides this parameter to 1.0, which is different than the config
+  denoise_box_noise_scale: 1.0
+
+  denoise_label_noise_ratio: 0.5 
+
   # TODO rename and see if I can just use the number of classes in the dataset
   denoise_labelbook_size: 91
 
