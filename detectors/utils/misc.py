@@ -20,6 +20,23 @@ def to_cpu(tensor):
     return tensor.detach().cpu()
 
 
+# TODO: move this to a math module
+def inverse_sigmoid(x, eps=1e-3):
+    """Inverse sigmoid function
+    
+    sigmoid = (1 / (1+ e^-x))
+    inverse_sigmoid = ln( x / (1 - x))
+    
+    Args:
+        x:
+        eps: float
+    """
+    x = x.clamp(min=0, max=1)
+    x1 = x.clamp(min=eps)
+    x2 = (1 - x).clamp(min=eps)
+    return torch.log(x1 / x2)
+
+
 def convert2cpu(gpu_matrix):
     return torch.FloatTensor(gpu_matrix.size()).copy_(gpu_matrix)
 

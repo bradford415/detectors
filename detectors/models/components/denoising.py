@@ -2,6 +2,8 @@
 import torch
 from torch import nn
 
+from detectors.utils.misc import inverse_sigmoid
+
 
 def setup_contrastive_denoising(
     training: bool,
@@ -22,10 +24,10 @@ def setup_contrastive_denoising(
 
     Args:
         training: training (True) or inference (False)
-        num_queries:
+        num_queries: total number of learnable object queries; TODO: verify this
         num_classes:
         hidden_dim: transformer hidden dimension; TODO: add a little more
-        label_enc: 
+        label_enc:
         targets: dictionaries of labels for each image in the batch; see DINO.forward() for more info
         denoise_number:
         denoise_label_noise_ratio:
@@ -200,35 +202,101 @@ def setup_contrastive_denoising(
             # Randomly flip the sign for all labels
             rand_part *= rand_sign
 
-            # Apply random noise to the GT boxes (tl_x, tl_y, br_x, br_y) by adding an element-wise 
-            # mult the rand noise [-2, 2] with the diff (w/2, h/2, w/2, h/2) and scale the values by 
+            # Apply random noise to the GT boxes (tl_x, tl_y, br_x, br_y) by adding an element-wise
+            # mult the rand noise [-2, 2] with the diff (w/2, h/2, w/2, h/2) and scale the values by
             # denoise_box_noise_scale (default 1.0)
             known_bbox_x1y1x2y2 = (
                 known_bbox_x1y1x2y2
                 + torch.mul(rand_part, diff).cuda() * denoise_box_noise_scale
             )
             # bound [0, 1]
-            known_bbox_x1y1x2y2 = known_bbox_x1y1x2y2.clamp(min=0.0, max=1.0) 
-            
+            known_bbox_x1y1x2y2 = known_bbox_x1y1x2y2.clamp(min=0.0, max=1.0)
+
             # Convert the randomly noised boxes from (tl_x, tl_y, br_x, br_y) to (cx, cy, w, h);
             # NOTE: these will have some weird values
-            known_bbox_expand[:, :2] = (known_bbox_x1y1x2y2[:, :2] + known_bbox_x1y1x2y2[:, 2:]) / 2
-            known_bbox_expand[:, 2:] = known_bbox_x1y1x2y2[:, 2:] - known_bbox_x1y1x2y2[:, :2]
-        
+            known_bbox_expand[:, :2] = (
+                known_bbox_x1y1x2y2[:, :2] + known_bbox_x1y1x2y2[:, 2:]
+            ) / 2
+            known_bbox_expand[:, 2:] = (
+                known_bbox_x1y1x2y2[:, 2:] - known_bbox_x1y1x2y2[:, :2]
+            )
+
         # (num_objects_batch*denoise_number*2,)
         m = known_labels_expand.long().to("cuda")
-        
-        # Embed the object labels which contain the randomly injected labels 
+
+        # Embed the object labels which contain the randomly injected labels
         # (num_objects_batch*denoise_number*2, hidden_dim)
         input_label_embed = label_enc(m)
-        
-        ####### START HERE##############
+
+        # Convert the noised boxes to logits
         input_bbox_embed = inverse_sigmoid(known_bbox_expand)
 
+        # Create a zeros tensor of (pad_size, hidden_dim) & (pad_size, 4)
+        # pad_size = single_pad * 2 * denoise_number and single_pad = num_objects in image with most objects 
         padding_label = torch.zeros(pad_size, hidden_dim).cuda()
         padding_bbox = torch.zeros(pad_size, 4).cuda()
 
+        # Repeat the zeros array for the entire batch 
+        # (batch_size, pad_size, hidden_dim) & (batch_size, pad_size, 4)
         input_query_label = padding_label.repeat(batch_size, 1, 1)
-        input_query_bbox = padding_bbox.repeat(batch_size, 1, 1)        
+        input_query_bbox = padding_bbox.repeat(batch_size, 1, 1)
+
+        # Create a map of indices on where to place the GT embeddings in the zeros tensor created above;
+        # the indices will span up to (num_objects_in_img_with_most_objs*denoise_number*2) (default 200);
+        # NOTE: input_label and bbox will be longer because it also has to go in a specific sample index 
+        map_known_indice = torch.tensor([]).to('cuda')
+        if len(known_num):
+            # Create a 1d range tensor for the num_objects in each image (e.g., [0, 1, 2, 3, 0, 1, 2])
+            map_known_indice = torch.cat([torch.tensor(range(num)) for num in known_num])  # [1,2, 1,2,3]
+            
+            # Repeat this pattern counting up, off-setting by single_pad every iteration until 
+            # 2*denoise_number iters (num_objects_batch*denoise_number*2) 
+            map_known_indice = torch.cat([map_known_indice + single_pad * i for i in range(2 * denoise_number)]).long()
+        
+        # Fill the input queries with their label & bboxes embeddings at their correct sample, 
+        # label and bbox index (batch_size, pad_size, hidden_dim) & (batch_size, pad_size, 4)
+        if len(known_batch_idx):
+            input_query_label[(known_batch_idx.long(), map_known_indice)] = input_label_embed
+            input_query_bbox[(known_batch_idx.long(), map_known_indice)] = input_bbox_embed
+
+        # total number of target queries (denoising_queries + learnable object queries);
+        # this is also the input length to the transformer decoder; TODO: verify this 
+        tgt_size = pad_size + num_queries
+        
+        # Create a blank attention mask where every element is False (tgt_size, tgt_size)
+        attn_mask = torch.ones(tgt_size, tgt_size).to('cuda') < 0
+        
+        # match query cannot see the reconstruct
+        # Set the bottom-left of the mask to True; True = masked, False = can attend;
+        # "For all detection queries, block attention to denoising queries."
+        #   1. Standard detection queries must not cheat by looking at ground-truth-derived noisy queries.
+        #   2. Ensures the detection part of the model truly learns from scratch, not from GT hints.
+        attn_mask[pad_size:, :pad_size] = True
+        
+        # reconstruct cannot see each other
+        for i in range(dn_number):
+            if i == 0:
+                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), single_pad * 2 * (i + 1):pad_size] = True
+            if i == dn_number - 1:
+                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), :single_pad * i * 2] = True
+            else:
+                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), single_pad * 2 * (i + 1):pad_size] = True
+                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), :single_pad * 2 * i] = True
+
+        dn_meta = {
+            'pad_size': pad_size,
+            'num_dn_group': dn_number,
+        }
+    else:
+
+        input_query_label = None
+        input_query_bbox = None
+        attn_mask = None
+        dn_meta = None
+
+    return input_query_label, input_query_bbox, attn_mask, dn_meta        
+        
+            
+        
             
         

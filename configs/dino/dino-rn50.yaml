@@ -31,7 +31,7 @@ dino_params:
 
   hidden_dim: 256 # TODO: might move to transformer parameters
 
-  # Number of learned_object_queries are inputinto the decoder; maximum number of object 
+  # Number of learnable object queries that are input into the decoder; maximum number of object 
   # predictions dino will produce (each a bounding box and class)
   num_queries: 900
 
