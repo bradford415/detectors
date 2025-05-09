@@ -17,15 +17,17 @@ class DINO(nn.Module):
     Types of queries:
         - Denoising (DN): auxiliary input queries added during training that are intentionally
                           "noised" versions of ground-truth object boxes and labels; they learn to
-                          make predictions based on anchors which have GT boxes nearby;
+                          make predictions based on anchors which have GT boxes nearby; section 3.3 of paper;
                           contrastive denoising (CDN) rejects useless anchors (i.e., no object);
+                          if an image has n GT boxes, a CDN group will have 2*n queries (i.e., each GT box)
+                          has a positive & negative query;
                           TODO: understand what these "anchors" are
                           There are two types of denoising queries:
                             - positive queries are slightly noised gt boxes & labels; the model
-                              is expected to recover the correct box & lable from this noise
+                              is expected to recover the correct box & label from this noise
                             - negative queries are incorrect labels or heavily noised boxes that do
                               not match any object and the model should not output any confident
-                              prediction for these
+                              prediction for these; negative queries should predict "no object"
     """
 
     def __init__(

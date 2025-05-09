@@ -32,6 +32,9 @@ def setup_contrastive_denoising(
         denoise_number:
         denoise_label_noise_ratio:
         denoise_box_noise_scale:
+
+    Return:
+        TODO: explain all return values as a summary, this will be very helpful; put location of attn_mask visual
     """
     if training:
         # Double the number of denoise_queries to create positive and negative queries;
@@ -232,71 +235,108 @@ def setup_contrastive_denoising(
         input_bbox_embed = inverse_sigmoid(known_bbox_expand)
 
         # Create a zeros tensor of (pad_size, hidden_dim) & (pad_size, 4)
-        # pad_size = single_pad * 2 * denoise_number and single_pad = num_objects in image with most objects 
+        # pad_size = single_pad * 2 * denoise_number and single_pad = num_objects in image with most objects
         padding_label = torch.zeros(pad_size, hidden_dim).cuda()
         padding_bbox = torch.zeros(pad_size, 4).cuda()
 
-        # Repeat the zeros array for the entire batch 
+        # Repeat the zeros array for the entire batch
         # (batch_size, pad_size, hidden_dim) & (batch_size, pad_size, 4)
         input_query_label = padding_label.repeat(batch_size, 1, 1)
         input_query_bbox = padding_bbox.repeat(batch_size, 1, 1)
 
         # Create a map of indices on where to place the GT embeddings in the zeros tensor created above;
         # the indices will span up to (num_objects_in_img_with_most_objs*denoise_number*2) (default 200);
-        # NOTE: input_label and bbox will be longer because it also has to go in a specific sample index 
-        map_known_indice = torch.tensor([]).to('cuda')
+        # NOTE: input_label and bbox will be longer because it also has to go in a specific sample index
+        map_known_indice = torch.tensor([]).to("cuda")
         if len(known_num):
             # Create a 1d range tensor for the num_objects in each image (e.g., [0, 1, 2, 3, 0, 1, 2])
-            map_known_indice = torch.cat([torch.tensor(range(num)) for num in known_num])  # [1,2, 1,2,3]
-            
-            # Repeat this pattern counting up, off-setting by single_pad every iteration until 
-            # 2*denoise_number iters (num_objects_batch*denoise_number*2) 
-            map_known_indice = torch.cat([map_known_indice + single_pad * i for i in range(2 * denoise_number)]).long()
-        
-        # Fill the input queries with their label & bboxes embeddings at their correct sample, 
+            map_known_indice = torch.cat(
+                [torch.tensor(range(num)) for num in known_num]
+            )  # [1,2, 1,2,3]
+
+            # Repeat this pattern counting up, off-setting by single_pad every iteration until
+            # 2*denoise_number iters (num_objects_batch*denoise_number*2)
+            map_known_indice = torch.cat(
+                [map_known_indice + single_pad * i for i in range(2 * denoise_number)]
+            ).long()
+
+        # Fill the input queries with their label & bboxes embeddings at their correct sample,
         # label and bbox index (batch_size, pad_size, hidden_dim) & (batch_size, pad_size, 4)
         if len(known_batch_idx):
-            input_query_label[(known_batch_idx.long(), map_known_indice)] = input_label_embed
-            input_query_bbox[(known_batch_idx.long(), map_known_indice)] = input_bbox_embed
+            input_query_label[(known_batch_idx.long(), map_known_indice)] = (
+                input_label_embed
+            )
+            input_query_bbox[(known_batch_idx.long(), map_known_indice)] = (
+                input_bbox_embed
+            )
 
         # total number of target queries (denoising_queries + learnable object queries);
-        # this is also the input length to the transformer decoder; TODO: verify this 
+        # this is also the input length to the transformer decoder; TODO: verify this
         tgt_size = pad_size + num_queries
-        
+
         # Create a blank attention mask where every element is False (tgt_size, tgt_size)
-        attn_mask = torch.ones(tgt_size, tgt_size).to('cuda') < 0
-        
-        # match query cannot see the reconstruct
-        # Set the bottom-left of the mask to True; True = masked, False = can attend;
+        attn_mask = torch.ones(tgt_size, tgt_size).to("cuda") < 0
+
+        # Set the bottom-left of the mask to True (the right side is for learnable object queries);
+        # True = masked, False = can attend;
+        # The goal of the attention mask is so denoising_queries only attend to themselves;
         # "For all detection queries, block attention to denoising queries."
         #   1. Standard detection queries must not cheat by looking at ground-truth-derived noisy queries.
         #   2. Ensures the detection part of the model truly learns from scratch, not from GT hints.
         attn_mask[pad_size:, :pad_size] = True
-        
-        # reconstruct cannot see each other
-        for i in range(dn_number):
-            if i == 0:
-                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), single_pad * 2 * (i + 1):pad_size] = True
-            if i == dn_number - 1:
-                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), :single_pad * i * 2] = True
-            else:
-                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), single_pad * 2 * (i + 1):pad_size] = True
-                attn_mask[single_pad * 2 * i:single_pad * 2 * (i + 1), :single_pad * 2 * i] = True
 
+        # Mask each group of denoising queries to prevent attending to other groups;
+        # this ensures group-level isolation during attention;
+        # during denoising training, multiple groups of denoising queries are constructed:
+        #    Group 0: [pos, pos, ..., neg, neg] (length = 2 × num_objects)
+        #    Group 1: ...
+        #    ...
+        #    Group N-1
+        # Therefore, each group should only attend to itself and not others; NOTE: these groups are shown
+        # visually in Figure 3 CDN groupX
+        # NOTE: See detectors/models/README.md for a visual of what the attention mask looks like
+        for cdn_group_i in range(denoise_number):  # (default 10)
+            if cdn_group_i == 0:
+                # First iteration only
+                # Example: if single_pad=10 the first iter allows attention (False) between [0:20, 0:20]
+                #          and blocks attn (True) [0:20, 20:200]
+                # Reminder: single_pad = number of the most objects per image in the batch
+                #           pad_size = the maximum total num_denoising_queries for all groups
+                attn_mask[
+                    single_pad * 2 * cdn_group_i : single_pad * 2 * (cdn_group_i + 1),
+                    single_pad * 2 * (cdn_group_i + 1) : pad_size,
+                ] = True
+            if cdn_group_i == denoise_number - 1:
+                # Last iteration
+                # Mask only the row_vals before the cdn_group since there won't be any groups after
+                # [: last_cdn_group:]
+                attn_mask[
+                    single_pad * 2 * cdn_group_i : single_pad * 2 * (cdn_group_i + 1),
+                    : single_pad * cdn_group_i * 2,
+                ] = True
+            else:
+                # For all iterations but the last
+                # Mask the row_vals after the group [cdn_group_i: cdn_group_i+1, cdn_group_i+1: pad_size]
+                attn_mask[
+                    single_pad * 2 * cdn_group_i : single_pad * 2 * (cdn_group_i + 1),
+                    single_pad * 2 * (cdn_group_i + 1) : pad_size,
+                ] = True
+                # Mask the row_vals at the beginning of the group [cdn_group_i: cdn_group_i+1, 0: cdn_group_i]
+                attn_mask[
+                    single_pad * 2 * cdn_group_i : single_pad * 2 * (cdn_group_i + 1),
+                    : single_pad * 2 * cdn_group_i,
+                ] = True
+
+        # Store the computed values used to build the denoising queries as metadata
         dn_meta = {
-            'pad_size': pad_size,
-            'num_dn_group': dn_number,
+            "pad_size": pad_size,  # number of total denoising queries across all groups (denoise_number*2*max_objects_batch,)
+            "num_dn_group": denoise_number,  # number of denoising queries per group (not mulitplied by 2 here)
         }
     else:
-
+        # During inference, set all the return values to None
         input_query_label = None
         input_query_bbox = None
         attn_mask = None
         dn_meta = None
 
-    return input_query_label, input_query_bbox, attn_mask, dn_meta        
-        
-            
-        
-            
-        
+    return input_query_label, input_query_bbox, attn_mask, dn_meta
