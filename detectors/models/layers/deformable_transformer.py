@@ -18,7 +18,8 @@ from typing import Optional
 
 import torch
 from torch import Tensor, nn
-from util.misc import inverse_sigmoid
+
+from detectors.utils.misc import inverse_sigmoid
 
 from .ops.modules import MSDeformAttn
 from .utils import (
@@ -30,6 +31,13 @@ from .utils import (
 
 
 class DeformableTransformer(nn.Module):
+    """Deformable Transformer module used in DINO
+    
+    The deformable transformer and deformable attention was initially introduced in deformable-detr; DINO
+    and other detr-like models modify this transformer module from the original
+    
+    TODO: Explain more
+    """
     def __init__(
         self,
         d_model=256,
@@ -82,6 +90,52 @@ class DeformableTransformer(nn.Module):
         embed_init_tgt=False,
         use_detached_boxes_dec_out=False,
     ):
+        """Initalize the deformable transformer module
+        
+        Args:
+            TODO:
+            dim_model: hidden_dim of the the transformer
+            num_heads:
+            num_obj_queries:
+            num_encoder_layers:
+            num_unicoder_layers:
+            num_decoder_layers:
+            dim_feedforward:
+            dropout:
+            activation:
+            normalize_before:
+            return_intermediate_dec:
+            query_dim
+            num_patterns
+            modulate_hw_attn:
+            deformable_encoder:
+            deformable_decoder:
+            num_feature_levels:
+            enc_n_points:
+            dec_n_points:
+            use_deformable_box_attn:
+            box_attn_type:
+            learnable_tgt_init:
+            decoder_query_perturber:
+            add_channel_attention:
+            add_pos_value:
+            random_refpoints_xy:
+            two_stage_type:
+            two_stage_pat_embed:
+            two_stage_add_query_num:
+            two_stage_learn_wh:
+            two_stage_keep_all_tokens:
+            dec_layer_number:
+            rm_enc_query_scale:
+            rm_dec_query_scale:
+            key_aware_type
+            layer_share_type
+            rm_detach:
+            decoder_sa_type:
+            module_seq:
+            embed_init_tgt:
+            use_detached_boxes_dec_out:
+        """
         super().__init__()
         self.num_feature_levels = num_feature_levels
         self.num_encoder_layers = num_encoder_layers

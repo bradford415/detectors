@@ -22,6 +22,10 @@ positional_embedding_params:
   # row/col normalize the poisitonal coordinates [0, 2pi)
   normalize: True
 
+criterion_params:
+  # TODO: comment
+  aux_loss: True
+
 denoising_params:
 
 # TODO: group these better
@@ -30,6 +34,7 @@ dino_params:
   num_feature_levels: 4
 
   hidden_dim: 256 # TODO: might move to transformer parameters
+  dropout: 0.0
 
   # Number of learnable object queries that are input into the decoder; maximum number of object 
   # predictions dino will produce (each a bounding box and class)
@@ -40,6 +45,8 @@ dino_params:
 
   # TODO: Comment
   query_dim: 4
+
+  # TODO: this might not be used? I could leave it in and just use not implemented error
   random_refpoints_xy: False
   fix_refpoints_hw: -1 # comment the options
 

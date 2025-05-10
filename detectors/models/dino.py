@@ -7,15 +7,23 @@ from torch.nn import functional as F
 
 from detectors.data.data import NestedTensor
 from detectors.models.backbones.backbone import Joiner, build_dino_backbone
+from detectors.models.components.denoising import setup_contrastive_denoising
 from detectors.models.layers.common import MLP
-from detectors.models.layers.deformable_transformer import build_deformable_transformer
+from detectors.models.layers.deformable_transformer import (
+    DeformableTransformer,
+    build_deformable_transformer,
+)
 
 
 class DINO(nn.Module):
     """Cross-attention detector module that performs object detection
 
     Types of queries:
-        - Denoising (DN): auxiliary input queries added during training that are intentionally
+        - object queries: obj queries are learnable queries and input into the transformer decoder;
+                          the number of object queries is the maximum objects DINO DETR can detect in a
+                          single image; each query predicts a class label (including background/no_object)
+                          and a bbox
+        - denoising (DN): auxiliary input queries added during training that are intentionally
                           "noised" versions of ground-truth object boxes and labels; they learn to
                           make predictions based on anchors which have GT boxes nearby; section 3.3 of paper;
                           contrastive denoising (CDN) rejects useless anchors (i.e., no object);
@@ -33,15 +41,15 @@ class DINO(nn.Module):
     def __init__(
         self,
         *,
-        backbone: nn.Module,
-        transformer: nn.Module,
+        backbone: Joiner,
+        transformer: DeformableTransformer,
         num_classes: int,
-        num_queries: int,
+        num_obj_queries: int,
         num_heads: int = 8,
         num_feature_levels: int = 4,
         aux_loss: bool = True,
         query_dim: int = 4,
-        random_refpoints_xy: bool = False,
+        random_refpoints_xy: bool = False,  # TODO: are these refpoints used?
         fix_refpoints_hw: bool = False,  # why is hw and not wh?
         two_stage_type: str = "standard",
         two_stage_add_query_num: int = 0,
@@ -60,10 +68,12 @@ class DINO(nn.Module):
 
         Args:
             backbone: backbone network to use for feature extraction; e.g., ResNet, ViT, Swin
-            transformer: TODO
+            transformer: deformable transformer used in DINO; deformable attention
+                         was originally introduced in deformable-detr
             num_classes: number of classes in the dataset ontology
-            num_queries: number of object queries to use for the transformer; this is the number of maximum objects
-                         conditional DETR can detect in a single image; for COCO, 100 queries is recommended
+            num_obj_queries: number of object queries to use for the transformer; this is the number of
+                             maximum objects DINO DETR can detect in a single image; each query predicts
+                             a class label (including background/no_object) and a bbox
             num_heads: TODO
             num_feature_levels: the number of multiscale feature maps to pass into the encoder; the
                                 feature maps will come from the backbone defined by `return_levels`
@@ -93,7 +103,7 @@ class DINO(nn.Module):
         self.transformer = transformer
 
         self.num_classes = num_classes
-        self.num_queries = num_queries
+        self.num_obj_queries = num_obj_queries
         self.hidden_dim = _hidden_dim
         self.num_heads = num_heads
         self.num_feature_levels = num_feature_levels
@@ -341,24 +351,37 @@ class DINO(nn.Module):
             and len(pos_encodings) == self.num_feature_levels
         )
 
-        ################# START HERE ######################
+        # Initialize the denoising_queries for contrastive denoising (CDN) and attention mask;
+        # see models.components.denoising.setup_contrastive_denoising() return docs for variable explanations
         if self.denoise_number > 0 or targets is not None:
-            input_query_label, input_query_bbox, attn_mask, dn_meta = prepare_for_cdn(
-                denoise_args=(
-                    targets,
-                    self.denoise_number,
-                    self.denoise_label_noise_ratio,
-                    self.denoise_box_noise_scale,
-                ),
-                training=self.training,
-                num_queries=self.num_queries,
-                num_classes=self.num_classes,
-                hidden_dim=self.hidden_dim,
-                label_enc=self.label_enc,
+            input_query_label, input_query_bbox, attn_mask, dn_meta = (
+                setup_contrastive_denoising(
+                    training=self.training,
+                    num_queries=self.num_obj_queries,
+                    num_classes=self.num_classes,
+                    hidden_dim=self.hidden_dim,
+                    label_enc=self.label_enc,
+                    targets=targets,
+                    denoise_number=self.denoise_number,
+                    denoise_label_noise_ratio=self.denoise_label_noise_ratio,
+                    denoise_box_noise_scale=self.denoise_box_noise_scale,
+                )
             )
         else:
+            # Not entirely sure when this case is used
             assert targets is None
             input_query_bbox = input_query_label = attn_mask = dn_meta = None
+
+        ############## START HERE ##########
+        # TODO
+        hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
+            feature_maps,
+            masks,
+            input_query_bbox,
+            pos_encodings,
+            input_query_label,
+            attn_mask,
+        )
 
 
 def build_dino(
@@ -366,6 +389,7 @@ def build_dino(
     backbone_args: dict[str, any],
     transformer_args: dict[str, any],
     dino_args: dict[str, any],
+    criterion_args: dict[str, any],
 ):
     """Build the DINO detector
 
@@ -377,8 +401,27 @@ def build_dino(
 
     """
 
-    backbone = build_dino_backbone(**backbone_args)
+    backbone: Joiner = build_dino_backbone(**backbone_args)
 
     transformer = build_deformable_transformer(**transformer_args)
 
-    model: Joiner = DINO(**dino_args)  # TODO pass args be keyword here probably
+    model = DINO(
+        backbone=backbone,
+        transformer=transformer,
+        num_classes=dino_args["num_classes"],
+        num_obj_queries=dino_args["num_obj_queries"],
+        num_heads=dino_args["num_heads"],
+        num_feature_levels=dino_args["num_feature_levels"],
+        aux_loss=criterion_args["aux_loss"],
+        query_dim=dino_args["query_dim"],
+        two_stage_type=dino_args["two_stage_type"],
+        two_stage_add_query_num=dino_args["two_stage_add_query_num"],
+        decoder_pred_bbox_embed_share=dino_args["decoder_pred_bbox_embed_share"],
+        decoder_pred_class_embed_share=dino_args["decoder_pred_class_embed_share"],
+        decoder_self_attn_type=dino_args["decoder_self_attn_type"],
+        num_patterns=dino_args["num_patterns"],
+        denoise_number=dino_args["denoise_number"],
+        denoise_box_noise_scale=dino_args["deniose_box_noise_scale"],
+        denoise_label_noise_ratio=dino_args["denoise_label_noise_ratio"],
+        denoise_labelbook_size=dino_args["denoise_labelbook_size"],
+    )  # TODO pass args be keyword here probably

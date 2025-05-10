@@ -15,7 +15,7 @@ def setup_contrastive_denoising(
     denoise_number: int,
     denoise_label_noise_ratio,
     denoise_box_noise_scale,
-):
+) -> tuple[torch.Tensor, torch.Tensor]:
     """TODO
 
     Section 3.3 and Figure 3 of DINO paper
@@ -25,16 +25,39 @@ def setup_contrastive_denoising(
     Args:
         training: training (True) or inference (False)
         num_queries: total number of learnable object queries; TODO: verify this
-        num_classes:
+        num_classes: TODO
         hidden_dim: transformer hidden dimension; TODO: add a little more
-        label_enc:
+        label_enc: an nn.Embedding layer to embed the denoising_queries containing GT classes with
+                   randomly injected classes
         targets: dictionaries of labels for each image in the batch; see DINO.forward() for more info
-        denoise_number:
-        denoise_label_noise_ratio:
-        denoise_box_noise_scale:
+        denoise_number: TODO
+        denoise_label_noise_ratio: TODO
+        denoise_box_noise_scale: TODO
 
     Return:
         TODO: explain all return values as a summary, this will be very helpful; put location of attn_mask visual
+        1. input_query_label: a tensor with GT-truth classes and randomly selected classes injected at random
+                              locations, this tensor was then embedded with nn.Embedding
+                              shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
+        2. input_query_bbox: a tensor with all  GT bboxes noised (positive and negative denoising queries), these
+                             bboxes are then converted to logits w/ the inverse_sigmoid;
+                             (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, 4)
+                             where 4 = (cx, cy, w, h)
+        3. attn_mask: an attention mask where False = attend and True = mask/block attention;
+                      mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
+                      the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
+                      is composed of CDN groups and each CDN group is only allowed to attend to itself,
+                      therefore, the mask looks like stepsin the top left; to the right of the CDN groups
+                      are learnable_obj_queries and these are free to attend to one another so the right
+                      side of the mask is all False;
+                      see detectors/models/README.md for a visual of this attn_mask
+        4. denoise_meta: a dicionary which stores the computed values used to build the denoising queries
+                         as metadata; has the following keys:
+                            1. pad_size: total number of denoising_queries (default 200)
+                            2. num_dn_group: the number of denoising_queries per CDN group
+                                             (this should vary by batch)
+
+
     """
     if training:
         # Double the number of denoise_queries to create positive and negative queries;
@@ -129,7 +152,7 @@ def setup_contrastive_denoising(
             )  # randomly put a new one here
 
             # inject random class labels into known_labels_expand; the random labels are copied from
-            # new_label at locations chose_indice across dim 0; shape ((num_objects_batch*denoise_number*2,)
+            # new_label at locations chosen_indice across dim 0; shape (num_objects_batch*denoise_number*2,)
             known_labels_expand.scatter_(dim=0, index=chosen_indice, src=new_label)
 
         # num_objects for the image with the most objects in the batch
@@ -246,7 +269,7 @@ def setup_contrastive_denoising(
 
         # Create a map of indices on where to place the GT embeddings in the zeros tensor created above;
         # the indices will span up to (num_objects_in_img_with_most_objs*denoise_number*2) (default 200);
-        # NOTE: input_label and bbox will be longer because it also has to go in a specific sample index
+        # NOTE: input_label and bbox will be longer than map_known_indice rows, because it also has to go in a specific sample index
         map_known_indice = torch.tensor([]).to("cuda")
         if len(known_num):
             # Create a 1d range tensor for the num_objects in each image (e.g., [0, 1, 2, 3, 0, 1, 2])
@@ -328,7 +351,7 @@ def setup_contrastive_denoising(
                 ] = True
 
         # Store the computed values used to build the denoising queries as metadata
-        dn_meta = {
+        denoise_meta = {
             "pad_size": pad_size,  # number of total denoising queries across all groups (denoise_number*2*max_objects_batch,)
             "num_dn_group": denoise_number,  # number of denoising queries per group (not mulitplied by 2 here)
         }
@@ -337,6 +360,6 @@ def setup_contrastive_denoising(
         input_query_label = None
         input_query_bbox = None
         attn_mask = None
-        dn_meta = None
+        denoise_meta = None
 
-    return input_query_label, input_query_bbox, attn_mask, dn_meta
+    return input_query_label, input_query_bbox, attn_mask, denoise_meta
