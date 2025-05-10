@@ -159,3 +159,22 @@ def get_world_size():
     if not is_dist_avail_and_initialized():
         return 1
     return dist.get_world_size()
+
+
+class RandomBoxPerturber:
+    def __init__(
+        self, x_noise_scale=0.2, y_noise_scale=0.2, w_noise_scale=0.2, h_noise_scale=0.2
+    ) -> None:
+        self.noise_scale = torch.Tensor(
+            [x_noise_scale, y_noise_scale, w_noise_scale, h_noise_scale]
+        )
+
+    def __call__(self, refanchors: torch.Tensor) -> torch.Tensor:
+        nq, bs, query_dim = refanchors.shape
+        device = refanchors.device
+
+        noise_raw = torch.rand_like(refanchors)
+        noise_scale = self.noise_scale.to(device)[:query_dim]
+
+        new_refanchors = refanchors * (1 + (noise_raw - 0.5) * noise_scale)
+        return new_refanchors.clamp_(0, 1)

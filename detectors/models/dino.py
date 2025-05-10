@@ -403,6 +403,7 @@ def build_dino(
 
     backbone: Joiner = build_dino_backbone(**backbone_args)
 
+    # Break up transformer args to something more readable
     transformer = build_deformable_transformer(**transformer_args)
 
     model = DINO(

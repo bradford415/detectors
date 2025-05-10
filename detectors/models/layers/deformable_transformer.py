@@ -19,7 +19,7 @@ from typing import Optional
 import torch
 from torch import Tensor, nn
 
-from detectors.utils.misc import inverse_sigmoid
+from detectors.utils.misc import RandomBoxPerturber, inverse_sigmoid
 
 from .ops.modules import MSDeformAttn
 from .utils import (
@@ -32,12 +32,13 @@ from .utils import (
 
 class DeformableTransformer(nn.Module):
     """Deformable Transformer module used in DINO
-    
+
     The deformable transformer and deformable attention was initially introduced in deformable-detr; DINO
     and other detr-like models modify this transformer module from the original
-    
+
     TODO: Explain more
     """
+
     def __init__(
         self,
         d_model=256,
@@ -50,7 +51,7 @@ class DeformableTransformer(nn.Module):
         dropout=0.0,
         activation="relu",
         normalize_before=False,
-        return_intermediate_dec=False,
+        return_intermediate_dec=True,
         query_dim=4,
         num_patterns=0,
         modulate_hw_attn=False,
@@ -69,7 +70,7 @@ class DeformableTransformer(nn.Module):
         add_pos_value=False,
         random_refpoints_xy=False,
         # two stage
-        two_stage_type="no",  # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
+        two_stage_type="standard",  # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
         two_stage_pat_embed=0,
         two_stage_add_query_num=0,
         two_stage_learn_wh=False,
@@ -84,14 +85,14 @@ class DeformableTransformer(nn.Module):
         layer_share_type=None,
         # for detach
         rm_detach=None,
-        decoder_sa_type="ca",
+        decoder_sa_type="sa",
         module_seq=["sa", "ca", "ffn"],
         # for dn
         embed_init_tgt=False,
         use_detached_boxes_dec_out=False,
     ):
         """Initalize the deformable transformer module
-        
+
         Args:
             TODO:
             dim_model: hidden_dim of the the transformer
@@ -1287,64 +1288,69 @@ def _get_clones(module, N, layer_share=False):
         return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_deformable_transformer(args):
-    decoder_query_perturber = None
-    if args.decoder_layer_noise:
-        from .utils import RandomBoxPerturber
+def build_deformable_transformer(two_stage_params, transformer_args: dict[str, any]):
+    """Builds the deformable transformer module
 
+    Args:
+        box_perturb_args: TODO
+    """
+
+    # This is False by default and never called; TODO: still need to briefly understand the code
+    transformer_args["decoder_layer_noise"]
+    if transformer_args["decoder_layer_noise"]:
+        dec_noise_params = transformer_args["dec_noise_params"]
         decoder_query_perturber = RandomBoxPerturber(
-            x_noise_scale=args.dln_xy_noise,
-            y_noise_scale=args.dln_xy_noise,
-            w_noise_scale=args.dln_hw_noise,
-            h_noise_scale=args.dln_hw_noise,
+            x_noise_scale=dec_noise_params["dln_xy_noise"],
+            y_noise_scale=dec_noise_params["dln_xy_noise"],
+            w_noise_scale=dec_noise_params["dln_hw_noise"],
+            h_noise_scale=dec_noise_params["dln_hw_noise"],
         )
 
-    use_detached_boxes_dec_out = False
-    try:
-        use_detached_boxes_dec_out = args.use_detached_boxes_dec_out
-    except:
-        use_detached_boxes_dec_out = False
+    use_detached_boxes_dec_out = use_detached_boxes_dec_out
 
+    breakpoint()
     return DeformableTransformer(
-        d_model=args.hidden_dim,
-        dropout=args.dropout,
-        nhead=args.nheads,
-        num_queries=args.num_queries,
-        dim_feedforward=args.dim_feedforward,
-        num_encoder_layers=args.enc_layers,
-        num_unicoder_layers=args.unic_layers,
-        num_decoder_layers=args.dec_layers,
-        normalize_before=args.pre_norm,
-        return_intermediate_dec=True,
-        query_dim=args.query_dim,
-        activation=args.transformer_activation,
-        num_patterns=args.num_patterns,
+        dim_model=transformer_args["hidden_dim"],
+        num_heads=transformer_args["num_heads"],
+        num_queries=transformer_args["num_queries"],
+        num_encoder_layers=transformer_args["num_encoder_layers"],
+        num_unicoder_layers=transformer_args["num_unicoder_layers"],
+        num_decoder_layers=transformer_args["num_decoder_layers"],
+        dim_feedforward=transformer_args["ff_layer"],
+        dropout=transformer_args["dropout"],
+        activation=transformer_args["activation"],
+        normalize_before=transformer_args["pre_norm"],
+        return_intermediate_dec=transformer_args["return_intermediate_dec"],
+        query_dim=transformer_args["query_dim"],
+        num_patterns=transformer_args["num_patterns"],
         modulate_hw_attn=True,
+        # for deformable encoder
         deformable_encoder=True,
         deformable_decoder=True,
-        num_feature_levels=args.num_feature_levels,
-        enc_n_points=args.enc_n_points,
-        dec_n_points=args.dec_n_points,
-        use_deformable_box_attn=args.use_deformable_box_attn,
-        box_attn_type=args.box_attn_type,
+        num_feature_levels=num_feature_levels,
+        enc_n_points=transformer_args["enc_n_points"],
+        dec_n_points=transformer_args["dec_n_points"],
+        use_deformable_box_attn=transformer_args["use_deformable_box_attn"],
+        box_attn_type=transformer_args["box_attn_type"],
         learnable_tgt_init=True,
         decoder_query_perturber=decoder_query_perturber,
-        add_channel_attention=args.add_channel_attention,
-        add_pos_value=args.add_pos_value,
-        random_refpoints_xy=args.random_refpoints_xy,
-        # two stage
-        two_stage_type=args.two_stage_type,  # ['no', 'standard', 'early']
-        two_stage_pat_embed=args.two_stage_pat_embed,
-        two_stage_add_query_num=args.two_stage_add_query_num,
-        two_stage_learn_wh=args.two_stage_learn_wh,
-        two_stage_keep_all_tokens=args.two_stage_keep_all_tokens,
-        dec_layer_number=args.dec_layer_number,
-        rm_self_attn_layers=None,
+        add_channel_attention=transformer_args["add_channel_attention"],
+        add_pos_value=transformer_args["add_pos_value"],
+        random_refpoints_xy=False,
+        two_stage_type=two_stage_params["type"],
+        two_stage_pat_embed=two_stage_params["pat_embed"],
+        two_stage_add_query_num=two_stage_params["add_query_num"],
+        two_stage_learn_wh=two_stage_params["learn_wh"],
+        two_stage_keep_all_tokens=two_stage_params["keep_all_tokens"],
+        dec_layer_number=transformer_args["dec_layer_number"],
+        rm_dec_query_scale=transformer_args["rm_dec_query_scale"],
+        rm_self_attn_layers=transformer_args["rm_self_attn_layers"],
         key_aware_type=None,
         layer_share_type=None,
-        rm_detach=None,
-        decoder_sa_type=args.decoder_sa_type,
-        module_seq=args.decoder_module_seq,
-        embed_init_tgt=args.embed_init_tgt,
+        rm_detach=transformer_args["rm_detach"],
+        decoder_sa_type=transformer_args["decoder_self_attn_type"],
+        module_seq=transformer_args["decoder_module_seq"],
+        # for denoising
+        embed_init_tgt=transformer_args["embed_init_tgt"],
         use_detached_boxes_dec_out=use_detached_boxes_dec_out,
     )

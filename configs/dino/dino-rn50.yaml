@@ -30,44 +30,40 @@ denoising_params:
 
 # TODO: group these better
 dino_params:
+
   # Model architecture params
   num_feature_levels: 4
 
-  hidden_dim: 256 # TODO: might move to transformer parameters
-  dropout: 0.0
-
-  # Number of learnable object queries that are input into the decoder; maximum number of object 
-  # predictions dino will produce (each a bounding box and class)
-  num_queries: 900
-
-  num_feature_levels: 4
-  num_heads: 8
-
   # TODO: Comment
   query_dim: 4
+
+  # TODO: comment
+  num_patterns: 0
 
   # TODO: this might not be used? I could leave it in and just use not implemented error
   random_refpoints_xy: False
   fix_refpoints_hw: -1 # comment the options
 
-
-
-
   # Other DINO params (maybe put these under their own key)
 
-  # TODO; comment
+  # TODO: comment
   dec_pred_class_embed_share: True
   dec_pred_bbox_embed_share: True
 
-  # TODO: comment
-  two_stage_type: "standard" # comment options if they exist
-  two_stage_add_query_num: 0
-  two_stage_bbox_embed_share: False
-  two_stage_class_embed_share: False
+  # TODO: commen
+  two_stage_params:
+    type: "standard" # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
+    pat_embed: 0
+    add_query_num: 0
+    learn_wh: False
+    keep_all_tokens: False
+    two_stage_default_hw: 0.05 # TODO: figure out if this is used
+    bbox_embed_share: False
+    class_embed_share: False
+
 
   # TODO: comment
   decoder_self_attn_type: "sa" # ["sa", "ca_label", "ca_content"]
-  num_patterns: 0
 
   # Number of denoising_queries for an image; will be evenly distributed to each GT object 
   # in the image based on the num_objects for the image w/ the most objects in the batch; therefore 
@@ -84,6 +80,69 @@ dino_params:
 
   # TODO rename and see if I can just use the number of classes in the dataset
   denoise_labelbook_size: 91
+
+  # According to this github issue: https://github.com/IDEA-Research/DINO/issues/77#issuecomment-1537355105
+  # the `look forward twice` (lft) mechanism is controlled by this parameter, but in the official
+  # repo this is disabled by default; they report best metrics with the lft mechanism so it's
+  # weird it's disabled by default; I'll have to play around with this parameter once I finish
+  # implementing
+  use_detached_boxes_dec_out: False
+
+  # deformable attention architecutre params
+  transformer_params:
+    hidden_dim: 256
+    num_heads: 8
+
+    # Number of learnable object queries that are input into the decoder; maximum number of object 
+    # predictions dino will produce (each a bounding box and class)
+    num_queries: 900
+
+    num_encoder_layers: 6
+    num_decoder_layers: 6
+    num_unicoder_layers: 0 # ? not sure what this is
+
+    # dimension of feedforward layer
+    ff_dim: 2048
+
+    dropout: 0.0
+    activation: "relu"
+
+    # TODO: comment
+    pre_norm: False
+
+    # TODO: comment
+    return_intermediate_dec: True
+
+    # TODO: Comment
+    enc_n_points: 4
+    dec_n_points: 4
+
+    use_deformable_box_attn: False
+
+    # TODO: comment
+    box_attn_type: "roi_align"
+
+    add_channel_attention: False
+
+    dec_layer_number: null
+
+    rm_dec_query_scale: True
+    rm_self_attn_layers: null
+
+    rm_detach: null
+
+    decoder_self_attn_type: "sa" # ['sa', 'ca_label', 'ca_content']
+    decoder_module_seq: ["sa", "ca", "ffn"]
+
+    embed_init_tgt: True
+
+    # Creates the decoder_query_bbox_pertuber; this is False by default and not used
+    # still need to briefly understand the code in case it becomes important
+    decoder_layer_noise: False
+    dec_noise_params:
+      dln_xy_noise: 0.2
+      dln_hw_noise: 0.2
+
 
 
 
