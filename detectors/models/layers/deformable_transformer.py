@@ -965,13 +965,14 @@ class TransformerDecoder(nn.Module):
                             topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
                         )  # unsigmoid
 
-                if self.rm_detach and "dec" in self.rm_detach:
+                if self.rm_detach and "dec" in self.rm_detach:  # Look forward once
                     reference_points = new_reference_points
-                else:
+                else:  # look forward twice (DINO)
                     reference_points = new_reference_points.detach()
-                if self.use_detached_boxes_dec_out:
+
+                if self.use_detached_boxes_dec_out:  # Look forward once
                     ref_points.append(reference_points)
-                else:
+                else:  # Look forward twice (DINO)
                     ref_points.append(new_reference_points)
 
             intermediate.append(self.norm(output))
@@ -1288,7 +1289,9 @@ def _get_clones(module, N, layer_share=False):
         return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_deformable_transformer(two_stage_params, transformer_args: dict[str, any]):
+def build_deformable_transformer(
+    num_feature_levels, two_stage_params, transformer_args: dict[str, any]
+):
     """Builds the deformable transformer module
 
     Args:
@@ -1306,9 +1309,9 @@ def build_deformable_transformer(two_stage_params, transformer_args: dict[str, a
             h_noise_scale=dec_noise_params["dln_hw_noise"],
         )
 
+    # False = Look forward twice (which is what DINO implements)
     use_detached_boxes_dec_out = use_detached_boxes_dec_out
 
-    breakpoint()
     return DeformableTransformer(
         dim_model=transformer_args["hidden_dim"],
         num_heads=transformer_args["num_heads"],
@@ -1324,7 +1327,6 @@ def build_deformable_transformer(two_stage_params, transformer_args: dict[str, a
         query_dim=transformer_args["query_dim"],
         num_patterns=transformer_args["num_patterns"],
         modulate_hw_attn=True,
-        # for deformable encoder
         deformable_encoder=True,
         deformable_decoder=True,
         num_feature_levels=num_feature_levels,

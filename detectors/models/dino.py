@@ -387,6 +387,7 @@ class DINO(nn.Module):
 def build_dino(
     *,
     backbone_args: dict[str, any],
+    denoising_args: dict[str, any],
     transformer_args: dict[str, any],
     dino_args: dict[str, any],
     criterion_args: dict[str, any],
@@ -396,14 +397,21 @@ def build_dino(
     Args:
         backbone_args: parameters specifically for the build_backbone() function;
                        see models.backbones.backbone.build_backbone() for parameter descriptions
-        transformer_args: TODO
-        dino_args: TODO: see if I want to split the dino params up more
+        denoising_args: parameters used for the denoising queries
+        transformer_args: parameters used for DINO and the deformable transformer
+        dino_args: General DINO parameters that are not as specific as some
 
     """
 
     backbone: Joiner = build_dino_backbone(**backbone_args)
 
+    ################# START HERE, BREAK UP ARGS @@@@@@@@@@@@@
+
+    # Set up arguments for deformable transformer
+    standard_args = dino_args["standard"]
+
     # Break up transformer args to something more readable
+
     transformer = build_deformable_transformer(**transformer_args)
 
     model = DINO(
