@@ -75,7 +75,7 @@ detector:
       denoise_labelbook_size: 91
 
     # deformable attention params; also contains some general dino params
-    transformer_:
+    transformer:
       hidden_dim: 256
       num_heads: 8
 

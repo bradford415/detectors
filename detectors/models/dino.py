@@ -386,15 +386,15 @@ class DINO(nn.Module):
 
 def build_dino(
     *,
+    num_classes: int,
     backbone_args: dict[str, any],
-    denoising_args: dict[str, any],
-    transformer_args: dict[str, any],
     dino_args: dict[str, any],
     criterion_args: dict[str, any],
 ):
     """Build the DINO detector
 
     Args:
+        
         backbone_args: parameters specifically for the build_backbone() function;
                        see models.backbones.backbone.build_backbone() for parameter descriptions
         denoising_args: parameters used for the denoising queries
@@ -405,19 +405,23 @@ def build_dino(
 
     backbone: Joiner = build_dino_backbone(**backbone_args)
 
-    ################# START HERE, BREAK UP ARGS @@@@@@@@@@@@@
-
     # Set up arguments for deformable transformer
     standard_args = dino_args["standard"]
+    two_stage_args = dino_args["two_stage"]
+    denoising_args = dino_args["denoising"]
+    transformer_args = dino_args["transformer"]
+    
 
-    # Break up transformer args to something more readable
-
+    # Initialize the deformable transformer used in DINO;
+    # see models.layers.deformable_transformer.DeformableTransformer for function
+    # descriptions
     transformer = build_deformable_transformer(**transformer_args)
 
+    # TODO: update the arguments so they're passed where they cam efomr
     model = DINO(
         backbone=backbone,
         transformer=transformer,
-        num_classes=dino_args["num_classes"],
+        num_classes=num_classes,
         num_obj_queries=dino_args["num_obj_queries"],
         num_heads=dino_args["num_heads"],
         num_feature_levels=dino_args["num_feature_levels"],
@@ -433,4 +437,4 @@ def build_dino(
         denoise_box_noise_scale=dino_args["deniose_box_noise_scale"],
         denoise_label_noise_ratio=dino_args["denoise_label_noise_ratio"],
         denoise_labelbook_size=dino_args["denoise_labelbook_size"],
-    )  # TODO pass args be keyword here probably
+    ) 
