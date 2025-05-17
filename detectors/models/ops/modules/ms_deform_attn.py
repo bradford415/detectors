@@ -148,7 +148,7 @@ class MSDeformAttn(nn.Module):
                 )
             )
 
-        # for amp
+        # for amp; this if statement was added by dino to support amp training
         if value.dtype == torch.float16:
             # for mixed precision
             output = MSDeformAttnFunction.apply(

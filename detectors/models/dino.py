@@ -19,10 +19,10 @@ class DINO(nn.Module):
     """Cross-attention detector module that performs object detection
 
     Types of queries:
-        - object queries: obj queries are learnable queries and input into the transformer decoder;
-                          the number of object queries is the maximum objects DINO DETR can detect in a
-                          single image; each query predicts a class label (including background/no_object)
-                          and a bbox
+        - object queries: also called learnable queries, these are input into the transformer
+                          decoder; the number of object queries is the maximum objects DINO
+                          DETR can detect in a single image; each query predicts a class label
+                          (including background/no_object) and a bbox
         - denoising (DN): auxiliary input queries added during training that are intentionally
                           "noised" versions of ground-truth object boxes and labels; they learn to
                           make predictions based on anchors which have GT boxes nearby; section 3.3 of paper;

@@ -3,6 +3,11 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+activation_map = {
+    "relu": F.relu,
+    "gelu": F.gelu,
+}
+
 
 class ConvNormLRelu(nn.Module):
     """Module which performs a convolution, batchnorm, and leakyReLU sequentially"""

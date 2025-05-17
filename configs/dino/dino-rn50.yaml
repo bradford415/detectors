@@ -29,9 +29,9 @@ criterion_params:
 detector:
   name: "dino"
 
+  # Section D.4 of the DINO paper gives parameters used
   params:
     standard:
-      # Model architecture params
       num_feature_levels: 4
 
       # TODO: Comment
@@ -67,6 +67,7 @@ detector:
       denoise_number: 100
 
       # NOTE: the bash script overrides this parameter to 1.0, which is different than the config
+      #       TODO: the paper uses 0.4 so I should play around with this
       denoise_box_noise_scale: 1.0
 
       denoise_label_noise_ratio: 0.5 
@@ -90,6 +91,7 @@ detector:
       # dimension of feedforward layer
       ff_dim: 2048
 
+      # dropout value and activation function for the encoder and decoder
       dropout: 0.0
       activation: "relu"
 
@@ -108,6 +110,7 @@ detector:
       # TODO: comment
       box_attn_type: "roi_align"
 
+      # Adds a 
       add_channel_attention: False
 
 

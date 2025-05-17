@@ -19,6 +19,7 @@ from typing import Optional
 import torch
 from torch import Tensor, nn
 
+from detectors.models.layers.common import activation_map
 from detectors.models.ops.modules import MSDeformAttn
 from detectors.utils.misc import RandomBoxPerturber, inverse_sigmoid
 
@@ -104,7 +105,7 @@ class DeformableTransformer(nn.Module):
             num_unicoder_layers:
             num_decoder_layers:
             dim_feedforward:
-            dropout:
+            dropout: dropout value used for the encoder and decoder
             activation:
             normalize_before:
             return_intermediate_dec:
@@ -184,21 +185,20 @@ class DeformableTransformer(nn.Module):
                 num_feature_levels,
                 nhead,
                 enc_n_points,
-                add_channel_attention=add_channel_attention,
-                use_deformable_box_attn=use_deformable_box_attn,
-                box_attn_type=box_attn_type,
             )
         else:
             raise NotImplementedError
+        
+        ######## START HERE ##########
         encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(
             encoder_layer,
             num_encoder_layers,
             encoder_norm,
             d_model=d_model,
-            num_queries=num_queries,
+            num_obj_queries=num_obj_queries,
             deformable_encoder=deformable_encoder,
-            enc_layer_share=enc_layer_share,
+            enc_layer_share=False,
             two_stage_type=two_stage_type,
         )
 
@@ -1009,67 +1009,78 @@ class TransformerDecoder(nn.Module):
 class DeformableTransformerEncoderLayer(nn.Module):
     """The encoder layer for the deformable transformer encoder used in DINO
 
+    Performs deformable self-attention and a two-layer ffn
+
+    This is almost identical to the original DETR encoder https://arxiv.org/pdf/2005.12872
+    in figure 10
+
     This is just the layer, not the full Encoder
     """
 
     def __init__(
         self,
-        d_model=256,
-        d_ffn=1024,
-        dropout=0.1,
-        activation="relu",
-        n_levels=4,
-        n_heads=8,
-        n_points=4,
-        add_channel_attention=False,
-        box_attn_type="roi_align",
+        d_model: int = 256,
+        d_ffn: int = 1024,
+        dropout: float = 0.1,
+        activation: str = "relu",
+        n_levels: int = 4,
+        n_heads: int = 8,
+        n_points: int = 4,
     ):
         """Initalize the deformable transformer encoder layer
 
         Args:
             d_model:
             d_ffn:
-            dropout:
-            activation:
+            dropout: dropout value for the deform transformer encoder layer; default is
+                     0.0
+            activation: the activation function to use after the first linear layer in the ffn
             n_levels:
             n_heads:
             n_points:
-            add_channel_attention:
-            use_deformable_box_attn:
-            box_attn_type:
         """
         super().__init__()
         # NOTE: removed MSDeformableBoxAttention because it was unused
 
-        # Initalize the deformable attention module; 
+        # Initalize the deformable attention module;
         # NOTE: this is a custom CUDA kernel w/ cpp code, it requires an NVIDIA GPU and a special install
-        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points) # TODO: One day I need to look through this code
+        self.self_attn = MSDeformAttn(
+            d_model, n_levels, n_heads, n_points
+        )  # TODO: One day I need to look through this code
 
-
-        ############## START HERE ############
+        # Initialize dropout and norm
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
-        # ffn
+        # Create the feedforward network (ffn) of the encoder
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = _get_activation_fn(activation, d_model=d_ffn)
+        self.activation = activation_map[activation]()
         self.dropout2 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout3 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)
 
-        # channel attention
-        self.add_channel_attention = add_channel_attention
-        if add_channel_attention:
-            self.activ_channel = _get_activation_fn("dyrelu", d_model=d_model)
-            self.norm_channel = nn.LayerNorm(d_model)
+        # NOTE: removing channel attention because not used
 
     @staticmethod
     def with_pos_embed(tensor, pos):
+        """Adds `pos` embeddings to the `tensor` element-wise
+
+        tensor and pos should be the same shape
+
+        Args:
+            tensor: the tensor sequence
+            pos:
+        """
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, src):
-        src2 = self.linear2(self.dropout2(self.activation(self.linear1(src))))
+
+        src2 = self.linear1(src)
+        src2 = self.activation(src2)
+        src2 = self.dropout2(src2)
+        src2 = self.linear2(src2)
+
         src = src + self.dropout3(src2)
         src = self.norm2(src)
         return src
@@ -1083,7 +1094,23 @@ class DeformableTransformerEncoderLayer(nn.Module):
         level_start_index,
         key_padding_mask=None,
     ):
-        # self attention
+        """Forward pass through the encoder layer
+
+        Args:
+            src: the input tensor to compute the attention of (b, TODO num_patches??, hidden_dim)
+            pos: the positional embeddings to add to the input tensor sequence
+                 (b, TODO, hidden_dim)
+            reference_points: TODO
+            spatial_shape:TODO
+            level_start_index: TODO
+            key_padding_mask: TODO
+
+        Returns:
+            An encoded tensor of the same shape as the input `src`
+        """
+        assert src.shape == pos.shape
+
+        # Add positional embeddings and compute self-attention with the `src` tensor
         src2 = self.self_attn(
             self.with_pos_embed(src, pos),
             reference_points,
@@ -1095,12 +1122,10 @@ class DeformableTransformerEncoderLayer(nn.Module):
         src = src + self.dropout1(src2)
         src = self.norm1(src)
 
-        # ffn
+        # Pass through the ffn (b, TODO, hidden_dim)
         src = self.forward_ffn(src)
 
-        # channel attn
-        if self.add_channel_attention:
-            src = self.norm_channel(src + self.activ_channel(src))
+        # NOTE: removing channel attention because not used
 
         return src
 
@@ -1141,7 +1166,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
 
         # ffn
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
+        d_modeltivation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
         self.dropout3 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout4 = nn.Dropout(dropout)
@@ -1165,7 +1190,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, tgt):
-        tgt2 = self.linear2(self.dropout3(self.activation(self.linear1(tgt))))
+        tgt2 = self.linear2(self.dropout3(d_modeltivation(self.linear1(tgt))))
         tgt = tgt + self.dropout4(tgt2)
         tgt = self.norm3(tgt)
         return tgt
