@@ -68,7 +68,6 @@ class PositionEmbeddingSineHW(nn.Module):
         Returns:
             positional embeddings of shape (b, num_pos_feats, h, w);
         """
-        ########## START HERE, STEP THROUGH CODE AND UNDERSTAND THE SHAPE #######
         image_patches = tensor_list.tensors
         mask = tensor_list.mask
         assert mask is not None

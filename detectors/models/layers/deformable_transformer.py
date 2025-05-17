@@ -19,9 +19,9 @@ from typing import Optional
 import torch
 from torch import Tensor, nn
 
+from detectors.models.ops.modules import MSDeformAttn
 from detectors.utils.misc import RandomBoxPerturber, inverse_sigmoid
 
-from .ops.modules import MSDeformAttn
 from .utils import (
     MLP,
     _get_activation_fn,
@@ -43,7 +43,7 @@ class DeformableTransformer(nn.Module):
         self,
         d_model=256,
         nhead=8,
-        num_queries=300,
+        num_obj_queries=900,
         num_encoder_layers=6,
         num_unicoder_layers=0,
         num_decoder_layers=6,
@@ -56,8 +56,8 @@ class DeformableTransformer(nn.Module):
         num_patterns=0,
         modulate_hw_attn=False,
         # for deformable encoder
-        deformable_encoder=False,
-        deformable_decoder=False,
+        deformable_encoder=True,
+        deformable_decoder=True,
         num_feature_levels=1,
         enc_n_points=4,
         dec_n_points=4,
@@ -82,7 +82,7 @@ class DeformableTransformer(nn.Module):
         rm_self_attn_layers=None,
         key_aware_type=None,
         # layer share
-        layer_share_type=None,
+        layer_share_type: Optional[str] = None,
         # for detach
         rm_detach=None,
         decoder_sa_type="sa",
@@ -95,9 +95,11 @@ class DeformableTransformer(nn.Module):
 
         Args:
             TODO:
-            dim_model: hidden_dim of the the transformer
+            d_model: hidden_dim of the the transformer
             num_heads:
-            num_obj_queries:
+            num_obj_queries: number of learnable object queries; this is the max num of objects
+                             DINO can detect single image; each query predicts a class label
+                             (including background/no_object) and a bbox
             num_encoder_layers:
             num_unicoder_layers:
             num_decoder_layers:
@@ -130,9 +132,11 @@ class DeformableTransformer(nn.Module):
             rm_enc_query_scale:
             rm_dec_query_scale:
             key_aware_type
-            layer_share_type
+            layer_share_type: a string of which layers to share: "encoder", "decoder", "both";
+                              if None do not share any layers; default None
             rm_detach:
-            decoder_sa_type:
+            decoder_sa_type: the type of self-attention to use for the decoder; supported values ["sa", "ca_label", "ca_content"]
+                             "sa" = standard self-attention; TODO: verify sa and explain the other two types
             module_seq:
             embed_init_tgt:
             use_detached_boxes_dec_out:
@@ -145,33 +149,32 @@ class DeformableTransformer(nn.Module):
         self.deformable_encoder = deformable_encoder
         self.deformable_decoder = deformable_decoder
         self.two_stage_keep_all_tokens = two_stage_keep_all_tokens
-        self.num_queries = num_queries
+        self.num_obj_queries = num_obj_queries
         self.random_refpoints_xy = random_refpoints_xy
         self.use_detached_boxes_dec_out = use_detached_boxes_dec_out
+
         assert query_dim == 4
 
+        # DeformableEncoder requires multiscale feature_maps
         if num_feature_levels > 1:
             assert (
                 deformable_encoder
             ), "only support deformable_encoder for num_feature_levels > 1"
-        if use_deformable_box_attn:
-            assert deformable_encoder or deformable_encoder
 
-        assert layer_share_type in [None, "encoder", "decoder", "both"]
-        if layer_share_type in ["encoder", "both"]:
-            enc_layer_share = True
-        else:
-            enc_layer_share = False
-        if layer_share_type in ["decoder", "both"]:
-            dec_layer_share = True
-        else:
-            dec_layer_share = False
+        # Verify deformable encoder is enabled if deformable_box_attn is used; this is False by default
+        if use_deformable_box_attn:
+            assert (
+                deformable_encoder or deformable_encoder
+            )  # NOTE: I think this is a bug in the original code
+
+        # NOTE: removing encoder/decoder layer share checks because an assertion in the
+        #       source code requires it to be None
         assert layer_share_type is None
 
         self.decoder_sa_type = decoder_sa_type
         assert decoder_sa_type in ["sa", "ca_label", "ca_content"]
 
-        # choose encoder layer type
+        # Instantiate the deformable transformer encoder layer (just the layer, not the full encoder)
         if deformable_encoder:
             encoder_layer = DeformableTransformerEncoderLayer(
                 d_model,
@@ -240,7 +243,7 @@ class DeformableTransformer(nn.Module):
         self.d_model = d_model
         self.nhead = nhead
         self.dec_layers = num_decoder_layers
-        self.num_queries = num_queries  # useful for single stage model only
+        self.num_obj_queries = num_obj_queries  # useful for single stage model only
         self.num_patterns = num_patterns
         if not isinstance(num_patterns, int):
             Warning("num_patterns should be int but {}".format(type(num_patterns)))
@@ -258,7 +261,7 @@ class DeformableTransformer(nn.Module):
         assert learnable_tgt_init, "why not learnable_tgt_init"
         self.embed_init_tgt = embed_init_tgt
         if (two_stage_type != "no" and embed_init_tgt) or (two_stage_type == "no"):
-            self.tgt_embed = nn.Embedding(self.num_queries, d_model)
+            self.tgt_embed = nn.Embedding(self.num_obj_queries, d_model)
             nn.init.normal_(self.tgt_embed.weight.data)
         else:
             self.tgt_embed = None
@@ -362,14 +365,27 @@ class DeformableTransformer(nn.Module):
             )
             self.refpoint_embed.weight.data[:, :2].requires_grad = False
 
-    def forward(self, srcs, masks, refpoint_embed, pos_embeds, tgt, attn_mask=None):
-        """
-        Input:
-            - srcs: List of multi features [bs, ci, hi, wi]
-            - masks: List of multi masks [bs, hi, wi]
-            - refpoint_embed: [bs, num_dn, 4]. None in infer
-            - pos_embeds: List of multi pos embeds [bs, ci, hi, wi]
-            - tgt: [bs, num_dn, d_model]. None in infer
+    def forward(
+        self,
+        feature_maps: list[torch.Tensor],
+        masks: list[torch.Tensor],
+        pos_embeds: list[torch.Tensor],
+        refpoint_embed,
+        tgt,
+        attn_mask=None,
+    ):
+        """Call the DeformableTransformer
+
+        Args:
+            feature_maps: list of multiscale feature maps which were extracted from the backbone,
+                          projected, and additional feature maps were created (b, h, w, c)
+            masks: list of padding masks  (b, h, w)
+            pos_embeds: list of positional embeds (b, hiddne_dim//2, h, w)
+
+            Args returned from setup_contrastive_denoising()
+                refpoint_embed: TODO [bs, num_dn, 4]. None in infer
+                tgt: TODO [bs, num_dn, d_model]. None in infer
+                attn_mask: TODO
 
         """
         # prepare input for encoder
@@ -457,7 +473,7 @@ class DeformableTransformer(nn.Module):
             enc_outputs_coord_unselected = (
                 self.enc_out_bbox_embed(output_memory) + output_proposals
             )  # (bs, \sum{hw}, 4) unsigmoid
-            topk = self.num_queries
+            topk = self.num_obj_queries
             topk_proposals = torch.topk(
                 enc_outputs_class_unselected.max(-1)[0], topk, dim=1
             )[
@@ -512,7 +528,7 @@ class DeformableTransformer(nn.Module):
                 tgt_embed = tgt.repeat(1, self.num_patterns, 1)
                 refpoint_embed = refpoint_embed.repeat(1, self.num_patterns, 1)
                 tgt_pat = self.patterns.weight[None, :, :].repeat_interleave(
-                    self.num_queries, 1
+                    self.num_obj_queries, 1
                 )  # 1, n_q*n_pat, d_model
                 tgt = tgt_embed + tgt_pat
 
@@ -583,7 +599,7 @@ class TransformerEncoder(nn.Module):
         num_layers,
         norm=None,
         d_model=256,
-        num_queries=300,
+        num_obj_queries=900,
         deformable_encoder=False,
         enc_layer_share=False,
         enc_layer_dropout_prob=None,
@@ -600,7 +616,7 @@ class TransformerEncoder(nn.Module):
             del encoder_layer
 
         self.query_scale = None
-        self.num_queries = num_queries
+        self.num_obj_queries = num_obj_queries
         self.deformable_encoder = deformable_encoder
         self.num_layers = num_layers
         self.norm = norm
@@ -729,7 +745,7 @@ class TransformerEncoder(nn.Module):
                 )
 
                 # gather boxes
-                topk = self.num_queries
+                topk = self.num_obj_queries
                 enc_outputs_class = self.class_embed[layer_id](output_memory)
                 ref_token_index = torch.topk(enc_outputs_class.max(-1)[0], topk, dim=1)[
                     1
@@ -991,6 +1007,11 @@ class TransformerDecoder(nn.Module):
 
 
 class DeformableTransformerEncoderLayer(nn.Module):
+    """The encoder layer for the deformable transformer encoder used in DINO
+
+    This is just the layer, not the full Encoder
+    """
+
     def __init__(
         self,
         d_model=256,
@@ -1001,17 +1022,31 @@ class DeformableTransformerEncoderLayer(nn.Module):
         n_heads=8,
         n_points=4,
         add_channel_attention=False,
-        use_deformable_box_attn=False,
         box_attn_type="roi_align",
     ):
+        """Initalize the deformable transformer encoder layer
+
+        Args:
+            d_model:
+            d_ffn:
+            dropout:
+            activation:
+            n_levels:
+            n_heads:
+            n_points:
+            add_channel_attention:
+            use_deformable_box_attn:
+            box_attn_type:
+        """
         super().__init__()
-        # self attention
-        if use_deformable_box_attn:
-            self.self_attn = MSDeformableBoxAttention(
-                d_model, n_levels, n_heads, n_boxes=n_points, used_func=box_attn_type
-            )
-        else:
-            self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        # NOTE: removed MSDeformableBoxAttention because it was unused
+
+        # Initalize the deformable attention module; 
+        # NOTE: this is a custom CUDA kernel w/ cpp code, it requires an NVIDIA GPU and a special install
+        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points) # TODO: One day I need to look through this code
+
+
+        ############## START HERE ############
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -1295,7 +1330,9 @@ def build_deformable_transformer(
     """Builds the deformable transformer module
 
     Args:
-        box_perturb_args: TODO
+        num_feature_levels: TODO
+        two_stage_params: TODO
+        transformer_args: TODO
     """
 
     # This is False by default and never called; TODO: still need to briefly understand the code
@@ -1313,7 +1350,7 @@ def build_deformable_transformer(
     use_detached_boxes_dec_out = use_detached_boxes_dec_out
 
     return DeformableTransformer(
-        dim_model=transformer_args["hidden_dim"],
+        d_model=transformer_args["hidden_dim"],
         num_heads=transformer_args["num_heads"],
         num_queries=transformer_args["num_queries"],
         num_encoder_layers=transformer_args["num_encoder_layers"],

@@ -262,11 +262,12 @@ class DINO(nn.Module):
                 f"decoder_sa_type `{decoder_self_attn_type}` not recognized"
             )
 
+        # see _init_projection_layers() for functionality
         self._init_projection_layers()
 
     def _init_projection_layers(self):
         """Initalize the parameters of conv2d for the feature_map projection layers;
-        these layers project the feature_maps before passing to the encoder
+        these layers project the feature_maps (and additional feat_maps) before passing to the encoder
         """
         for proj in self.input_proj:
             nn.init.xavier_uniform_(
@@ -394,7 +395,7 @@ def build_dino(
     """Build the DINO detector
 
     Args:
-        
+
         backbone_args: parameters specifically for the build_backbone() function;
                        see models.backbones.backbone.build_backbone() for parameter descriptions
         denoising_args: parameters used for the denoising queries
@@ -410,7 +411,6 @@ def build_dino(
     two_stage_args = dino_args["two_stage"]
     denoising_args = dino_args["denoising"]
     transformer_args = dino_args["transformer"]
-    
 
     # Initialize the deformable transformer used in DINO;
     # see models.layers.deformable_transformer.DeformableTransformer for function
@@ -437,4 +437,4 @@ def build_dino(
         denoise_box_noise_scale=dino_args["deniose_box_noise_scale"],
         denoise_label_noise_ratio=dino_args["denoise_label_noise_ratio"],
         denoise_labelbook_size=dino_args["denoise_labelbook_size"],
-    ) 
+    )

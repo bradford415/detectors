@@ -105,8 +105,10 @@ class NestedTensor:
 
     @classmethod
     def from_tensor_list(cls, img_tensors: Sequence[Tensor]) -> "NestedTensor":
-        """Creates a NestTensor object from a list of image sizes; this is intended
-        to be called from the collate_fn (i.e., no batch dim for tensors)
+        """Creates a NestTensor object from a list of tensors
+
+        This is intended to be called from the collate_fn (i.e., no batch dim for tensors); currently
+        called in data.collate_functions.collate_fn_nested_tensor()
 
         Args:
             img_tensors: a sequence of image tensors where each element has dims (c, h, w)
