@@ -71,7 +71,7 @@ class DeformableTransformer(nn.Module):
         add_pos_value=False,
         random_refpoints_xy=False,
         # two stage
-        two_stage_type="standard",  # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
+        two_stage_type="standard",
         two_stage_pat_embed=0,
         two_stage_add_query_num=0,
         two_stage_learn_wh=False,
@@ -124,7 +124,7 @@ class DeformableTransformer(nn.Module):
             add_channel_attention:
             add_pos_value:
             random_refpoints_xy:
-            two_stage_type:
+            two_stage_type: supported values: ["no", "standard"]
             two_stage_pat_embed:
             two_stage_add_query_num:
             two_stage_learn_wh:
@@ -188,8 +188,13 @@ class DeformableTransformer(nn.Module):
             )
         else:
             raise NotImplementedError
-        
-        ######## START HERE ##########
+
+        assert two_stage_type in [
+            "no",
+            "standard",
+        ], "unknown param {} of two_stage_type".format(two_stage_type)
+
+        # Create the TransformerEncoder module
         encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
         self.encoder = TransformerEncoder(
             encoder_layer,
@@ -203,24 +208,20 @@ class DeformableTransformer(nn.Module):
         )
 
         # choose decoder layer type
-        if deformable_decoder:
-            decoder_layer = DeformableTransformerDecoderLayer(
-                d_model,
-                dim_feedforward,
-                dropout,
-                activation,
-                num_feature_levels,
-                nhead,
-                dec_n_points,
-                use_deformable_box_attn=use_deformable_box_attn,
-                box_attn_type=box_attn_type,
-                key_aware_type=key_aware_type,
-                decoder_sa_type=decoder_sa_type,
-                module_seq=module_seq,
-            )
-
-        else:
-            raise NotImplementedError
+        decoder_layer = DeformableTransformerDecoderLayer(
+            d_model,
+            dim_feedforward,
+            dropout,
+            activation,
+            num_feature_levels,
+            nhead,
+            dec_n_points,
+            use_deformable_box_attn=use_deformable_box_attn,
+            box_attn_type=box_attn_type,
+            key_aware_type=key_aware_type,
+            decoder_sa_type=decoder_sa_type,
+            module_seq=module_seq,
+        )
 
         decoder_norm = nn.LayerNorm(d_model)
         self.decoder = TransformerDecoder(
@@ -271,10 +272,7 @@ class DeformableTransformer(nn.Module):
         self.two_stage_pat_embed = two_stage_pat_embed
         self.two_stage_add_query_num = two_stage_add_query_num
         self.two_stage_learn_wh = two_stage_learn_wh
-        assert two_stage_type in [
-            "no",
-            "standard",
-        ], "unknown param {} of two_stage_type".format(two_stage_type)
+
         if two_stage_type == "standard":
             # anchor selection at the output of encoder
             self.enc_output = nn.Linear(d_model, d_model)
@@ -346,12 +344,31 @@ class DeformableTransformer(nn.Module):
                 self.two_stage_wh_embedding.weight, math.log(0.05 / (1 - 0.05))
             )
 
-    def get_valid_ratio(self, mask):
+    def get_valid_ratio(self, mask: torch.Tensor):
+        """Calculates the proportion of the image that is not padded (i.e., the valid part)
+        in both the height and width; this is where the padding mask is False (no padding)
+
+        Args:
+            mask: the binary mask for a feature map which indicates where real pixels are (False)
+                  and where padded pixels are (True); shape (b, h, w)
+        
+        Returns:
+            a tensor of width and height ratios for the batch which expresses what percentage
+            of the width & height contains 'real' (valid) pixels (i.e., not padded); 
+            shape (b, 2) where first col is width_ratios and second col is height ratios
+        """
+        # Extract the first column and first row and count the number of 'real' pixels in
+        # each batch; we only need the first row/column because of the way DETR pads
         _, H, W = mask.shape
-        valid_H = torch.sum(~mask[:, :, 0], 1)
-        valid_W = torch.sum(~mask[:, 0, :], 1)
+        valid_H = torch.sum(~mask[:, :, 0], 1) # (b,)
+        valid_W = torch.sum(~mask[:, 0, :], 1) # (b,)
+
+        # Calculate the percentage of the height & wdith that has 'real' (valid) pixels
         valid_ratio_h = valid_H.float() / H
         valid_ratio_w = valid_W.float() / W
+
+        # combine the width and height ratios for the batch; shape (b, 2) where the first column
+        # is the width_ratios across the batch and the second column is the height_ratios across the batch 
         valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
         return valid_ratio
 
@@ -592,21 +609,375 @@ class DeformableTransformer(nn.Module):
         #           (n_enc+1, bs, nq, query_dim) or (1, bs, nq, query_dim) or None
 
 
-class TransformerEncoder(nn.Module):
+class DeformableTransformerEncoderLayer(nn.Module):
+    """The encoder layer for the deformable transformer encoder used in DINO
+
+    Performs deformable self-attention and a two-layer ffn
+
+    This is almost identical to the original DETR encoder https://arxiv.org/pdf/2005.12872
+    in figure 10
+
+    This is just the layer, not the full Encoder
+    """
+
     def __init__(
         self,
-        encoder_layer,
-        num_layers,
-        norm=None,
+        d_model: int = 256,
+        d_ffn: int = 1024,
+        dropout: float = 0.1,
+        activation: str = "relu",
+        n_levels: int = 4,
+        n_heads: int = 8,
+        n_points: int = 4,
+    ):
+        """Initalize the deformable transformer encoder layer
+
+        Args:
+            d_model:
+            d_ffn:
+            dropout: dropout value for the deform transformer encoder layer; default is
+                     0.0
+            activation: the activation function to use after the first linear layer in the ffn
+            n_levels:
+            n_heads:
+            n_points:
+        """
+        super().__init__()
+        # NOTE: removed MSDeformableBoxAttention because it was unused
+
+        # Initalize the deformable attention module;
+        # NOTE: this is a custom CUDA kernel w/ cpp code, it requires an NVIDIA GPU and a special install
+        self.self_attn = MSDeformAttn(
+            d_model, n_levels, n_heads, n_points
+        )  # TODO: One day I need to look through this code
+
+        # Initialize dropout and norm
+        self.dropout1 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+
+        # Create the feedforward network (ffn) of the encoder
+        self.linear1 = nn.Linear(d_model, d_ffn)
+        self.activation = activation_map[activation]()
+        self.dropout2 = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(d_ffn, d_model)
+        self.dropout3 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(d_model)
+
+        # NOTE: removing channel attention because not used
+
+    @staticmethod
+    def with_pos_embed(tensor, pos):
+        """Adds `pos` embeddings to the `tensor` element-wise
+
+        tensor and pos should be the same shape
+
+        Args:
+            tensor: the tensor sequence
+            pos:
+        """
+        return tensor if pos is None else tensor + pos
+
+    def forward_ffn(self, src):
+
+        src2 = self.linear1(src)
+        src2 = self.activation(src2)
+        src2 = self.dropout2(src2)
+        src2 = self.linear2(src2)
+
+        src = src + self.dropout3(src2)
+        src = self.norm2(src)
+        return src
+
+    def forward(
+        self,
+        src,
+        pos,
+        reference_points,
+        spatial_shapes,
+        level_start_index,
+        key_padding_mask=None,
+    ):
+        """Forward pass through the encoder layer
+
+        Args:
+            src: the input tensor to compute the attention of (b, sum(h_i * w_i), hidden_dim)
+            pos: the positional embeddings to add to the input tensor sequence
+                 (b, sum(h_i * w_i), hidden_dim)
+            reference_points: TODO
+            spatial_shape:TODO
+            level_start_index: TODO
+            key_padding_mask: TODO
+
+        Returns:
+            An encoded tensor of the same shape as the input `src`
+        """
+        assert src.shape == pos.shape
+
+        # Add positional embeddings and compute self-attention with the `src` tensor
+        src2 = self.self_attn(
+            self.with_pos_embed(src, pos),
+            reference_points,
+            src,
+            spatial_shapes,
+            level_start_index,
+            key_padding_mask,
+        )
+        src = src + self.dropout1(src2)
+        src = self.norm1(src)
+
+        # Pass through the ffn (b, TODO, hidden_dim)
+        src = self.forward_ffn(src)
+
+        # NOTE: removing channel attention because not used
+
+        return src
+
+
+class DeformableTransformerDecoderLayer(nn.Module):
+    def __init__(
+        self,
         d_model=256,
-        num_obj_queries=900,
-        deformable_encoder=False,
-        enc_layer_share=False,
-        enc_layer_dropout_prob=None,
-        two_stage_type="no",  # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
+        d_ffn=1024,
+        dropout=0.1,
+        activation="relu",
+        n_levels=4,
+        n_heads=8,
+        n_points=4,
+        use_deformable_box_attn=False,
+        box_attn_type="roi_align",
+        key_aware_type=None,
+        decoder_sa_type="ca",
+        module_seq=["sa", "ca", "ffn"],
     ):
         super().__init__()
-        # prepare layers
+        self.module_seq = module_seq
+        assert sorted(module_seq) == ["ca", "ffn", "sa"]
+        # cross attention
+        if use_deformable_box_attn:
+            self.cross_attn = MSDeformableBoxAttention(
+                d_model, n_levels, n_heads, n_boxes=n_points, used_func=box_attn_type
+            )
+        else:
+            self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        self.dropout1 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+
+        # self attention
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(d_model)
+
+        # ffn
+        self.linear1 = nn.Linear(d_model, d_ffn)
+        d_modeltivation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
+        self.dropout3 = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(d_ffn, d_model)
+        self.dropout4 = nn.Dropout(dropout)
+        self.norm3 = nn.LayerNorm(d_model)
+
+        self.key_aware_type = key_aware_type
+        self.key_aware_proj = None
+        self.decoder_sa_type = decoder_sa_type
+        assert decoder_sa_type in ["sa", "ca_label", "ca_content"]
+
+        if decoder_sa_type == "ca_content":
+            self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+
+    def rm_self_attn_modules(self):
+        self.self_attn = None
+        self.dropout2 = None
+        self.norm2 = None
+
+    @staticmethod
+    def with_pos_embed(tensor, pos):
+        return tensor if pos is None else tensor + pos
+
+    def forward_ffn(self, tgt):
+        tgt2 = self.linear2(self.dropout3(d_modeltivation(self.linear1(tgt))))
+        tgt = tgt + self.dropout4(tgt2)
+        tgt = self.norm3(tgt)
+        return tgt
+
+    def forward_sa(
+        self,
+        # for tgt
+        tgt: Optional[Tensor],  # nq, bs, d_model
+        tgt_query_pos: Optional[Tensor] = None,  # pos for query. MLP(Sine(pos))
+        tgt_query_sine_embed: Optional[Tensor] = None,  # pos for query. Sine(pos)
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        tgt_reference_points: Optional[Tensor] = None,  # nq, bs, 4
+        # for memory
+        memory: Optional[Tensor] = None,  # hw, bs, d_model
+        memory_key_padding_mask: Optional[Tensor] = None,
+        memory_level_start_index: Optional[Tensor] = None,  # num_levels
+        memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
+        memory_pos: Optional[Tensor] = None,  # pos for memory
+        # sa
+        self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
+        cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
+    ):
+        # self attention
+        if self.self_attn is not None:
+            if self.decoder_sa_type == "sa":
+                q = k = self.with_pos_embed(tgt, tgt_query_pos)
+                tgt2 = self.self_attn(q, k, tgt, attn_mask=self_attn_mask)[0]
+                tgt = tgt + self.dropout2(tgt2)
+                tgt = self.norm2(tgt)
+            elif self.decoder_sa_type == "ca_label":
+                bs = tgt.shape[1]
+                k = v = self.label_embedding.weight[:, None, :].repeat(1, bs, 1)
+                tgt2 = self.self_attn(tgt, k, v, attn_mask=self_attn_mask)[0]
+                tgt = tgt + self.dropout2(tgt2)
+                tgt = self.norm2(tgt)
+            elif self.decoder_sa_type == "ca_content":
+                tgt2 = self.self_attn(
+                    self.with_pos_embed(tgt, tgt_query_pos).transpose(0, 1),
+                    tgt_reference_points.transpose(0, 1).contiguous(),
+                    memory.transpose(0, 1),
+                    memory_spatial_shapes,
+                    memory_level_start_index,
+                    memory_key_padding_mask,
+                ).transpose(0, 1)
+                tgt = tgt + self.dropout2(tgt2)
+                tgt = self.norm2(tgt)
+            else:
+                raise NotImplementedError(
+                    "Unknown decoder_sa_type {}".format(self.decoder_sa_type)
+                )
+
+        return tgt
+
+    def forward_ca(
+        self,
+        # for tgt
+        tgt: Optional[Tensor],  # nq, bs, d_model
+        tgt_query_pos: Optional[Tensor] = None,  # pos for query. MLP(Sine(pos))
+        tgt_query_sine_embed: Optional[Tensor] = None,  # pos for query. Sine(pos)
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        tgt_reference_points: Optional[Tensor] = None,  # nq, bs, 4
+        # for memory
+        memory: Optional[Tensor] = None,  # hw, bs, d_model
+        memory_key_padding_mask: Optional[Tensor] = None,
+        memory_level_start_index: Optional[Tensor] = None,  # num_levels
+        memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
+        memory_pos: Optional[Tensor] = None,  # pos for memory
+        # sa
+        self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
+        cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
+    ):
+        # cross attention
+        if self.key_aware_type is not None:
+            if self.key_aware_type == "mean":
+                tgt = tgt + memory.mean(0, keepdim=True)
+            elif self.key_aware_type == "proj_mean":
+                tgt = tgt + self.key_aware_proj(memory).mean(0, keepdim=True)
+            else:
+                raise NotImplementedError(
+                    "Unknown key_aware_type: {}".format(self.key_aware_type)
+                )
+        tgt2 = self.cross_attn(
+            self.with_pos_embed(tgt, tgt_query_pos).transpose(0, 1),
+            tgt_reference_points.transpose(0, 1).contiguous(),
+            memory.transpose(0, 1),
+            memory_spatial_shapes,
+            memory_level_start_index,
+            memory_key_padding_mask,
+        ).transpose(0, 1)
+        tgt = tgt + self.dropout1(tgt2)
+        tgt = self.norm1(tgt)
+
+        return tgt
+
+    def forward(
+        self,
+        # for tgt
+        tgt: Optional[Tensor],  # nq, bs, d_model
+        tgt_query_pos: Optional[Tensor] = None,  # pos for query. MLP(Sine(pos))
+        tgt_query_sine_embed: Optional[Tensor] = None,  # pos for query. Sine(pos)
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        tgt_reference_points: Optional[Tensor] = None,  # nq, bs, 4
+        # for memory
+        memory: Optional[Tensor] = None,  # hw, bs, d_model
+        memory_key_padding_mask: Optional[Tensor] = None,
+        memory_level_start_index: Optional[Tensor] = None,  # num_levels
+        memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
+        memory_pos: Optional[Tensor] = None,  # pos for memory
+        # sa
+        self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
+        cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
+    ):
+        for funcname in self.module_seq:
+            if funcname == "ffn":
+                tgt = self.forward_ffn(tgt)
+            elif funcname == "ca":
+                tgt = self.forward_ca(
+                    tgt,
+                    tgt_query_pos,
+                    tgt_query_sine_embed,
+                    tgt_key_padding_mask,
+                    tgt_reference_points,
+                    memory,
+                    memory_key_padding_mask,
+                    memory_level_start_index,
+                    memory_spatial_shapes,
+                    memory_pos,
+                    self_attn_mask,
+                    cross_attn_mask,
+                )
+            elif funcname == "sa":
+                tgt = self.forward_sa(
+                    tgt,
+                    tgt_query_pos,
+                    tgt_query_sine_embed,
+                    tgt_key_padding_mask,
+                    tgt_reference_points,
+                    memory,
+                    memory_key_padding_mask,
+                    memory_level_start_index,
+                    memory_spatial_shapes,
+                    memory_pos,
+                    self_attn_mask,
+                    cross_attn_mask,
+                )
+            else:
+                raise ValueError("unknown funcname {}".format(funcname))
+
+        return tgt
+
+
+class TransformerEncoder(nn.Module):
+    """The deformable transformer encoder used in DINO"""
+
+    def __init__(
+        self,
+        encoder_layer: DeformableTransformerEncoderLayer,
+        num_layers: int,
+        norm: Optional[nn.Module] = None,
+        d_model: int = 256,
+        num_obj_queries: int = 900,
+        deformable_encoder: bool = False,
+        enc_layer_share: bool = False,
+        enc_layer_dropout_prob=None,
+        two_stage_type: str = "standard",
+    ):
+        """Initalize the TransformerEncoder
+
+        Args:
+            encoder_layer:
+            num_layers:
+            norm: Normalization module to use after at the end of the Encoder; by default
+                  this is None, so no normalization is applied at the end
+            d_model:
+            num_obj_queries: number of learnable queries which predict a class label and a bounding box
+            deformable_encoder:
+            enc_layer_share: Whether to share all the encoder layers' parameters
+                             (i.e., only one module is used); default is False
+            enc_layer_dropout_prob: probablity
+            two_stage_type:  supported values: ["no", "standard"]
+        """
+        super().__init__()
+        # Create a list of new encoder layers which has len() num_layers;
+        # the default case is to not share parameters between layers i.e., create deep copies
         if num_layers > 0:
             self.layers = _get_clones(
                 encoder_layer, num_layers, layer_share=enc_layer_share
@@ -615,6 +986,8 @@ class TransformerEncoder(nn.Module):
             self.layers = []
             del encoder_layer
 
+        assert len(self.layers) == num_layers
+
         self.query_scale = None
         self.num_obj_queries = num_obj_queries
         self.deformable_encoder = deformable_encoder
@@ -622,6 +995,8 @@ class TransformerEncoder(nn.Module):
         self.norm = norm
         self.d_model = d_model
 
+        # setup the layer dropout probability if not None; this randomly skips
+        # encoder layers; by default this is None and can be ignored
         self.enc_layer_dropout_prob = enc_layer_dropout_prob
         if enc_layer_dropout_prob is not None:
             assert isinstance(enc_layer_dropout_prob, list)
@@ -629,23 +1004,29 @@ class TransformerEncoder(nn.Module):
             for i in enc_layer_dropout_prob:
                 assert 0.0 <= i <= 1.0
 
+        #
         self.two_stage_type = two_stage_type
-        if two_stage_type in ["enceachlayer", "enclayer1"]:
-            _proj_layer = nn.Linear(d_model, d_model)
-            _norm_layer = nn.LayerNorm(d_model)
-            if two_stage_type == "enclayer1":
-                self.enc_norm = nn.ModuleList([_norm_layer])
-                self.enc_proj = nn.ModuleList([_proj_layer])
-            else:
-                self.enc_norm = nn.ModuleList(
-                    [copy.deepcopy(_norm_layer) for i in range(num_layers - 1)]
-                )
-                self.enc_proj = nn.ModuleList(
-                    [copy.deepcopy(_proj_layer) for i in range(num_layers - 1)]
-                )
+
+        # NOTE: removing the two_stage_setup  for ["enceachlayer", "enclayer1"] as they do 
+        #       not appear to be support
 
     @staticmethod
-    def get_reference_points(spatial_shapes, valid_ratios, device):
+    def get_reference_points(spatial_shapes: torch.Tensor, valid_ratios: torch.Tensor, device: torch.device):
+        """Computes normalized reference points used by the deformable attention module in 
+        the encoder and decoder
+        
+        Reference points are the starting points for where attention should be computed, 
+        then an `offset` parameter is learned which will offset these reference points to 
+        where the model thinks the most important features to attend to are
+
+        Args:
+            spatial_shapes: height and width of each feature_map level (num_level, 2)
+            valid_ratios: a tensor of width and height ratios for the batch which expresses what percentage
+                          of the width & height contains 'real' (valid) pixels (i.e., not padded); 
+                          shape (b, 2) where first col is width_ratios and second col is height ratios
+            device: the device to perform computations on
+        """
+        ######## START HERE ########
         reference_points_list = []
         for lvl, (H_, W_) in enumerate(spatial_shapes):
             ref_y, ref_x = torch.meshgrid(
@@ -671,27 +1052,33 @@ class TransformerEncoder(nn.Module):
         ref_token_index: Optional[Tensor] = None,
         ref_token_coord: Optional[Tensor] = None,
     ):
-        """
-        Input:
-            - src: [bs, sum(hi*wi), 256]
-            - pos: pos embed for src. [bs, sum(hi*wi), 256]
-            - spatial_shapes: h,w of each level [num_level, 2]
-            - level_start_index: [num_level] start point of level in sum(hi*wi).
-            - valid_ratios: [bs, num_level, 2]
-            - key_padding_mask: [bs, sum(hi*wi)]
+        """Call the TransformerEncoder
 
-            - ref_token_index: bs, nq
-            - ref_token_coord: bs, nq, 4
-        Intermedia:
-            - reference_points: [bs, sum(hi*wi), num_level, 2]
-        Outpus:
-            - output: [bs, sum(hi*wi), 256]
+        Args:
+            NOTE: h_i & w_i -> height and width of a feature_map from the list of feature_maps
+            src: the input tensor to compute the attention of (b, sum(h_i * w_i), hidden_dim)
+            pos: the positional embeddings to add to the input tensor sequence
+                 (b, sum(h_i * w_i), hidden_dim)
+            spatial_shapes: height and width of each feature_map level (num_level, 2)
+            level_start_index: start point of level in sum(h_i * w_i) (num_level,);
+                               e.g., the 1st level will start at index 0, the 2nd level will
+                               start on index feature_map[0]_h * feature_map[0]_w, etc..
+                               because the 2nd dim of src is flattened across all feature_maps
+            valid_ratios: TODO (b, num_level, 2)
+            key_padding_mask: TODO[bs, sum(hi*wi)]
+            ref_token_index: TODO bs, nq
+            ref_token_coord: TODO bs, nq, 4
+            reference_points: TODO [bs, sum(hi*wi), num_level, 2]
+        
+        Returns:
+            output: TODO [bs, sum(hi*wi), 256]
         """
-        if self.two_stage_type in ["no", "standard", "enceachlayer", "enclayer1"]:
+        if self.two_stage_type in ["no", "standard"]:
             assert ref_token_index is None
 
         output = src
-        # preparation and reshape
+
+        # TODO: preparation and reshape
         if self.num_layers > 0:
             if self.deformable_encoder:
                 reference_points = self.get_reference_points(
@@ -1006,343 +1393,16 @@ class TransformerDecoder(nn.Module):
         ]
 
 
-class DeformableTransformerEncoderLayer(nn.Module):
-    """The encoder layer for the deformable transformer encoder used in DINO
+def _get_clones(module: nn.Module, N: int, layer_share: bool = False):
+    """Creates a list of copies a `module` or layer `N` times; if
+    layer_share=True, then the layers
 
-    Performs deformable self-attention and a two-layer ffn
-
-    This is almost identical to the original DETR encoder https://arxiv.org/pdf/2005.12872
-    in figure 10
-
-    This is just the layer, not the full Encoder
+    Args:
+        module: nn.Module to create copies of
+        N: number of module copies to make
+        layer_share: whether to use the same module N times (this shares the same parameters)
+                     or to make deep copies of the layer; default is to make deep copies
     """
-
-    def __init__(
-        self,
-        d_model: int = 256,
-        d_ffn: int = 1024,
-        dropout: float = 0.1,
-        activation: str = "relu",
-        n_levels: int = 4,
-        n_heads: int = 8,
-        n_points: int = 4,
-    ):
-        """Initalize the deformable transformer encoder layer
-
-        Args:
-            d_model:
-            d_ffn:
-            dropout: dropout value for the deform transformer encoder layer; default is
-                     0.0
-            activation: the activation function to use after the first linear layer in the ffn
-            n_levels:
-            n_heads:
-            n_points:
-        """
-        super().__init__()
-        # NOTE: removed MSDeformableBoxAttention because it was unused
-
-        # Initalize the deformable attention module;
-        # NOTE: this is a custom CUDA kernel w/ cpp code, it requires an NVIDIA GPU and a special install
-        self.self_attn = MSDeformAttn(
-            d_model, n_levels, n_heads, n_points
-        )  # TODO: One day I need to look through this code
-
-        # Initialize dropout and norm
-        self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-
-        # Create the feedforward network (ffn) of the encoder
-        self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = activation_map[activation]()
-        self.dropout2 = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ffn, d_model)
-        self.dropout3 = nn.Dropout(dropout)
-        self.norm2 = nn.LayerNorm(d_model)
-
-        # NOTE: removing channel attention because not used
-
-    @staticmethod
-    def with_pos_embed(tensor, pos):
-        """Adds `pos` embeddings to the `tensor` element-wise
-
-        tensor and pos should be the same shape
-
-        Args:
-            tensor: the tensor sequence
-            pos:
-        """
-        return tensor if pos is None else tensor + pos
-
-    def forward_ffn(self, src):
-
-        src2 = self.linear1(src)
-        src2 = self.activation(src2)
-        src2 = self.dropout2(src2)
-        src2 = self.linear2(src2)
-
-        src = src + self.dropout3(src2)
-        src = self.norm2(src)
-        return src
-
-    def forward(
-        self,
-        src,
-        pos,
-        reference_points,
-        spatial_shapes,
-        level_start_index,
-        key_padding_mask=None,
-    ):
-        """Forward pass through the encoder layer
-
-        Args:
-            src: the input tensor to compute the attention of (b, TODO num_patches??, hidden_dim)
-            pos: the positional embeddings to add to the input tensor sequence
-                 (b, TODO, hidden_dim)
-            reference_points: TODO
-            spatial_shape:TODO
-            level_start_index: TODO
-            key_padding_mask: TODO
-
-        Returns:
-            An encoded tensor of the same shape as the input `src`
-        """
-        assert src.shape == pos.shape
-
-        # Add positional embeddings and compute self-attention with the `src` tensor
-        src2 = self.self_attn(
-            self.with_pos_embed(src, pos),
-            reference_points,
-            src,
-            spatial_shapes,
-            level_start_index,
-            key_padding_mask,
-        )
-        src = src + self.dropout1(src2)
-        src = self.norm1(src)
-
-        # Pass through the ffn (b, TODO, hidden_dim)
-        src = self.forward_ffn(src)
-
-        # NOTE: removing channel attention because not used
-
-        return src
-
-
-class DeformableTransformerDecoderLayer(nn.Module):
-    def __init__(
-        self,
-        d_model=256,
-        d_ffn=1024,
-        dropout=0.1,
-        activation="relu",
-        n_levels=4,
-        n_heads=8,
-        n_points=4,
-        use_deformable_box_attn=False,
-        box_attn_type="roi_align",
-        key_aware_type=None,
-        decoder_sa_type="ca",
-        module_seq=["sa", "ca", "ffn"],
-    ):
-        super().__init__()
-        self.module_seq = module_seq
-        assert sorted(module_seq) == ["ca", "ffn", "sa"]
-        # cross attention
-        if use_deformable_box_attn:
-            self.cross_attn = MSDeformableBoxAttention(
-                d_model, n_levels, n_heads, n_boxes=n_points, used_func=box_attn_type
-            )
-        else:
-            self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
-        self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-
-        # self attention
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.norm2 = nn.LayerNorm(d_model)
-
-        # ffn
-        self.linear1 = nn.Linear(d_model, d_ffn)
-        d_modeltivation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
-        self.dropout3 = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(d_ffn, d_model)
-        self.dropout4 = nn.Dropout(dropout)
-        self.norm3 = nn.LayerNorm(d_model)
-
-        self.key_aware_type = key_aware_type
-        self.key_aware_proj = None
-        self.decoder_sa_type = decoder_sa_type
-        assert decoder_sa_type in ["sa", "ca_label", "ca_content"]
-
-        if decoder_sa_type == "ca_content":
-            self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
-
-    def rm_self_attn_modules(self):
-        self.self_attn = None
-        self.dropout2 = None
-        self.norm2 = None
-
-    @staticmethod
-    def with_pos_embed(tensor, pos):
-        return tensor if pos is None else tensor + pos
-
-    def forward_ffn(self, tgt):
-        tgt2 = self.linear2(self.dropout3(d_modeltivation(self.linear1(tgt))))
-        tgt = tgt + self.dropout4(tgt2)
-        tgt = self.norm3(tgt)
-        return tgt
-
-    def forward_sa(
-        self,
-        # for tgt
-        tgt: Optional[Tensor],  # nq, bs, d_model
-        tgt_query_pos: Optional[Tensor] = None,  # pos for query. MLP(Sine(pos))
-        tgt_query_sine_embed: Optional[Tensor] = None,  # pos for query. Sine(pos)
-        tgt_key_padding_mask: Optional[Tensor] = None,
-        tgt_reference_points: Optional[Tensor] = None,  # nq, bs, 4
-        # for memory
-        memory: Optional[Tensor] = None,  # hw, bs, d_model
-        memory_key_padding_mask: Optional[Tensor] = None,
-        memory_level_start_index: Optional[Tensor] = None,  # num_levels
-        memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
-        memory_pos: Optional[Tensor] = None,  # pos for memory
-        # sa
-        self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
-        cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
-    ):
-        # self attention
-        if self.self_attn is not None:
-            if self.decoder_sa_type == "sa":
-                q = k = self.with_pos_embed(tgt, tgt_query_pos)
-                tgt2 = self.self_attn(q, k, tgt, attn_mask=self_attn_mask)[0]
-                tgt = tgt + self.dropout2(tgt2)
-                tgt = self.norm2(tgt)
-            elif self.decoder_sa_type == "ca_label":
-                bs = tgt.shape[1]
-                k = v = self.label_embedding.weight[:, None, :].repeat(1, bs, 1)
-                tgt2 = self.self_attn(tgt, k, v, attn_mask=self_attn_mask)[0]
-                tgt = tgt + self.dropout2(tgt2)
-                tgt = self.norm2(tgt)
-            elif self.decoder_sa_type == "ca_content":
-                tgt2 = self.self_attn(
-                    self.with_pos_embed(tgt, tgt_query_pos).transpose(0, 1),
-                    tgt_reference_points.transpose(0, 1).contiguous(),
-                    memory.transpose(0, 1),
-                    memory_spatial_shapes,
-                    memory_level_start_index,
-                    memory_key_padding_mask,
-                ).transpose(0, 1)
-                tgt = tgt + self.dropout2(tgt2)
-                tgt = self.norm2(tgt)
-            else:
-                raise NotImplementedError(
-                    "Unknown decoder_sa_type {}".format(self.decoder_sa_type)
-                )
-
-        return tgt
-
-    def forward_ca(
-        self,
-        # for tgt
-        tgt: Optional[Tensor],  # nq, bs, d_model
-        tgt_query_pos: Optional[Tensor] = None,  # pos for query. MLP(Sine(pos))
-        tgt_query_sine_embed: Optional[Tensor] = None,  # pos for query. Sine(pos)
-        tgt_key_padding_mask: Optional[Tensor] = None,
-        tgt_reference_points: Optional[Tensor] = None,  # nq, bs, 4
-        # for memory
-        memory: Optional[Tensor] = None,  # hw, bs, d_model
-        memory_key_padding_mask: Optional[Tensor] = None,
-        memory_level_start_index: Optional[Tensor] = None,  # num_levels
-        memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
-        memory_pos: Optional[Tensor] = None,  # pos for memory
-        # sa
-        self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
-        cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
-    ):
-        # cross attention
-        if self.key_aware_type is not None:
-            if self.key_aware_type == "mean":
-                tgt = tgt + memory.mean(0, keepdim=True)
-            elif self.key_aware_type == "proj_mean":
-                tgt = tgt + self.key_aware_proj(memory).mean(0, keepdim=True)
-            else:
-                raise NotImplementedError(
-                    "Unknown key_aware_type: {}".format(self.key_aware_type)
-                )
-        tgt2 = self.cross_attn(
-            self.with_pos_embed(tgt, tgt_query_pos).transpose(0, 1),
-            tgt_reference_points.transpose(0, 1).contiguous(),
-            memory.transpose(0, 1),
-            memory_spatial_shapes,
-            memory_level_start_index,
-            memory_key_padding_mask,
-        ).transpose(0, 1)
-        tgt = tgt + self.dropout1(tgt2)
-        tgt = self.norm1(tgt)
-
-        return tgt
-
-    def forward(
-        self,
-        # for tgt
-        tgt: Optional[Tensor],  # nq, bs, d_model
-        tgt_query_pos: Optional[Tensor] = None,  # pos for query. MLP(Sine(pos))
-        tgt_query_sine_embed: Optional[Tensor] = None,  # pos for query. Sine(pos)
-        tgt_key_padding_mask: Optional[Tensor] = None,
-        tgt_reference_points: Optional[Tensor] = None,  # nq, bs, 4
-        # for memory
-        memory: Optional[Tensor] = None,  # hw, bs, d_model
-        memory_key_padding_mask: Optional[Tensor] = None,
-        memory_level_start_index: Optional[Tensor] = None,  # num_levels
-        memory_spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
-        memory_pos: Optional[Tensor] = None,  # pos for memory
-        # sa
-        self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
-        cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
-    ):
-        for funcname in self.module_seq:
-            if funcname == "ffn":
-                tgt = self.forward_ffn(tgt)
-            elif funcname == "ca":
-                tgt = self.forward_ca(
-                    tgt,
-                    tgt_query_pos,
-                    tgt_query_sine_embed,
-                    tgt_key_padding_mask,
-                    tgt_reference_points,
-                    memory,
-                    memory_key_padding_mask,
-                    memory_level_start_index,
-                    memory_spatial_shapes,
-                    memory_pos,
-                    self_attn_mask,
-                    cross_attn_mask,
-                )
-            elif funcname == "sa":
-                tgt = self.forward_sa(
-                    tgt,
-                    tgt_query_pos,
-                    tgt_query_sine_embed,
-                    tgt_key_padding_mask,
-                    tgt_reference_points,
-                    memory,
-                    memory_key_padding_mask,
-                    memory_level_start_index,
-                    memory_spatial_shapes,
-                    memory_pos,
-                    self_attn_mask,
-                    cross_attn_mask,
-                )
-            else:
-                raise ValueError("unknown funcname {}".format(funcname))
-
-        return tgt
-
-
-def _get_clones(module, N, layer_share=False):
     if layer_share:
         return nn.ModuleList([module for i in range(N)])
     else:

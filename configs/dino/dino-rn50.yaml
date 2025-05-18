@@ -48,7 +48,7 @@ detector:
 
     # TODO: comment
     two_stage:
-      type: "standard" # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
+      type: "standard" # ["no", "standard"]
       pat_embed: 0
       add_query_num: 0
       learn_wh: False
@@ -95,7 +95,7 @@ detector:
       dropout: 0.0
       activation: "relu"
 
-      # TODO: comment
+      # Whether to normalize at the end of the TransformerEncoder; the name doesn't really make sense
       pre_norm: False
 
       # TODO: comment
