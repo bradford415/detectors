@@ -351,24 +351,24 @@ class DeformableTransformer(nn.Module):
         Args:
             mask: the binary mask for a feature map which indicates where real pixels are (False)
                   and where padded pixels are (True); shape (b, h, w)
-        
+
         Returns:
             a tensor of width and height ratios for the batch which expresses what percentage
-            of the width & height contains 'real' (valid) pixels (i.e., not padded); 
+            of the width & height contains 'real' (valid) pixels (i.e., not padded);
             shape (b, 2) where first col is width_ratios and second col is height ratios
         """
         # Extract the first column and first row and count the number of 'real' pixels in
         # each batch; we only need the first row/column because of the way DETR pads
         _, H, W = mask.shape
-        valid_H = torch.sum(~mask[:, :, 0], 1) # (b,)
-        valid_W = torch.sum(~mask[:, 0, :], 1) # (b,)
+        valid_H = torch.sum(~mask[:, :, 0], 1)  # (b,)
+        valid_W = torch.sum(~mask[:, 0, :], 1)  # (b,)
 
         # Calculate the percentage of the height & wdith that has 'real' (valid) pixels
         valid_ratio_h = valid_H.float() / H
         valid_ratio_w = valid_W.float() / W
 
         # combine the width and height ratios for the batch; shape (b, 2) where the first column
-        # is the width_ratios across the batch and the second column is the height_ratios across the batch 
+        # is the width_ratios across the batch and the second column is the height_ratios across the batch
         valid_ratio = torch.stack([valid_ratio_w, valid_ratio_h], -1)
         return valid_ratio
 
@@ -1007,22 +1007,24 @@ class TransformerEncoder(nn.Module):
         #
         self.two_stage_type = two_stage_type
 
-        # NOTE: removing the two_stage_setup  for ["enceachlayer", "enclayer1"] as they do 
+        # NOTE: removing the two_stage_setup  for ["enceachlayer", "enclayer1"] as they do
         #       not appear to be support
 
     @staticmethod
-    def get_reference_points(spatial_shapes: torch.Tensor, valid_ratios: torch.Tensor, device: torch.device):
-        """Computes normalized reference points used by the deformable attention module in 
+    def get_reference_points(
+        spatial_shapes: torch.Tensor, valid_ratios: torch.Tensor, device: torch.device
+    ):
+        """Computes normalized reference points used by the deformable attention module in
         the encoder and decoder
-        
-        Reference points are the starting points for where attention should be computed, 
-        then an `offset` parameter is learned which will offset these reference points to 
+
+        Reference points are the starting points for where attention should be computed,
+        then an `offset` parameter is learned which will offset these reference points to
         where the model thinks the most important features to attend to are
 
         Args:
             spatial_shapes: height and width of each feature_map level (num_level, 2)
             valid_ratios: a tensor of width and height ratios for the batch which expresses what percentage
-                          of the width & height contains 'real' (valid) pixels (i.e., not padded); 
+                          of the width & height contains 'real' (valid) pixels (i.e., not padded);
                           shape (b, 2) where first col is width_ratios and second col is height ratios
             device: the device to perform computations on
         """
@@ -1069,7 +1071,7 @@ class TransformerEncoder(nn.Module):
             ref_token_index: TODO bs, nq
             ref_token_coord: TODO bs, nq, 4
             reference_points: TODO [bs, sum(hi*wi), num_level, 2]
-        
+
         Returns:
             output: TODO [bs, sum(hi*wi), 256]
         """
