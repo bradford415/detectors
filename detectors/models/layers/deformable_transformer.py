@@ -1080,6 +1080,7 @@ class TransformerEncoder(nn.Module):
 
         output = src
 
+        ########## START HERE after get reference points
         # TODO: preparation and reshape
         if self.num_layers > 0:
             if self.deformable_encoder:
