@@ -207,6 +207,9 @@ class DeformableTransformer(nn.Module):
             two_stage_type=two_stage_type,
         )
 
+        ######### START HERE, may want to skip the init function for now?
+
+
         # choose decoder layer type
         decoder_layer = DeformableTransformerDecoderLayer(
             d_model,
@@ -405,6 +408,7 @@ class DeformableTransformer(nn.Module):
                 attn_mask: TODO
 
         """
+        ######## START HERE and go up to where the encoder is called #########
         # prepare input for encoder
         src_flatten = []
         mask_flatten = []
@@ -434,6 +438,8 @@ class DeformableTransformer(nn.Module):
         level_start_index = torch.cat(
             (spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1])
         )
+
+        # TODO: shape
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
 
         # two stage
@@ -769,7 +775,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
 
         # ffn
         self.linear1 = nn.Linear(d_model, d_ffn)
-        d_modeltivation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
+        self.activation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
         self.dropout3 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout4 = nn.Dropout(dropout)
@@ -793,7 +799,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, tgt):
-        tgt2 = self.linear2(self.dropout3(d_modeltivation(self.linear1(tgt))))
+        tgt2 = self.linear2(self.dropout3(self.activation(self.linear1(tgt))))
         tgt = tgt + self.dropout4(tgt2)
         tgt = self.norm3(tgt)
         return tgt
@@ -1022,24 +1028,54 @@ class TransformerEncoder(nn.Module):
         where the model thinks the most important features to attend to are
 
         Args:
-            spatial_shapes: height and width of each feature_map level (num_level, 2)
-            valid_ratios: a tensor of width and height ratios for the batch which expresses what percentage
-                          of the width & height contains 'real' (valid) pixels (i.e., not padded);
-                          shape (b, 2) where first col is width_ratios and second col is height ratios
+            spatial_shapes: height and width of each feature_map level (num_level, 2); no batch
+                            dimension bc these values should be the same across the batch
+            valid_ratios: a tensor of width and height ratios for each feature_map across the batch
+                          which expresses what percentage of the width & height contains 'real' (valid)
+                          pixels (i.e., not padded); shape (b, num_levels, 2) where 2 = width_ratios and height_ratios
+                          and 4 is the number of levels (num_feature_maps); num_levels is typically 4
             device: the device to perform computations on
+
+        Returns:
+            x, y reference points which were normalized by the `real` pixel ratio
+            (i.e., values > 1.0 are padded, not real), each reference point is scaled
+            by the valid_ratio for each level (b, sum(h_i*w_i), num_levels, 2)
         """
-        ######## START HERE ########
+        # used to store the reference points in an xy tensor for each level (each feature_map);
+        # each element will be (b, h_i*w_i, 2)
         reference_points_list = []
+
+        # for each feature map in the batch
         for lvl, (H_, W_) in enumerate(spatial_shapes):
+            # initalize meshgrid ranging [0.5, height - 0.5] rows and [0.5, width - 0.5] cols
             ref_y, ref_x = torch.meshgrid(
                 torch.linspace(0.5, H_ - 0.5, H_, dtype=torch.float32, device=device),
                 torch.linspace(0.5, W_ - 0.5, W_, dtype=torch.float32, device=device),
+                indexing="ij",  # i->rows, j->cols
             )
+
+            # normalize the reference points and bound them to the `real` region by flattening the
+            # ref points (1, h*w) and divide by the `real` pixel height and width; valid_ratios multiplied
+            # by the spatial dims gives the number of real pixels; (1, h*w) / (b, 1) = (b, h*w);
+            # values > 1.0 are invalid
             ref_y = ref_y.reshape(-1)[None] / (valid_ratios[:, None, lvl, 1] * H_)
             ref_x = ref_x.reshape(-1)[None] / (valid_ratios[:, None, lvl, 0] * W_)
+
+            # combine x & y ref points and append to list (b, h*w, 2)
             ref = torch.stack((ref_x, ref_y), -1)
             reference_points_list.append(ref)
+
+        # list length should be the number of feature maps
+        assert len(reference_points_list) == spatial_shapes.shape[0]
+
+        # combine all the reference points across all features map levels into a single
+        # tensor (b, sum(h_i*w_i), 2) where 2 = (ref_x, ref_y)
         reference_points = torch.cat(reference_points_list, 1)
+
+        # Scale and broadcast every reference point by the valid ratio for each feature map level
+        # (b, sum(h_i*w_i), 1, 2) * (b, 1, num_levels, 2) = (b, sum(h_i*w_i), num_levels, 2);
+        # I'm entirely sure why we broadcast each ref point with the ratios for each level,
+        # since 2nd dim already includes these (concatenated together in the previous line)
         reference_points = reference_points[:, :, None] * valid_ratios[:, None]
         return reference_points
 
@@ -1073,23 +1109,32 @@ class TransformerEncoder(nn.Module):
             reference_points: TODO [bs, sum(hi*wi), num_level, 2]
 
         Returns:
-            output: TODO [bs, sum(hi*wi), 256]
+            output: the enhanced features after being propagated through the stack
+                    of transformer encoder layers (b, sum(h_i * w__), hidden_dim)
+                    where hidden_dim typically is 256
+            NOTE: the other 2 return values are empty lists due to the default parameters
         """
         if self.two_stage_type in ["no", "standard"]:
             assert ref_token_index is None
 
         output = src
 
-        ########## START HERE after get reference points
-        # TODO: preparation and reshape
+        # Create reference points which act as the starting point for deformable attention;
+        # deformable attention then learns `offsets` which shifts the location of the reference points
+        # to where the model thinks it should attend; these `reference_points` were normalized
+        # by the feature_map h/w of only the 'valid' regions (i.e., no padding), not the full h/w
         if self.num_layers > 0:
             if self.deformable_encoder:
+                # (b, sum(h_i*w_i), num_levels, 2)
                 reference_points = self.get_reference_points(
                     spatial_shapes, valid_ratios, device=src.device
                 )
 
+        # TODO
         intermediate_output = []
         intermediate_ref = []
+
+        # is None by default so we'll skip this
         if ref_token_index is not None:
             out_i = torch.gather(
                 output, 1, ref_token_index.unsqueeze(-1).repeat(1, 1, self.d_model)
@@ -1097,19 +1142,19 @@ class TransformerEncoder(nn.Module):
             intermediate_output.append(out_i)
             intermediate_ref.append(ref_token_coord)
 
-        # main process
+        # main process; loop through the list of DeformableTransformerEncoderLayers
+        # and pass the output of the current layer into the next layer
         for layer_id, layer in enumerate(self.layers):
             # main process
             dropflag = False
-            if self.enc_layer_dropout_prob is not None:
-                prob = random.random()
-                if prob < self.enc_layer_dropout_prob[layer_id]:
-                    dropflag = True
 
+            # NOTE: removing the layer dropping becuase it is unused
+
+            # forward pass through the current encoder layer
             if not dropflag:
                 if self.deformable_encoder:
                     output = layer(
-                        src=output,
+                        src=output,  # see `src` in the docstring for `output` description
                         pos=pos,
                         reference_points=reference_points,
                         spatial_shapes=spatial_shapes,
@@ -1123,37 +1168,13 @@ class TransformerEncoder(nn.Module):
                         key_padding_mask=key_padding_mask,
                     ).transpose(0, 1)
 
-            if (
-                (layer_id == 0 and self.two_stage_type in ["enceachlayer", "enclayer1"])
-                or (self.two_stage_type == "enceachlayer")
-            ) and (layer_id != self.num_layers - 1):
-                output_memory, output_proposals = gen_encoder_output_proposals(
-                    output, key_padding_mask, spatial_shapes
-                )
-                output_memory = self.enc_norm[layer_id](
-                    self.enc_proj[layer_id](output_memory)
-                )
+            # NOTE: removing unsupported two_stage_type (['enceachlayer', 'enclayer1'])
+            #       if statement
 
-                # gather boxes
-                topk = self.num_obj_queries
-                enc_outputs_class = self.class_embed[layer_id](output_memory)
-                ref_token_index = torch.topk(enc_outputs_class.max(-1)[0], topk, dim=1)[
-                    1
-                ]  # bs, nq
-                ref_token_coord = torch.gather(
-                    output_proposals, 1, ref_token_index.unsqueeze(-1).repeat(1, 1, 4)
-                )
+            # NOTE: also removing the aux loss if statement since it never gets used
+            #       in the encoder (ref_token_index is None)
 
-                output = output_memory
-
-            # aux loss
-            if (layer_id != self.num_layers - 1) and ref_token_index is not None:
-                out_i = torch.gather(
-                    output, 1, ref_token_index.unsqueeze(-1).repeat(1, 1, self.d_model)
-                )
-                intermediate_output.append(out_i)
-                intermediate_ref.append(ref_token_coord)
-
+        # pre_norm by default is False so this is skipped
         if self.norm is not None:
             output = self.norm(output)
 

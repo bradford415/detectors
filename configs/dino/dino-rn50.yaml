@@ -46,7 +46,10 @@ detector:
 
     # Other DINO params (maybe put these under their own key)
 
-    # TODO: comment
+    # Two stage refers to how the learned obj queries are initalized to the decoder;
+    # for the standard two-stage (Section 3.4):
+    #   1. select top K encoder features from the last encoder layer as priors to enhance decoder queries
+    #   2. 
     two_stage:
       type: "standard" # ["no", "standard"]
       pat_embed: 0
@@ -84,6 +87,7 @@ detector:
       # predictions dino will produce (each a bounding box and class)
       num_queries: 900
 
+      # Number of deformable transformer encoder/decoder layers to use
       num_encoder_layers: 6
       num_decoder_layers: 6
       num_unicoder_layers: 0 # ? not sure what this is
