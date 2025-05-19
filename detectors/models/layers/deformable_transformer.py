@@ -19,7 +19,7 @@ from typing import Optional
 import torch
 from torch import Tensor, nn
 
-from detectors.models.layers.common import activation_map
+from detectors.models.layers.common import MLP, activation_map
 from detectors.models.ops.modules import MSDeformAttn
 from detectors.utils.misc import RandomBoxPerturber, inverse_sigmoid
 
@@ -46,20 +46,20 @@ class DeformableTransformer(nn.Module):
         nhead=8,
         num_obj_queries=900,
         num_encoder_layers=6,
-        num_unicoder_layers=0,
         num_decoder_layers=6,
+        num_unicoder_layers=0,
         dim_feedforward=2048,
         dropout=0.0,
         activation="relu",
         normalize_before=False,
         return_intermediate_dec=True,
         query_dim=4,
-        num_patterns=0,
+        num_patterns: int = 0,
         modulate_hw_attn=False,
         # for deformable encoder
-        deformable_encoder=True,
-        deformable_decoder=True,
-        num_feature_levels=1,
+        deformable_encoder: bool = True,
+        deformable_decoder: bool = True,
+        num_feature_levels: int = 1,
         enc_n_points=4,
         dec_n_points=4,
         use_deformable_box_attn=False,
@@ -102,15 +102,15 @@ class DeformableTransformer(nn.Module):
                              DINO can detect single image; each query predicts a class label
                              (including background/no_object) and a bbox
             num_encoder_layers:
-            num_unicoder_layers:
             num_decoder_layers:
+            num_unicoder_layers:
             dim_feedforward:
             dropout: dropout value used for the encoder and decoder
             activation:
             normalize_before:
             return_intermediate_dec:
-            query_dim
-            num_patterns
+            query_dim:
+            num_patterns:
             modulate_hw_attn:
             deformable_encoder:
             deformable_decoder:
@@ -207,10 +207,7 @@ class DeformableTransformer(nn.Module):
             two_stage_type=two_stage_type,
         )
 
-        ######### START HERE, may want to skip the init function for now?
-
-
-        # choose decoder layer type
+        # Create the deformable transformer decoder layer
         decoder_layer = DeformableTransformerDecoderLayer(
             d_model,
             dim_feedforward,
@@ -226,6 +223,7 @@ class DeformableTransformer(nn.Module):
             module_seq=module_seq,
         )
 
+        # Initalize the transformer decoder
         decoder_norm = nn.LayerNorm(d_model)
         self.decoder = TransformerDecoder(
             decoder_layer,
@@ -240,9 +238,11 @@ class DeformableTransformer(nn.Module):
             decoder_query_perturber=decoder_query_perturber,
             dec_layer_number=dec_layer_number,
             rm_dec_query_scale=rm_dec_query_scale,
-            dec_layer_share=dec_layer_share,
+            dec_layer_share=False,
             use_detached_boxes_dec_out=use_detached_boxes_dec_out,
         )
+        
+        ############## START HERE ##################
 
         self.d_model = d_model
         self.nhead = nhead
@@ -408,7 +408,6 @@ class DeformableTransformer(nn.Module):
                 attn_mask: TODO
 
         """
-        ######## START HERE and go up to where the encoder is called #########
         # prepare input for encoder
         src_flatten = []
         mask_flatten = []
@@ -616,7 +615,7 @@ class DeformableTransformer(nn.Module):
 
 
 class DeformableTransformerEncoderLayer(nn.Module):
-    """The encoder layer for the deformable transformer encoder used in DINO
+    """The deformable encoder layer for the transformer encoder used in DINO
 
     Performs deformable self-attention and a two-layer ffn
 
@@ -678,9 +677,11 @@ class DeformableTransformerEncoderLayer(nn.Module):
         tensor and pos should be the same shape
 
         Args:
-            tensor: the tensor sequence
-            pos:
+            tensor: the tensor sequence (b, sum(h_i * w_i), hidden_dim)
+            pos: the positional embeddings to add to the (b, sum(h_i * w_i), hidden_dim)
         """
+        assert tensor.shape == pos.shape
+
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, src):
@@ -740,42 +741,61 @@ class DeformableTransformerEncoderLayer(nn.Module):
 
 
 class DeformableTransformerDecoderLayer(nn.Module):
+    """The deformable decoder layer for the transformer decoder used in DINO"""
+
     def __init__(
         self,
         d_model=256,
         d_ffn=1024,
-        dropout=0.1,
+        dropout=0.0,
         activation="relu",
         n_levels=4,
         n_heads=8,
         n_points=4,
-        use_deformable_box_attn=False,
-        box_attn_type="roi_align",
         key_aware_type=None,
         decoder_sa_type="ca",
         module_seq=["sa", "ca", "ffn"],
     ):
+        """Initalize the DeformableTransformerDecoderLayer
+
+
+
+        Args:
+            d_model: total dimension of the model (hidden_dim); default 256
+            d_ffn: output dimesnion of the 1st linear layer
+            dropout: dropout value for each attn module and after each linear layer; default 0.0
+            activation: type of activation function to use after the first linear layer in the ffn
+            n_levels: number of multiscale feature map levels; default 4
+            n_heads: number of heads in deformable cross attn and regular self attn; default 8
+            n_points: TODO
+            key_aware_type:
+            decoder_sa_type: the type of self-attention to use in the decoder; default is "sa" which
+                             uses a standard multiheaded self-attention module, not deformable attn
+            module_seq: the order to call the modules in for the decoder forward() call; the order
+                        must be ["sa", "ca", "ffn"] which stands for
+                        ["self-attention", "cross-attention", "feedforward network"]; NOTE: this follows
+                        the original DETR decoder very closely (see the DETR paper figure 10)
+        """
         super().__init__()
         self.module_seq = module_seq
         assert sorted(module_seq) == ["ca", "ffn", "sa"]
-        # cross attention
-        if use_deformable_box_attn:
-            self.cross_attn = MSDeformableBoxAttention(
-                d_model, n_levels, n_heads, n_boxes=n_points, used_func=box_attn_type
-            )
-        else:
-            self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+
+        # NOTE: removed MSDeformableBoxAttention because it was unused
+
+        # Create the cross-attn multiscale deformable attention module
+        self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
-        # self attention
+        # Create a regular multiheaded self-attention module (not deformable)
         self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.dropout2 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)
 
-        # ffn
+        # Create a 2 layer ffn
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
+        self.activation = activation_map(activation)
         self.dropout3 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout4 = nn.Dropout(dropout)
@@ -796,6 +816,16 @@ class DeformableTransformerDecoderLayer(nn.Module):
 
     @staticmethod
     def with_pos_embed(tensor, pos):
+        """Adds `pos` embeddings to the `tensor` element-wise
+
+        tensor and pos should be the same shape
+
+        Args:
+            tensor: the tensor sequence (b, sum(h_i * w_i), hidden_dim)
+            pos: the positional embeddings to add to the (b, sum(h_i * w_i), hidden_dim)
+        """
+        assert tensor.shape == pos.shape
+
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, tgt):
@@ -912,6 +942,11 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
         cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
     ):
+        """Forward pass through the deformable transformer decoder layer
+
+        Args:
+            TODO
+        """
         for funcname in self.module_seq:
             if funcname == "ffn":
                 tgt = self.forward_ffn(tgt)
@@ -952,7 +987,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    """The deformable transformer encoder used in DINO"""
+    """The transformer encoder used in DINO"""
 
     def __init__(
         self,
@@ -970,7 +1005,8 @@ class TransformerEncoder(nn.Module):
 
         Args:
             encoder_layer:
-            num_layers:
+            num_layers: number of encoder layers to stack; these will be looped through
+                        sequentially in forward
             norm: Normalization module to use after at the end of the Encoder; by default
                   this is None, so no normalization is applied at the end
             d_model:
@@ -1190,51 +1226,91 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
+    """The transformer decoder used in DINO"""
+
     def __init__(
         self,
-        decoder_layer,
-        num_layers,
-        norm=None,
-        return_intermediate=False,
-        d_model=256,
-        query_dim=4,
-        modulate_hw_attn=False,
-        num_feature_levels=1,
-        deformable_decoder=False,
+        decoder_layer: DeformableTransformerDecoderLayer,
+        num_layers: int,
+        norm: Optional[nn.Module] = None,
+        return_intermediate: bool = False,
+        d_model: int = 256,
+        query_dim: int = 4,
+        modulate_hw_attn: bool = False,
+        num_feature_levels: int = 1,
+        deformable_decoder: bool = False,
         decoder_query_perturber=None,
         dec_layer_number=None,  # number of queries each layer in decoder
         rm_dec_query_scale=False,
-        dec_layer_share=False,
-        dec_layer_dropout_prob=None,
+        dec_layer_share: bool = False,
+        dec_layer_dropout_prob: Optional[bool] = None,
         use_detached_boxes_dec_out=False,
     ):
+        """Initalize the transformer decoder
+
+        Args:
+            decoder_layer: deformable transformer decoder layer,
+            num_layers: number of decoder layers to stack; these will be looped through
+                        sequentially in forward
+            norm: the type of normalization to use; default nn.LayerNorm
+            return_intermediate: whether to return the intermediate layers from the decoder; default is True
+                                 and this parameter isn't really even used, it just throws an assert if False
+            d_model: total dimension of the transformer decoder; this dim will be split across
+            query_dim: TODO
+            modulate_hw_attn:
+            num_feature_levels:
+            deformable_decoder:
+            decoder_query_perturber:
+            dec_layer_number: TODO  # number of queries each layer in decoder
+            rm_dec_query_scale: TODO,
+            dec_layer_share: whether to use the same decoder layer and share parameters; default False,
+                             do not share
+            dec_layer_dropout_prob: by default is None and can be ignored
+            use_detached_boxes_dec_out=False,
+
+        """
         super().__init__()
+
+        # Create a list of new decoder layers which has len() num_layers;
+        # the default case is to not share parameters between layers i.e., create deep copies
         if num_layers > 0:
             self.layers = _get_clones(
                 decoder_layer, num_layers, layer_share=dec_layer_share
             )
         else:
             self.layers = []
+
+        assert len(self.layers) == num_layers
+
         self.num_layers = num_layers
         self.norm = norm
         self.return_intermediate = return_intermediate
         assert return_intermediate, "support return_intermediate only"
+
         self.query_dim = query_dim
         assert query_dim in [2, 4], "query_dim should be 2/4 but {}".format(query_dim)
+
         self.num_feature_levels = num_feature_levels
         self.use_detached_boxes_dec_out = use_detached_boxes_dec_out
 
-        self.ref_point_head = MLP(query_dim // 2 * d_model, d_model, d_model, 2)
+        # a 2 layer MLP to embed TODO: write what this is used for
+        self.ref_point_head = MLP(
+            input_dim=query_dim // 2 * d_model, # default 512
+            hidden_dim=d_model,
+            output_dim=d_model,
+            num_layers=2,
+        )
+        
+        # NOTE: removing if statement if deformable_decoder is False since it's always True
+
+        # TODO: comment
         if not deformable_decoder:
             self.query_pos_sine_scale = MLP(d_model, d_model, d_model, 2)
-        else:
+        else: # default case
             self.query_pos_sine_scale = None
 
-        if rm_dec_query_scale:
-            self.query_scale = None
-        else:
-            raise NotImplementedError
-            self.query_scale = MLP(d_model, d_model, d_model, 2)
+        self.query_scale = None
+
         self.bbox_embed = None
         self.class_embed = None
 
@@ -1244,18 +1320,22 @@ class TransformerDecoder(nn.Module):
 
         if not deformable_decoder and modulate_hw_attn:
             self.ref_anchor_head = MLP(d_model, d_model, 2, 2)
-        else:
+        else: # default case
             self.ref_anchor_head = None
 
         self.decoder_query_perturber = decoder_query_perturber
         self.box_pred_damping = None
 
         self.dec_layer_number = dec_layer_number
+        
+        # default is None and can be ignored for now
         if dec_layer_number is not None:
             assert isinstance(dec_layer_number, list)
             assert len(dec_layer_number) == num_layers
 
         self.dec_layer_dropout_prob = dec_layer_dropout_prob
+        
+        # default is None and can be ignored from now
         if dec_layer_dropout_prob is not None:
             assert isinstance(dec_layer_dropout_prob, list)
             assert len(dec_layer_dropout_prob) == num_layers

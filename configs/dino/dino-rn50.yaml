@@ -80,6 +80,8 @@ detector:
 
     # deformable attention params; also contains some general dino params
     transformer:
+      # total dimension & number of heads of the transformer encoder/decoder; hidden_dim
+      # will be split across num_heads so hidden_dim % num_heads = 0
       hidden_dim: 256
       num_heads: 8
 
@@ -102,7 +104,8 @@ detector:
       # Whether to normalize at the end of the TransformerEncoder; the name doesn't really make sense
       pre_norm: False
 
-      # TODO: comment
+      # whether to return the intermediate layers from the decoder; default is True and this parameter
+      # isn't really even used, it just throws an assert if False 
       return_intermediate_dec: True
 
       # TODO: Comment
@@ -118,7 +121,8 @@ detector:
       add_channel_attention: False
 
 
-      # TODO: Might remove these params if the don't need to change
+      # Used to initalize TransformerDecoder attributes in __init__()
+      # TODO write a little more about rm_dec_query_scale if needed
       dec_layer_number: null
       rm_dec_query_scale: True
       rm_self_attn_layers: null
@@ -128,7 +132,13 @@ detector:
       dec_pred_class_embed_share: True
       dec_pred_bbox_embed_share: True
 
+      # the type of self-attention to use in the decoder; if "sa"
+      # use a standard multiheaded self-attention module, not deformable attn
       decoder_self_attn_type: "sa" # ['sa', 'ca_label', 'ca_content']
+
+      # The order to call the modules in the decoder; this order should not be changed 
+      # and it follows the original DETR decoder closely (see detr paper figure 10);
+      # stands for ["self-attention", "cross-attention", "feedforward network"]
       decoder_module_seq: ["sa", "ca", "ffn"]
 
       embed_init_tgt: True

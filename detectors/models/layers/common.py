@@ -114,10 +114,10 @@ class MLP(nn.Module):
             TODO put shape
         """
         for index, layer in enumerate(self.layers):
-            x = layer(x)
 
-            # ReLU activation on every linear layer output except the last one
+            # ReLU activation after every linear layer output except the last one
             if index < self.num_layers - 1:
+                x = layer(x)
                 x = F.relu(x)
             else:
                 x = layer(x)
