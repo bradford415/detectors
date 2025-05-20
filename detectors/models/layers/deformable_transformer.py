@@ -241,7 +241,7 @@ class DeformableTransformer(nn.Module):
             dec_layer_share=False,
             use_detached_boxes_dec_out=use_detached_boxes_dec_out,
         )
-        
+
         ############## START HERE ##################
 
         self.d_model = d_model
@@ -253,6 +253,8 @@ class DeformableTransformer(nn.Module):
             Warning("num_patterns should be int but {}".format(type(num_patterns)))
             self.num_patterns = 0
 
+        # Create self.level_embed which is a trainable tensor (num_feature_leves, d_model)
+        # TODO: write what it's used for
         if num_feature_levels > 1:
             if self.num_encoder_layers > 0:
                 self.level_embed = nn.Parameter(
@@ -264,23 +266,27 @@ class DeformableTransformer(nn.Module):
         self.learnable_tgt_init = learnable_tgt_init
         assert learnable_tgt_init, "why not learnable_tgt_init"
         self.embed_init_tgt = embed_init_tgt
+
+        # create self.tgt_embed nn.Embedding layer (num_obj_queries, d_model)
+        # and initalize weight with a normal_distribution
         if (two_stage_type != "no" and embed_init_tgt) or (two_stage_type == "no"):
             self.tgt_embed = nn.Embedding(self.num_obj_queries, d_model)
             nn.init.normal_(self.tgt_embed.weight.data)
         else:
             self.tgt_embed = None
 
-        # for two stage
+        # assign two stage attributes; default values "standard", 0, 0, False, respectively
         self.two_stage_type = two_stage_type
         self.two_stage_pat_embed = two_stage_pat_embed
         self.two_stage_add_query_num = two_stage_add_query_num
         self.two_stage_learn_wh = two_stage_learn_wh
 
+        # Create a linear and norm layer for anchor selection at the output of encoder
         if two_stage_type == "standard":
-            # anchor selection at the output of encoder
             self.enc_output = nn.Linear(d_model, d_model)
             self.enc_output_norm = nn.LayerNorm(d_model)
 
+            # Next 3 if statements are skipped by default
             if two_stage_pat_embed > 0:
                 self.pat_embed_for_2stage = nn.Parameter(
                     torch.Tensor(two_stage_pat_embed, d_model)
@@ -295,11 +301,15 @@ class DeformableTransformer(nn.Module):
             else:
                 self.two_stage_wh_embedding = None
 
+        # skipped by default
         if two_stage_type == "no":
-            self.init_ref_points(num_queries)  # init self.refpoint_embed
+            self.init_ref_points(num_obj_queries)  # init self.refpoint_embed
 
         self.enc_out_class_embed = None
         self.enc_out_bbox_embed = None
+
+
+        ############### START HERE ############
 
         # evolution of anchors
         self.dec_layer_number = dec_layer_number
@@ -1295,18 +1305,18 @@ class TransformerDecoder(nn.Module):
 
         # a 2 layer MLP to embed TODO: write what this is used for
         self.ref_point_head = MLP(
-            input_dim=query_dim // 2 * d_model, # default 512
+            input_dim=query_dim // 2 * d_model,  # default 512
             hidden_dim=d_model,
             output_dim=d_model,
             num_layers=2,
         )
-        
+
         # NOTE: removing if statement if deformable_decoder is False since it's always True
 
         # TODO: comment
         if not deformable_decoder:
             self.query_pos_sine_scale = MLP(d_model, d_model, d_model, 2)
-        else: # default case
+        else:  # default case
             self.query_pos_sine_scale = None
 
         self.query_scale = None
@@ -1320,21 +1330,21 @@ class TransformerDecoder(nn.Module):
 
         if not deformable_decoder and modulate_hw_attn:
             self.ref_anchor_head = MLP(d_model, d_model, 2, 2)
-        else: # default case
+        else:  # default case
             self.ref_anchor_head = None
 
         self.decoder_query_perturber = decoder_query_perturber
         self.box_pred_damping = None
 
         self.dec_layer_number = dec_layer_number
-        
+
         # default is None and can be ignored for now
         if dec_layer_number is not None:
             assert isinstance(dec_layer_number, list)
             assert len(dec_layer_number) == num_layers
 
         self.dec_layer_dropout_prob = dec_layer_dropout_prob
-        
+
         # default is None and can be ignored from now
         if dec_layer_dropout_prob is not None:
             assert isinstance(dec_layer_dropout_prob, list)
