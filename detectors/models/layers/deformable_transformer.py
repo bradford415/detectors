@@ -242,8 +242,6 @@ class DeformableTransformer(nn.Module):
             use_detached_boxes_dec_out=use_detached_boxes_dec_out,
         )
 
-        ############## START HERE ##################
-
         self.d_model = d_model
         self.nhead = nhead
         self.dec_layers = num_decoder_layers
@@ -254,7 +252,7 @@ class DeformableTransformer(nn.Module):
             self.num_patterns = 0
 
         # Create self.level_embed which is a trainable tensor (num_feature_leves, d_model)
-        # TODO: write what it's used for
+        # this parameter's values will be initialized in self._init_parameters()
         if num_feature_levels > 1:
             if self.num_encoder_layers > 0:
                 self.level_embed = nn.Parameter(
@@ -308,23 +306,21 @@ class DeformableTransformer(nn.Module):
         self.enc_out_class_embed = None
         self.enc_out_bbox_embed = None
 
-
-        ############### START HERE ############
-
-        # evolution of anchors
+        # evolution of anchors; skipped by default so can be ignored for now
         self.dec_layer_number = dec_layer_number
         if dec_layer_number is not None:
             if self.two_stage_type != "no" or num_patterns == 0:
                 assert (
-                    dec_layer_number[0] == num_queries
-                ), f"dec_layer_number[0]({dec_layer_number[0]}) != num_queries({num_queries})"
+                    dec_layer_number[0] == num_obj_queries
+                ), f"dec_layer_number[0]({dec_layer_number[0]}) != num_queries({num_obj_queries})"
             else:
                 assert (
-                    dec_layer_number[0] == num_queries * num_patterns
-                ), f"dec_layer_number[0]({dec_layer_number[0]}) != num_queries({num_queries}) * num_patterns({num_patterns})"
+                    dec_layer_number[0] == num_obj_queries * num_patterns
+                ), f"dec_layer_number[0]({dec_layer_number[0]}) != num_queries({num_obj_queries}) * num_patterns({num_patterns})"
 
-        self._reset_parameters()
+        self._init_parameters()
 
+        # skipped by default
         self.rm_self_attn_layers = rm_self_attn_layers
         if rm_self_attn_layers is not None:
             print(
@@ -336,22 +332,39 @@ class DeformableTransformer(nn.Module):
                 if lid in rm_self_attn_layers:
                     dec_layer.rm_self_attn_modules()
 
+        # skipped by default
         self.rm_detach = rm_detach
         if self.rm_detach:
             assert isinstance(rm_detach, list)
             assert any([i in ["enc_ref", "enc_tgt", "dec"] for i in rm_detach])
         self.decoder.rm_detach = rm_detach
 
-    def _reset_parameters(self):
+    def _init_parameters(self):
+        """Initialize 
+        
+        1. Initializes mulitdimenional parameters (like weight matrices but NOT biases)
+        2. Initializes MSDeformAttn defined by MSDeformAttn._reset_parameters()
+        3. Initializes self.level_embed from a normal distribution (level_embed, d_model)
+        """
+        # Apply xaiver_uniform init to all multi-dimensional parameters like weight matrices;
+        # this will skip single dimensional parameters like biases
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
+
+        # Initalize the Multiscale Deformable Attention based on MSDeformAttn._reset_parameters()
+        # function; this is different than the current function
         for m in self.modules():
             if isinstance(m, MSDeformAttn):
                 m._reset_parameters()
+    
+        # Initalize the values of the self.level_embed parameter with values drawn from a
+        # normal distribution
         if self.num_feature_levels > 1 and self.level_embed is not None:
             nn.init.normal_(self.level_embed)
 
+        # this is skipped by default but the intent is to bias the simoid to predict small bboxes early on;
+        # log(0.05 / (1 - 0.05))) = ~ -2.94 and sigmoid(-2.94) = ~ 0.05
         if self.two_stage_learn_wh:
             nn.init.constant_(
                 self.two_stage_wh_embedding.weight, math.log(0.05 / (1 - 0.05))
