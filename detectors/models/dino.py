@@ -378,8 +378,8 @@ class DINO(nn.Module):
         hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
             feature_maps,
             masks,
-            input_query_bbox,
             pos_encodings,
+            input_query_bbox,
             input_query_label,
             attn_mask,
         )

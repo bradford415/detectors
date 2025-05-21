@@ -340,8 +340,8 @@ class DeformableTransformer(nn.Module):
         self.decoder.rm_detach = rm_detach
 
     def _init_parameters(self):
-        """Initialize 
-        
+        """Initialize
+
         1. Initializes mulitdimenional parameters (like weight matrices but NOT biases)
         2. Initializes MSDeformAttn defined by MSDeformAttn._reset_parameters()
         3. Initializes self.level_embed from a normal distribution (level_embed, d_model)
@@ -357,7 +357,7 @@ class DeformableTransformer(nn.Module):
         for m in self.modules():
             if isinstance(m, MSDeformAttn):
                 m._reset_parameters()
-    
+
         # Initalize the values of the self.level_embed parameter with values drawn from a
         # normal distribution
         if self.num_feature_levels > 1 and self.level_embed is not None:
@@ -426,9 +426,32 @@ class DeformableTransformer(nn.Module):
             pos_embeds: list of positional embeds (b, hiddne_dim//2, h, w)
 
             Args returned from setup_contrastive_denoising()
-                refpoint_embed: TODO [bs, num_dn, 4]. None in infer
-                tgt: TODO [bs, num_dn, d_model]. None in infer
-                attn_mask: TODO
+                refpoint_embed: during training: 
+                                    noised GT bboxes representing positive and negative denoising
+                                    queries; pos & neg queries alternate for all objects in the batch denoise_number_per_cdn_group times;
+                                    pos denoise queries are slightly noised and expected to recover the GT object during prediction,
+                                    while neg denoise queries are heavily noised and expected to predict `no_object/background`
+                                    (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, 4)
+                                    where 4 = (cx, cy, w, h); 
+                                during inference:
+                                    value is None
+                                see setup_contrastive_denoising() return docs variable `input_query_bbox` for more info
+                                [bs, num_dn, 4]. None in infer
+                tgt: during training:
+                        a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
+                        injected at random locations, this tensor was then embedded with nn.Embedding;
+                        approximately 25% of GT labels are randomly changed;
+                        shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
+                     during inference:
+                        value is None
+                attn_mask: an attention mask where False = attend and True = mask/block attention;
+                           mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
+                           the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
+                           is composed of CDN groups and each CDN group is only allowed to attend to itself,
+                           therefore, the mask looks like stepsin the top left; to the right of the CDN groups
+                           are learnable_obj_queries and these are free to attend to one another so the right
+                           side of the mask is all False;
+                           see detectors/models/README.md for a visual of this attn_mask
 
         """
         # prepare input for encoder

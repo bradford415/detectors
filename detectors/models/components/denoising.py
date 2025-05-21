@@ -24,7 +24,7 @@ def setup_contrastive_denoising(
 
     Args:
         training: training (True) or inference (False)
-        num_queries: total number of learnable object queries; TODO: verify this
+        num_queries: total number of learnable object queries
         num_classes: TODO
         hidden_dim: transformer hidden dimension; TODO: add a little more
         label_enc: an nn.Embedding layer to embed the denoising_queries containing GT classes with
@@ -36,13 +36,17 @@ def setup_contrastive_denoising(
 
     Return:
         TODO: explain all return values as a summary, this will be very helpful; put location of attn_mask visual
-        1. input_query_label: a tensor with GT-truth classes and randomly selected classes injected at random
-                              locations, this tensor was then embedded with nn.Embedding
+        NOTE: denoise_number_per_cdn_group = intial_denoise_number//max_objects_batch
+        1. input_query_label: a tensor with GT-truth classes and randomly selected classes (from the entire ontology)
+                              injected at random locations, this tensor was then embedded with nn.Embedding;
+                              approximately 25% of GT labels are randomly changed;
                               shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
-        2. input_query_bbox: a tensor with all  GT bboxes noised (positive and negative denoising queries), these
+        2. input_query_bbox: a tensor with all GT bboxes noised (positive and negative denoising queries), these
                              bboxes are then converted to logits w/ the inverse_sigmoid;
                              (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, 4)
-                             where 4 = (cx, cy, w, h)
+                             where 4 = (cx, cy, w, h);
+                             e.g., denoise_number = 100, num_objs_per_image = [10, 9] then the shape
+                                   would be (10*(100//10)*2)
         3. attn_mask: an attention mask where False = attend and True = mask/block attention;
                       mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
                       the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
@@ -162,12 +166,12 @@ def setup_contrastive_denoising(
 
         # The below code creates two variables: positive_idx, and negative idx;
         # the goal is to create indices of positive & negative denoising queries; these indices
-        # will alternate in sets [0, num_objects_batch] until (num_queries_batch*denoise_number*2 - 1);
-        # i.e., if num_queries_batch=19 then [0, 18] are positive indices, [19, 37] are negative queries,
-        # and so on until the last index is 379 (num_queries_batch*denoise_number*2 - 1)
+        # will alternate in sets [0, total_objects_batch] until (total_objects_batch*denoise_number*2 - 1);
+        # i.e., if num_objects_batch=19 then [0, 18] are positive indices, [19, 37] are negative queries,
+        # and so on until the last index is 379 (total_objects_batch*denoise_number*2 - 1)
 
-        # Create a range tensor from [0, num_objects_batch) and repeat along rows
-        # (denoise_number, num_objects_batch)
+        # Create a range tensor from [0, total_objects_batch) and repeat along rows
+        # (denoise_number, total_objects_batch)
         positive_idx = (
             torch.arange(boxes.shape[0])
             .long()
@@ -275,7 +279,7 @@ def setup_contrastive_denoising(
             # Create a 1d range tensor for the num_objects in each image (e.g., [0, 1, 2, 3, 0, 1, 2])
             map_known_indice = torch.cat(
                 [torch.tensor(range(num)) for num in known_num]
-            )  # [1,2, 1,2,3]
+            )
 
             # Repeat this pattern counting up, off-setting by single_pad every iteration until
             # 2*denoise_number iters (num_objects_batch*denoise_number*2)
