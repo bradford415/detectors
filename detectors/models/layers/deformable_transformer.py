@@ -34,6 +34,8 @@ from .utils import (
 class DeformableTransformer(nn.Module):
     """Deformable Transformer module used in DINO
 
+    Includes the TransformerEncoder and TransformerDecoder
+
     The deformable transformer and deformable attention was initially introduced in deformable-detr; DINO
     and other detr-like models modify this transformer module from the original
 
@@ -426,75 +428,98 @@ class DeformableTransformer(nn.Module):
             pos_embeds: list of positional embeds (b, hiddne_dim//2, h, w)
 
             Args returned from setup_contrastive_denoising()
-                refpoint_embed: during training: 
-                                    noised GT bboxes representing positive and negative denoising
-                                    queries; pos & neg queries alternate for all objects in the batch denoise_number_per_cdn_group times;
-                                    pos denoise queries are slightly noised and expected to recover the GT object during prediction,
-                                    while neg denoise queries are heavily noised and expected to predict `no_object/background`
-                                    (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, 4)
-                                    where 4 = (cx, cy, w, h); 
-                                during inference:
-                                    value is None
-                                see setup_contrastive_denoising() return docs variable `input_query_bbox` for more info
-                                [bs, num_dn, 4]. None in infer
-                tgt: during training:
-                        a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
-                        injected at random locations, this tensor was then embedded with nn.Embedding;
-                        approximately 25% of GT labels are randomly changed;
-                        shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
-                     during inference:
-                        value is None
-                attn_mask: an attention mask where False = attend and True = mask/block attention;
-                           mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
-                           the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
-                           is composed of CDN groups and each CDN group is only allowed to attend to itself,
-                           therefore, the mask looks like stepsin the top left; to the right of the CDN groups
-                           are learnable_obj_queries and these are free to attend to one another so the right
-                           side of the mask is all False;
-                           see detectors/models/README.md for a visual of this attn_mask
+            refpoint_embed: during training:
+                                noised GT bboxes representing positive and negative denoising
+                                queries; pos & neg queries alternate for all objects in the batch
+                                denoise_number_per_cdn_group times; pos denoise queries are slightly noised
+                                and expected to recover the GT object during prediction, while neg denoise
+                                queries are heavily noised and expected to predict `no_object/background`
+                                (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, 4)
+                                where 4 = (cx, cy, w, h);
+                            during inference:
+                                value is None
+                            see setup_contrastive_denoising() return docs variable `input_query_bbox` for more info
+            tgt: during training:
+                    a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
+                    injected at random locations, this tensor was then embedded with nn.Embedding;
+                    approximately 25% of GT labels are randomly changed;
+                    shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
+                    during inference:
+                    value is None
+            attn_mask: an attention mask where False = attend and True = mask/block attention;
+                        mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
+                        the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
+                        is composed of CDN groups and each CDN group is only allowed to attend to itself,
+                        therefore, the mask looks like stepsin the top left; to the right of the CDN groups
+                        are learnable_obj_queries and these are free to attend to one another so the right
+                        side of the mask is all False;
+                        see detectors/models/README.md for a visual of this attn_mask
 
         """
-        # prepare input for encoder
-        src_flatten = []
+        # Prepare the input for the encoder
+        f_maps_flatten = []
         mask_flatten = []
         lvl_pos_embed_flatten = []
         spatial_shapes = []
-        for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
-            bs, c, h, w = src.shape
+
+        # loop through each feature_map level
+        for lvl, (f_map, mask, pos_embed) in enumerate(
+            zip(feature_maps, masks, pos_embeds)
+        ):
+            # Store spatial sizes from each feature map
+            bs, c, h, w = f_map.shape
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
 
-            src = src.flatten(2).transpose(1, 2)  # bs, hw, c
-            mask = mask.flatten(1)  # bs, hw
-            pos_embed = pos_embed.flatten(2).transpose(1, 2)  # bs, hw, c
+            # flatten feature maps, masks, and positonal embeddings
+            f_map = f_map.flatten(2).transpose(1, 2)  # (b, h*w, hidden_dim)
+            mask = mask.flatten(1)  # (b, h*w)
+            pos_embed = pos_embed.flatten(2).transpose(1, 2)  # (b, h*w, hidden_dim)
+
+            # add the pos_embedding to the level_embedding; (b, h*w, hidden_dim) + (1, 1, hidden_dim)
+            # this will broadcast across the batch and flattened spatial dims
             if self.num_feature_levels > 1 and self.level_embed is not None:
                 lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1)
             else:
                 lvl_pos_embed = pos_embed
+
+            # store the flattened pos_embed+lvl_embed, feature_map, and mask
             lvl_pos_embed_flatten.append(lvl_pos_embed)
-            src_flatten.append(src)
+            f_maps_flatten.append(f_map)
             mask_flatten.append(mask)
-        src_flatten = torch.cat(src_flatten, 1)  # bs, \sum{hxw}, c
-        mask_flatten = torch.cat(mask_flatten, 1)  # bs, \sum{hxw}
-        lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)  # bs, \sum{hxw}, c
+
+        # convert lists to tensors
+        f_maps_flatten = torch.cat(f_maps_flatten, 1)  # (b, sum(h_w * w_i), hidden_dim)
+        mask_flatten = torch.cat(mask_flatten, 1)  # (b, sum(h_w, w_i))
+        lvl_pos_embed_flatten = torch.cat(
+            lvl_pos_embed_flatten, 1
+        )  # (b, sum(h_w * w_i), hidden_dim)
+
+        # (num_feature_maps, 2)
         spatial_shapes = torch.as_tensor(
-            spatial_shapes, dtype=torch.long, device=src_flatten.device
+            spatial_shapes, dtype=torch.long, device=f_maps_flatten.device
         )
+
+        # Create a tensor of `start` indices where each flattened feature map begins;
+        # (num_feature_maps,)
         level_start_index = torch.cat(
             (spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1])
         )
 
-        # TODO: shape
+        # Find the proportion of `real` (not padded) height/width pixels of each image
+        # in the batch (b, num_feature_maps, 2)
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
 
-        # two stage
+        # two stage; TODO comment maybe
         enc_topk_proposals = enc_refpoint_embed = None
+
+        ############ START HERE ##############
 
         #########################################################
         # Begin Encoder
         #########################################################
         memory, enc_intermediate_output, enc_intermediate_refpoints = self.encoder(
-            src_flatten,
+            f_maps_flatten,
             pos=lvl_pos_embed_flatten,
             level_start_index=level_start_index,
             spatial_shapes=spatial_shapes,

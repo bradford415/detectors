@@ -35,8 +35,11 @@ class PositionEmbeddingSineHW(nn.Module):
         """Initialize the Postional Embedding Module
 
         Args:
-            num_pos_feats: embedding size of each positional embedding;
-                           this is typically half of the token embedding dim (the input to the encoder)
+            num_pos_feats: embedding size of each sine and cosine positional embedding; the output embedding size
+                           will be num_pos_feats*2 because we alternate sine and cos; this dimension will match
+                           the dimension the feature_maps get projected to in models.dino.DINO.__init__()
+                           (i.e., num_post_featrs*2) this is typically half of the token embedding dim
+                           (the input to the encoder)
             temperature_h: temperature for height; a lower temperature means positions change more rapidly
             temperature_w: temperature for width; a lower temperature means positions change more rapidly
             normalize: whether to row normalize and col normalize the positional coordinates (right before creating embeddings)
