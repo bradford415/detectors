@@ -515,9 +515,9 @@ class DeformableTransformer(nn.Module):
 
         ############ START HERE ##############
 
-        #########################################################
-        # Begin Encoder
-        #########################################################
+        # Encode the features through the TransformerEncoder
+        # `memory` (b, sum(h_i, w_i), hidden_dim) is the encoded `f_maps_flatten`
+        # and `enc_*` are None by the default parameters
         memory, enc_intermediate_output, enc_intermediate_refpoints = self.encoder(
             f_maps_flatten,
             pos=lvl_pos_embed_flatten,
@@ -528,14 +528,9 @@ class DeformableTransformer(nn.Module):
             ref_token_index=enc_topk_proposals,  # bs, nq
             ref_token_coord=enc_refpoint_embed,  # bs, nq, 4
         )
-        #########################################################
-        # End Encoder
-        # - memory: bs, \sum{hw}, c
-        # - mask_flatten: bs, \sum{hw}
-        # - lvl_pos_embed_flatten: bs, \sum{hw}, c
-        # - enc_intermediate_output: None or (nenc+1, bs, nq, c) or (nenc, bs, nq, c)
-        # - enc_intermediate_refpoints: None or (nenc+1, bs, nq, c) or (nenc, bs, nq, c)
-        #########################################################
+
+        # input and output of encoder should have same shape
+        assert memory.shape == f_maps_flatten.shape
 
         if self.two_stage_type == "standard":
             if self.two_stage_learn_wh:
@@ -1198,6 +1193,9 @@ class TransformerEncoder(nn.Module):
         ref_token_coord: Optional[Tensor] = None,
     ):
         """Call the TransformerEncoder
+
+        The main goal is to loop through the stack of encoders and encode the
+        input features
 
         Args:
             NOTE: h_i & w_i -> height and width of a feature_map from the list of feature_maps

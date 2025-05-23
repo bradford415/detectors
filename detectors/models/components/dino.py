@@ -367,3 +367,89 @@ def setup_contrastive_denoising(
         denoise_meta = None
 
     return input_query_label, input_query_bbox, attn_mask, denoise_meta
+
+
+def gen_encoder_output_proposals(
+    memory: torch.Tensor,
+    memory_padding_mask: torch.Tensor,
+    spatial_shapes: torch.Tensor,
+    learned_wh=None,
+):
+    """TODO
+
+    Args:
+        memory: encoded features form the TransformerEncoder (b, sum(h_i * w_i), hidden_dim)
+        memory_padding_mask: flattened padding mask for the encoded features, where False = `real` pixels
+                             and True = padded pixels (b, sum(h_i * w_i)); this is the same mask created in
+                             the from_tensor_list() in the collate_fn and interpolated in BackboneBase
+        spatial_shapes: height and width of each feature_map level (num_level, 2); no batch
+                        dimension bc these values should be the same across the batch
+        learned_wh: TODO
+
+    Input:
+        - memory: bs, \sum{hw}, d_model
+        - memory_padding_mask: bs, \sum{hw}
+        - spatial_shapes: nlevel, 2
+        - learnedwh: 2
+    Output:
+        - output_memory: bs, \sum{hw}, d_model
+        - output_proposals: bs, \sum{hw}, 4
+    """
+    N_, S_, C_ = memory.shape
+    base_scale = 4.0
+    proposals = []
+    _cur = 0
+
+    # Loop through each feature_map's spatial size
+    for lvl, (H_, W_) in enumerate(spatial_shapes):
+
+        # Extract the padding mask at the locations of the current feature map (pad mask is a the flattened f_maps)
+        # and reshape back to spatial dimensions (b, h, w, 1)
+        mask_flatten_ = memory_padding_mask[:, _cur : (_cur + H_ * W_)].view(
+            N_, H_, W_, 1
+        )
+
+        # count the number of real height & width pixels (b,)
+        valid_H = torch.sum(~mask_flatten_[:, :, 0, 0], 1)
+        valid_W = torch.sum(~mask_flatten_[:, 0, :, 0], 1)
+
+        # create a grid of row and col coordinates for the current feature map
+        grid_y, grid_x = torch.meshgrid(
+            torch.linspace(0, H_ - 1, H_, dtype=torch.float32, device=memory.device),
+            torch.linspace(0, W_ - 1, W_, dtype=torch.float32, device=memory.device),
+        )
+        grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1) # (h, w, 2)
+
+        scale = torch.cat([valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).view(
+            N_, 1, 1, 2
+        )
+        grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
+
+        if learned_wh is not None:
+            wh = torch.ones_like(grid) * learned_wh.sigmoid() * (2.0**lvl)
+        else:
+            wh = torch.ones_like(grid) * 0.05 * (2.0**lvl)
+
+        proposal = torch.cat((grid, wh), -1).view(N_, -1, 4)
+        proposals.append(proposal)
+        _cur += H_ * W_
+
+    output_proposals = torch.cat(proposals, 1)
+    output_proposals_valid = (
+        (output_proposals > 0.01) & (output_proposals < 0.99)
+    ).all(-1, keepdim=True)
+    output_proposals = torch.log(output_proposals / (1 - output_proposals))  # unsigmoid
+    output_proposals = output_proposals.masked_fill(
+        memory_padding_mask.unsqueeze(-1), float("inf")
+    )
+    output_proposals = output_proposals.masked_fill(
+        ~output_proposals_valid, float("inf")
+    )
+
+    output_memory = memory
+    output_memory = output_memory.masked_fill(
+        memory_padding_mask.unsqueeze(-1), float(0)
+    )
+    output_memory = output_memory.masked_fill(~output_proposals_valid, float(0))
+
+    return output_memory, output_proposals
