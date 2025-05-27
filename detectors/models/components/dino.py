@@ -386,6 +386,11 @@ def gen_encoder_output_proposals(
                         dimension bc these values should be the same across the batch
         learned_wh: TODO
 
+    Return:
+        1. output_memory: the encoded features with padding filled with 0s (b, sum(h_i * w_i), hidden_dim)
+        2. output_proposals: the initial box proposals (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h);
+           the proposals are normalized to [0, 1] (relative to the `real` pixels) and padded regions are filled with "inf"s;
+
     Input:
         - memory: bs, \sum{hw}, d_model
         - memory_padding_mask: bs, \sum{hw}
@@ -418,27 +423,49 @@ def gen_encoder_output_proposals(
             torch.linspace(0, H_ - 1, H_, dtype=torch.float32, device=memory.device),
             torch.linspace(0, W_ - 1, W_, dtype=torch.float32, device=memory.device),
         )
-        grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1) # (h, w, 2)
+        grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1)  # (h, w, 2)
 
+        # Combine the valid w/h count (b, 1, 1, 2) where 2 (w, h)
         scale = torch.cat([valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).view(
             N_, 1, 1, 2
         )
+
+        # Create batch dim & repeat grid along the batch (keep the same memory location), then shift the pixel_coordinates to `pixel centers` 
+        # (i.e., the center of pixel (0, 0) is (0.5, 0,5)), and normalize relative to the `valid` pixels w/h;
+        # values <= 1.0 are valid and pixels > 1.0 are padded
         grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
 
         if learned_wh is not None:
             wh = torch.ones_like(grid) * learned_wh.sigmoid() * (2.0**lvl)
         else:
+            # use a fixed width and height based on the feature map level; create a tensor
+            # (b, h, w, 2) of values [0.05*1, 0.05*2, 0.05*4, 0.05*8] corresponding 
+            # to the current level
             wh = torch.ones_like(grid) * 0.05 * (2.0**lvl)
 
+        # create the initial box proposals (b, h*w, 4) where 4 = (cx, cy, w, h)
         proposal = torch.cat((grid, wh), -1).view(N_, -1, 4)
         proposals.append(proposal)
+
+        # assign the start index of the next feature map
         _cur += H_ * W_
 
+    # Combine proposals from all feature maps into a tensor (b, sum(h_i * w_i), 4)
     output_proposals = torch.cat(proposals, 1)
+
+    # find the proposals that are valid (x or y < 1.0)  i.e., proposals that are not padded  
+    # (b, sum(h_i * w_i), 1)
     output_proposals_valid = (
         (output_proposals > 0.01) & (output_proposals < 0.99)
     ).all(-1, keepdim=True)
-    output_proposals = torch.log(output_proposals / (1 - output_proposals))  # unsigmoid
+
+    # Convert the proposals to logits by applying the inverse sigmoid (logit) function; 
+    # this only works [0, 1], anything 1.0 or greater is unstable
+    output_proposals = torch.log(output_proposals / (1 - output_proposals))
+
+    # Fill the padded regions and the invalid proposalswith "inf"s
+    # NOTE: I'm not entirely sure what the difference is between memory_padding_mask and output_proposals_valid
+    #       but both statements do change the number of infs
     output_proposals = output_proposals.masked_fill(
         memory_padding_mask.unsqueeze(-1), float("inf")
     )
@@ -446,6 +473,7 @@ def gen_encoder_output_proposals(
         ~output_proposals_valid, float("inf")
     )
 
+    # fill the encoded_features with 0 at the padded locations and invalid proposals (2, sum(h_i * w_i), hidden_dim)
     output_memory = memory
     output_memory = output_memory.masked_fill(
         memory_padding_mask.unsqueeze(-1), float(0)
