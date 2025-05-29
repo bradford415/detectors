@@ -54,6 +54,8 @@ detector:
       type: "standard" # ["no", "standard"]
       pat_embed: 0
       add_query_num: 0
+
+      # whether to learn the 
       learn_wh: False
       keep_all_tokens: False
       two_stage_default_hw: 0.05 # TODO: figure out if this is used

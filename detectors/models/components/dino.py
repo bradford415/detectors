@@ -375,7 +375,19 @@ def gen_encoder_output_proposals(
     spatial_shapes: torch.Tensor,
     learned_wh=None,
 ):
-    """TODO
+    """Generate initial dense bbox proposals:
+        1. for each feature in every feature map (b, sum(h_i* w_i), 4)
+        2. 4 = (cx, cy, w, h) where cx, cy are grid coordinates for each feature_map
+        3. 0.5 is added to select the `pixel center`
+        4. assuming learned_wh=None, w, h is a value between [0, 1] correspoding to the
+           feature map level [0.05*1, 0.05*2, 0.05*4, 0.05*8]
+        5. these 4 values are converted to logits by applying the inverse_sigmoid (logit) function
+        6. finally, these initial proposals are masked to "inf" in padded regions and invalid proposal
+           locations; invalid proposals are outside the range [0.01, 0.99]; I think we do this
+           because values outside this range are too close to the edge
+
+    This function also masks out the padded and invalid locations of the encoded features (memory)
+    with 0s; invalid locations are the same as the bbox proposals
 
     Args:
         memory: encoded features form the TransformerEncoder (b, sum(h_i * w_i), hidden_dim)
@@ -384,21 +396,13 @@ def gen_encoder_output_proposals(
                              the from_tensor_list() in the collate_fn and interpolated in BackboneBase
         spatial_shapes: height and width of each feature_map level (num_level, 2); no batch
                         dimension bc these values should be the same across the batch
-        learned_wh: TODO
+        learned_wh: a learnable base size for the bbox; default is None which generates a base value for
+                    width & height corresponding to the feature_map level [0.05*1, 0.05*2, 0.05*4, 0.05*8]
 
     Return:
         1. output_memory: the encoded features with padding filled with 0s (b, sum(h_i * w_i), hidden_dim)
         2. output_proposals: the initial box proposals (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h);
            the proposals are normalized to [0, 1] (relative to the `real` pixels) and padded regions are filled with "inf"s;
-
-    Input:
-        - memory: bs, \sum{hw}, d_model
-        - memory_padding_mask: bs, \sum{hw}
-        - spatial_shapes: nlevel, 2
-        - learnedwh: 2
-    Output:
-        - output_memory: bs, \sum{hw}, d_model
-        - output_proposals: bs, \sum{hw}, 4
     """
     N_, S_, C_ = memory.shape
     base_scale = 4.0
@@ -423,14 +427,15 @@ def gen_encoder_output_proposals(
             torch.linspace(0, H_ - 1, H_, dtype=torch.float32, device=memory.device),
             torch.linspace(0, W_ - 1, W_, dtype=torch.float32, device=memory.device),
         )
-        grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1)  # (h, w, 2)
+        # (h, w, 2) where 2 = (x_coord, y_coord) of grid
+        grid = torch.cat([grid_x.unsqueeze(-1), grid_y.unsqueeze(-1)], -1)
 
         # Combine the valid w/h count (b, 1, 1, 2) where 2 (w, h)
         scale = torch.cat([valid_W.unsqueeze(-1), valid_H.unsqueeze(-1)], 1).view(
             N_, 1, 1, 2
         )
 
-        # Create batch dim & repeat grid along the batch (keep the same memory location), then shift the pixel_coordinates to `pixel centers` 
+        # Create batch dim & repeat grid along the batch (keep the same memory location), then shift the pixel_coordinates to `pixel centers`
         # (i.e., the center of pixel (0, 0) is (0.5, 0,5)), and normalize relative to the `valid` pixels w/h;
         # values <= 1.0 are valid and pixels > 1.0 are padded
         grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
@@ -439,7 +444,7 @@ def gen_encoder_output_proposals(
             wh = torch.ones_like(grid) * learned_wh.sigmoid() * (2.0**lvl)
         else:
             # use a fixed width and height based on the feature map level; create a tensor
-            # (b, h, w, 2) of values [0.05*1, 0.05*2, 0.05*4, 0.05*8] corresponding 
+            # (b, h, w, 2) of values [0.05*1, 0.05*2, 0.05*4, 0.05*8] corresponding
             # to the current level
             wh = torch.ones_like(grid) * 0.05 * (2.0**lvl)
 
@@ -453,19 +458,20 @@ def gen_encoder_output_proposals(
     # Combine proposals from all feature maps into a tensor (b, sum(h_i * w_i), 4)
     output_proposals = torch.cat(proposals, 1)
 
-    # find the proposals that are valid (x or y < 1.0)  i.e., proposals that are not padded  
-    # (b, sum(h_i * w_i), 1)
+    # find proposal locations that are valid i.e., in the range [0.01, 0.99]; this will be used
+    # to find the locations outside this range by taking the not; values outside this range
+    # are too close to the edges
     output_proposals_valid = (
         (output_proposals > 0.01) & (output_proposals < 0.99)
     ).all(-1, keepdim=True)
 
-    # Convert the proposals to logits by applying the inverse sigmoid (logit) function; 
+    # Convert the proposals to logits by applying the inverse sigmoid (logit) function;
     # this only works [0, 1], anything 1.0 or greater is unstable
     output_proposals = torch.log(output_proposals / (1 - output_proposals))
 
-    # Fill the padded regions and the invalid proposalswith "inf"s
-    # NOTE: I'm not entirely sure what the difference is between memory_padding_mask and output_proposals_valid
-    #       but both statements do change the number of infs
+    # Fill the padded regions and the invalid proposals with "inf"; invalid proposals are
+    # outside the range [0.01, 0.99] I think we do this because values outside this range
+    # are too close to the edge
     output_proposals = output_proposals.masked_fill(
         memory_padding_mask.unsqueeze(-1), float("inf")
     )
@@ -473,7 +479,9 @@ def gen_encoder_output_proposals(
         ~output_proposals_valid, float("inf")
     )
 
-    # fill the encoded_features with 0 at the padded locations and invalid proposals (2, sum(h_i * w_i), hidden_dim)
+    # Fill the encoded features (memory) at padded and invalid proposal locations with 0s;
+    # invalid  proposals are outside the range [0.01, 0.99]; I think we do this because values
+    # outside this range are too close to the edge
     output_memory = memory
     output_memory = output_memory.masked_fill(
         memory_padding_mask.unsqueeze(-1), float(0)

@@ -193,7 +193,7 @@ class DINO(nn.Module):
         nn.init.constant_(_bbox_embed.layers[-1].bias.data, 0)
 
         # Create a bbox MLP and class embed module for each decoder; if embed_share=True,
-        # use the same MLP for each bbox and share the parameters
+        # use the same MLP for each bbox and share the parameters; default is False
         if decoder_pred_bbox_embed_share:
             box_embed_layerlist = [
                 _bbox_embed for _ in range(transformer.num_decoder_layers)

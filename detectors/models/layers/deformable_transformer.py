@@ -19,16 +19,12 @@ from typing import Optional
 import torch
 from torch import Tensor, nn
 
+from detectors.models.components.dino import gen_encoder_output_proposals
 from detectors.models.layers.common import MLP, activation_map
 from detectors.models.ops.modules import MSDeformAttn
 from detectors.utils.misc import RandomBoxPerturber, inverse_sigmoid
 
-from .utils import (
-    MLP,
-    _get_activation_fn,
-    gen_encoder_output_proposals,
-    gen_sineembed_for_position,
-)
+from .utils import MLP, _get_activation_fn, gen_sineembed_for_position
 
 
 class DeformableTransformer(nn.Module):
@@ -281,7 +277,9 @@ class DeformableTransformer(nn.Module):
         self.two_stage_add_query_num = two_stage_add_query_num
         self.two_stage_learn_wh = two_stage_learn_wh
 
-        # Create a linear and norm layer for anchor selection at the output of encoder
+        # Create a linear and norm layer for anchor selection at the output of encoder;
+        # used after the encoder output has its padded and invalid regions set to 0 in
+        # gen_encoder_output_proposals
         if two_stage_type == "standard":
             self.enc_output = nn.Linear(d_model, d_model)
             self.enc_output_norm = nn.LayerNorm(d_model)
@@ -305,6 +303,10 @@ class DeformableTransformer(nn.Module):
         if two_stage_type == "no":
             self.init_ref_points(num_obj_queries)  # init self.refpoint_embed
 
+        # Both these attributes are set in models.dino.DINO.__init__() in the two stage block;
+        # they're used to encode the encoder output to class embeddings and bbox embeddings
+        # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80
+        # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
         self.enc_out_class_embed = None
         self.enc_out_bbox_embed = None
 
@@ -536,12 +538,20 @@ class DeformableTransformer(nn.Module):
             if self.two_stage_learn_wh:
                 input_hw = self.two_stage_wh_embedding.weight[0]
             else:
+                # set input_hw to None
                 input_hw = None
+
+            # mask out padded & invalid output_memory locations and generate
+            # inital bbox proposals (b, sum(h_i * w_i), 4); see function docstrings for more info
             output_memory, output_proposals = gen_encoder_output_proposals(
                 memory, mask_flatten, spatial_shapes, input_hw
             )
+
+            # linearly project and norm the masked, encoded features
+            # same shape as input (b, sum(h_i * w_i), hidden_dim)
             output_memory = self.enc_output_norm(self.enc_output(output_memory))
 
+            # skipped by default
             if self.two_stage_pat_embed > 0:
                 bs, nhw, _ = output_memory.shape
                 # output_memory: bs, n, 256; self.pat_embed_for_2stage: k, 256
@@ -552,12 +562,17 @@ class DeformableTransformer(nn.Module):
                     1, self.two_stage_pat_embed, 1
                 )
 
+            # skipped by default
             if self.two_stage_add_query_num > 0:
                 assert refpoint_embed is not None
                 output_memory = torch.cat((output_memory, tgt), dim=1)
                 output_proposals = torch.cat((output_proposals, refpoint_embed), dim=1)
 
+            # Embed the encoder output_memory into class embeddings;
+            # (b, sum(h_i * w_i), num_classes) for coco num_classes=91
             enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
+
+            ############# START HERE #############
             enc_outputs_coord_unselected = (
                 self.enc_out_bbox_embed(output_memory) + output_proposals
             )  # (bs, \sum{hw}, 4) unsigmoid
