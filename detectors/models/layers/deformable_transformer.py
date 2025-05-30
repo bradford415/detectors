@@ -305,9 +305,10 @@ class DeformableTransformer(nn.Module):
 
         # Both these attributes are set in models.dino.DINO.__init__() in the two stage block;
         # they're used to encode the encoder output to class embeddings and bbox embeddings
-        # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80
+        # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80;
+        # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
-        self.enc_out_class_embed = None
+        self.enc_out_class_embed = None # used to embed the encoder output to class embeddings to select proposals to use for the decoder
         self.enc_out_bbox_embed = None
 
         # evolution of anchors; skipped by default so can be ignored for now
@@ -568,20 +569,30 @@ class DeformableTransformer(nn.Module):
                 output_memory = torch.cat((output_memory, tgt), dim=1)
                 output_proposals = torch.cat((output_proposals, refpoint_embed), dim=1)
 
-            # Embed the encoder output_memory into class embeddings;
+            # Embed the encoder output_memory into class embeddings through a Linear layer;
             # (b, sum(h_i * w_i), num_classes) for coco num_classes=91
             enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
 
-            ############# START HERE #############
+            # embed the encoder output_memory into bbox embeddings through an MLP then add
+            # the inital output_proposals element-wise; this includes maksing out the padded
+            # and invalid regions with "inf"
+            # (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h)
             enc_outputs_coord_unselected = (
                 self.enc_out_bbox_embed(output_memory) + output_proposals
-            )  # (bs, \sum{hw}, 4) unsigmoid
+            )
+
+            # assign top_k proposals to pass into the decoder; default 900
             topk = self.num_obj_queries
+
+            # Find the max class value for each encoded feature, and then only select the
+            # topk indices with the highest class values (b, topk)
             topk_proposals = torch.topk(
                 enc_outputs_class_unselected.max(-1)[0], topk, dim=1
             )[
                 1
             ]  # bs, nq
+
+            ####### START HERE #########
 
             # gather boxes
             refpoint_embed_undetach = torch.gather(
