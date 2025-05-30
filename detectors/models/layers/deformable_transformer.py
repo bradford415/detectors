@@ -308,7 +308,7 @@ class DeformableTransformer(nn.Module):
         # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80;
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
-        self.enc_out_class_embed = None # used to embed the encoder output to class embeddings to select proposals to use for the decoder
+        self.enc_out_class_embed = None # topk proposals will be chosen from these embeded values  
         self.enc_out_bbox_embed = None
 
         # evolution of anchors; skipped by default so can be ignored for now
@@ -516,8 +516,6 @@ class DeformableTransformer(nn.Module):
         # two stage; TODO comment maybe
         enc_topk_proposals = enc_refpoint_embed = None
 
-        ############ START HERE ##############
-
         # Encode the features through the TransformerEncoder
         # `memory` (b, sum(h_i, w_i), hidden_dim) is the encoded `f_maps_flatten`
         # and `enc_*` are None by the default parameters
@@ -585,7 +583,7 @@ class DeformableTransformer(nn.Module):
             topk = self.num_obj_queries
 
             # Find the max class value for each encoded feature, and then only select the
-            # topk indices with the highest class values (b, topk)
+            # topk indices with the highest class values (b, topk) (e.g., sum(hi * wi) ~ 10000 and only 900 are selected)
             topk_proposals = torch.topk(
                 enc_outputs_class_unselected.max(-1)[0], topk, dim=1
             )[
