@@ -595,9 +595,10 @@ class DeformableTransformer(nn.Module):
             )[1]
 
             # gather reference boxes along the features `dim` from the topk_proposal indices selected
-            # by the class_embedding above; the values of `index` are used to select the `row` (dim 1)
-            # and the column index (dim 2) of `index` selects the values in `src` along the columns;
-            # see this post for how torch.gather() works:
+            # by the class_embedding above; these reference boxes are initial anchor points for the decoder; 
+            # to begin to refine into actual predicted boxes;the values of `index` are used to select the 
+            # `row` (dim 1) and the column index (dim 2) of `index` selects the values in `src` along the 
+            # columns; see this post for how torch.gather() works:
             #   https://stackoverflow.com/questions/50999977/what-does-gather-do-in-pytorch-in-layman-terms
             refpoint_embed_undetach = torch.gather(
                 enc_outputs_coord_unselected,
