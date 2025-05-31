@@ -308,7 +308,9 @@ class DeformableTransformer(nn.Module):
         # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80;
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
-        self.enc_out_class_embed = None # topk proposals will be chosen from these embeded values  
+        self.enc_out_class_embed = (
+            None  # topk proposals will be chosen from these embeded values
+        )
         self.enc_out_bbox_embed = None
 
         # evolution of anchors; skipped by default so can be ignored for now
@@ -568,6 +570,7 @@ class DeformableTransformer(nn.Module):
                 output_proposals = torch.cat((output_proposals, refpoint_embed), dim=1)
 
             # Embed the encoder output_memory into class embeddings through a Linear layer;
+            # used to select topk features as described in section 3.4 in DINO paper;
             # (b, sum(h_i * w_i), num_classes) for coco num_classes=91
             enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
 
@@ -582,25 +585,62 @@ class DeformableTransformer(nn.Module):
             # assign top_k proposals to pass into the decoder; default 900
             topk = self.num_obj_queries
 
-            # Find the max class value for each encoded feature, and then only select the
-            # topk indices with the highest class values (b, topk) (e.g., sum(hi * wi) ~ 10000 and only 900 are selected)
+            # Select the topk proposal (feature) indices with the highest class value
+            # (b, topk); described in section 3.4
+            #   1. find the max class value for each encoded feature
+            #   2. only select the topk indices with the highest class values
+            #      (e.g., sum(hi * wi) ~ 10000 and only 900 are selected);
             topk_proposals = torch.topk(
                 enc_outputs_class_unselected.max(-1)[0], topk, dim=1
-            )[
-                1
-            ]  # bs, nq
+            )[1]
 
-            ####### START HERE #########
-
-            # gather boxes
+            # gather reference boxes along the features `dim` from the topk_proposal indices selected
+            # by the class_embedding above; the values of `index` are used to select the `row` (dim 1)
+            # and the column index (dim 2) of `index` selects the values in `src` along the columns;
+            # see this post for how torch.gather() works:
+            #   https://stackoverflow.com/questions/50999977/what-does-gather-do-in-pytorch-in-layman-terms
             refpoint_embed_undetach = torch.gather(
                 enc_outputs_coord_unselected,
-                1,
-                topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
-            )  # unsigmoid
+                dim=1,
+                index=topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
+            )  # reminder that these boxes had the inverse sigmoid applied (logits)
+
+            # output shape is the same as `index` shape
+            assert (
+                refpoint_embed_undetach.shape
+                == topk_proposals.unsqueeze(-1).repeat(1, 1, 4).shape
+            )
+            # detaches refpoint_embed_ from the computation graph, making it a constant;
+            # we do this for several reasons:
+            #   1. we detach the reference points so we have fixed anchors to guide
+            #      decoder queries, this helps improve the stability of the training
+            #   2. by detaching, we make sure gradients don’t flow back through these reference
+            #      points, so the parts of the model that produced them aren’t adjusted based on
+            #      losses computed downstream from THESE points; the encoder and other parameters
+            #      that preceed this detachment are still updated through other means, like
+            #      the encoder features that get passed into the decoder, these reference points
+            #      are just one branch in the computational graph
+            #   3. I think one way to think about this is that the encoder should focus on producing
+            #      rich features to pass into the decoder, not focusing on initalizing the best
+            #      reference anchors; the reference anchors are just a byproduct from the encoder;
+            #      by detaching the reference anchors, the encoder will not be updated by the 
+            #      reference points gradients; if we did not detach, this could confuse the decoder
+            #      on what it's trying to learn
+            #   4. the goal is for the decoder to refine these anchor reference points, this is what
+            #      one thing the decoder should learn to do; detaching them helps to provide a 
+            #      "clean slate" for the decoder's progressive refinement. It essentially treats
+            #      the initial reference points as "proposals" that the decoder then refines, 
+            #      rather than forcing the encoder to directly optimize these initial proposals to 
+            #      be perfect.
             refpoint_embed_ = refpoint_embed_undetach.detach()
+
+
+
+            ########### START  HERE !!! ###########
             init_box_proposal = torch.gather(
-                output_proposals, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, 4)
+                output_proposals,
+                dim=1,
+                index=topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
             ).sigmoid()  # sigmoid
 
             # gather tgt

@@ -73,7 +73,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         # TODO: make this 91 for detr-based and 80 for yolo-based
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         # basically it's so they don't need a class mapping since the 80 `thing`` classes which are actually
-        # in the dataset are not contiguous; these missing objects will be treated as the background class 
+        # in the dataset are not contiguous; these missing objects will be treated as the background class
         # but since there's no actual labels the object never predicts and they saw no drop in performance with this;
         # the only con is that there will be a few extra parameters for the class prediction
         self.num_classes = 80
