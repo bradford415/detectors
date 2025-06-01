@@ -70,12 +70,16 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
         self.prepare = PreprocessCoco()
 
-        # TODO: make this 91 for detr-based and 80 for yolo-based
+        # TODO: make this 91 for detr-based and 80 for yolo-based; or put num_classes in config hmmm
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         # basically it's so they don't need a class mapping since the 80 `thing`` classes which are actually
         # in the dataset are not contiguous; these missing objects will be treated as the background class
         # but since there's no actual labels the object never predicts and they saw no drop in performance with this;
-        # the only con is that there will be a few extra parameters for the class prediction
+        # the only con is that there will be a few extra parameters for the class prediction;
+        # additionally, 91 is used because coco has IDs (0-90 = 91 classes) and with adding the no object class
+        # we get 92 classes, so num_classes=91 because we care about the index value (even though there's technically
+        # 92 w/ the no object) this post explains a little more:
+        #   https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
         self.num_classes = 80
 
         # Extract dataset ontology

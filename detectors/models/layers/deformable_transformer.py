@@ -548,8 +548,8 @@ class DeformableTransformer(nn.Module):
                 memory, mask_flatten, spatial_shapes, input_hw
             )
 
-            # linearly project and norm the masked, encoded features
-            # same shape as input (b, sum(h_i * w_i), hidden_dim)
+            # linearly project and norm the masked, encoded features output shape is same shape
+            # as input (b, sum(h_i * w_i), hidden_dim)
             output_memory = self.enc_output_norm(self.enc_output(output_memory))
 
             # skipped by default
@@ -595,9 +595,9 @@ class DeformableTransformer(nn.Module):
             )[1]
 
             # gather reference boxes along the features `dim` from the topk_proposal indices selected
-            # by the class_embedding above; these reference boxes are initial anchor points for the decoder; 
-            # to begin to refine into actual predicted boxes;the values of `index` are used to select the 
-            # `row` (dim 1) and the column index (dim 2) of `index` selects the values in `src` along the 
+            # by the class_embedding above; these reference boxes are initial anchor points for the decoder;
+            # to begin to refine into actual predicted boxes;the values of `index` are used to select the
+            # `row` (dim 1) and the column index (dim 2) of `index` selects the values in `src` along the
             # columns; see this post for how torch.gather() works:
             #   https://stackoverflow.com/questions/50999977/what-does-gather-do-in-pytorch-in-layman-terms
             refpoint_embed_undetach = torch.gather(
@@ -624,46 +624,66 @@ class DeformableTransformer(nn.Module):
             #   3. I think one way to think about this is that the encoder should focus on producing
             #      rich features to pass into the decoder, not focusing on initalizing the best
             #      reference anchors; the reference anchors are just a byproduct from the encoder;
-            #      by detaching the reference anchors, the encoder will not be updated by the 
+            #      by detaching the reference anchors, the encoder will not be updated by the
             #      reference points gradients; if we did not detach, this could confuse the decoder
             #      on what it's trying to learn
             #   4. the goal is for the decoder to refine these anchor reference points, this is what
-            #      one thing the decoder should learn to do; detaching them helps to provide a 
+            #      one thing the decoder should learn to do; detaching them helps to provide a
             #      "clean slate" for the decoder's progressive refinement. It essentially treats
-            #      the initial reference points as "proposals" that the decoder then refines, 
-            #      rather than forcing the encoder to directly optimize these initial proposals to 
+            #      the initial reference points as "proposals" that the decoder then refines,
+            #      rather than forcing the encoder to directly optimize these initial proposals to
             #      be perfect.
             refpoint_embed_ = refpoint_embed_undetach.detach()
 
-
-
-            ########### START  HERE !!! ###########
+            # Gather initial box proposals using the topk class embeds from the generated output proposoals
+            # gen_encoder_output_proposals() and apply sigmoid() to each element; output_proposals shape
+            # (b, sum(h_i * w_i), 4),  init_box_proposal (b, topk, 4) where topk by default is 900
             init_box_proposal = torch.gather(
                 output_proposals,
                 dim=1,
                 index=topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
             ).sigmoid()  # sigmoid
 
-            # gather tgt
+            # NOTE: at the end out gen_encoder_output_proposals(), the inverse sigmoid is applied to
+            #       output_proposals but then in then gathering the init_box_proposal we apply sigmoid again;
+            #       I'm guessing when we generate the refpoint_embed we added the unsigmoided output_prosals
+            #       so we want to use logits (inverse_sigmoid), or it may be used downstream to
+
+            # TODO: I'm not sure of the difference between init_box_proposal and refpoint_embed_
+
+            assert init_box_proposal.shape == refpoint_embed_.shape
+
+            # Gather the encoded features from the topk chosen from the class embed (b, topk, 256)
             tgt_undetach = torch.gather(
                 output_memory,
-                1,
-                topk_proposals.unsqueeze(-1).repeat(1, 1, self.d_model),
+                dim=1,
+                index=topk_proposals.unsqueeze(-1).repeat(1, 1, self.d_model),
             )
             if self.embed_init_tgt:
+                # Extract the tgt_embed weight matrix and reshape the matrix, repeat for the new batch dim,
+                # and swap batch and obj_queries dim
+                # (900, hidden_dim) -> (900, 1, hidden_dim) -> (900, 2, hidden_dim) -> (2, 900, hidden_dim);
+                # NOTE: unlike expand, repeat copies the tensor data (new memory) and repeat is differentiable
                 tgt_ = (
                     self.tgt_embed.weight[:, None, :].repeat(1, bs, 1).transpose(0, 1)
-                )  # nq, bs, d_model
+                )
             else:
                 tgt_ = tgt_undetach.detach()
 
             if refpoint_embed is not None:
+                # Combine noised boxes with positive and negative queries from setup_contrastive_denoising()
+                # with the detached reference box anchors which were created from the encoded features and
+                # embedded with an MLP (+ output_proposals) (b, max_objects*num_cdn_group*2 + topk, 4) ~ (b, 1100, 4)
                 refpoint_embed = torch.cat([refpoint_embed, refpoint_embed_], dim=1)
+
+                # Combine noised class labels (randomly selected labels) form setup_contrastive_denoising()
+                # and the extracted tgt_embed weight matrix (b, max_objects*num_cdn_group*2 + topk, hidden_dim)
                 tgt = torch.cat([tgt, tgt_], dim=1)
             else:
                 refpoint_embed, tgt = refpoint_embed_, tgt_
 
-        elif self.two_stage_type == "no":
+        # I think this is previous generation detr case (like a lot of this code)
+        elif self.two_stage_type == "no": 
             tgt_ = (
                 self.tgt_embed.weight[:, None, :].repeat(1, bs, 1).transpose(0, 1)
             )  # nq, bs, d_model
@@ -691,21 +711,16 @@ class DeformableTransformer(nn.Module):
             raise NotImplementedError(
                 "unknown two_stage_type {}".format(self.two_stage_type)
             )
-        #########################################################
-        # End preparing tgt
-        # - tgt: bs, NQ, d_model
-        # - refpoint_embed(unsigmoid): bs, NQ, d_model
-        #########################################################
 
-        #########################################################
-        # Begin Decoder
-        #########################################################
+        # Decode the features through the TransformerEncoder;
+        # pass the `memory`` straight from the encoder, not the `output_memory` that was masked and projected
+        # TODO, write the outputs and go through decoder if haven't already
         hs, references = self.decoder(
-            tgt=tgt.transpose(0, 1),
-            memory=memory.transpose(0, 1),
+            tgt=tgt.transpose(0, 1), # (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
+            memory=memory.transpose(0, 1), # (sum(h_i * w_i), b, hidden_dim)
             memory_key_padding_mask=mask_flatten,
-            pos=lvl_pos_embed_flatten.transpose(0, 1),
-            refpoints_unsigmoid=refpoint_embed.transpose(0, 1),
+            pos=lvl_pos_embed_flatten.transpose(0, 1), # (sum(h_i * w_i), b, hidden_dim)
+            refpoints_unsigmoid=refpoint_embed.transpose(0, 1), # (sum(h_i * w_i), b, 4)
             level_start_index=level_start_index,
             spatial_shapes=spatial_shapes,
             valid_ratios=valid_ratios,
@@ -1493,6 +1508,7 @@ class TransformerDecoder(nn.Module):
         spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
         valid_ratios: Optional[Tensor] = None,
     ):
+        ########## START HERE ###########
         """
         Input:
             - tgt: nq, bs, d_model
