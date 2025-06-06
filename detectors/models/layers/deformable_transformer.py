@@ -1004,6 +1004,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
         cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
     ):
+        ############### START HERE ######################
         # self attention
         if self.self_attn is not None:
             if self.decoder_sa_type == "sa":
@@ -1133,7 +1134,12 @@ class DeformableTransformerDecoderLayer(nn.Module):
                             also see detectors/models/README.md for a visual of this attn_mask
             cross_attn_mask: None; unused in TransformerDecoder()
         """
-        
+        assert self.module_seq == ["sa", "ca", "ffn"]
+
+        # Call each decoder module in the order specified by self.module_seq
+        # reminder: the module or is ["sa", "ca", "ffn"] which stands for 
+        #           ["self-attention", "cross-attention", "feedforward network"];
+        #           NOTE: this follows the original DETR decoder very closely (see the DETR paper figure 10)
         for funcname in self.module_seq:
             if funcname == "ffn":
                 tgt = self.forward_ffn(tgt)
