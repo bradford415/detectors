@@ -682,8 +682,8 @@ class DeformableTransformer(nn.Module):
             else:
                 refpoint_embed, tgt = refpoint_embed_, tgt_
 
-        # I think this is previous generation detr case (like a lot of this code)
-        elif self.two_stage_type == "no": 
+        # skipped; I think this is previous generation detr case (like a lot of this code)
+        elif self.two_stage_type == "no":
             tgt_ = (
                 self.tgt_embed.weight[:, None, :].repeat(1, bs, 1).transpose(0, 1)
             )  # nq, bs, d_model
@@ -716,15 +716,21 @@ class DeformableTransformer(nn.Module):
         # pass the `memory`` straight from the encoder, not the `output_memory` that was masked and projected
         # TODO, write the outputs and go through decoder if haven't already
         hs, references = self.decoder(
-            tgt=tgt.transpose(0, 1), # (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
-            memory=memory.transpose(0, 1), # (sum(h_i * w_i), b, hidden_dim)
+            tgt=tgt.transpose(
+                0, 1
+            ),  # (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
+            memory=memory.transpose(0, 1),  # (sum(h_i * w_i), b, hidden_dim)
+            tgt_mask=attn_mask,
             memory_key_padding_mask=mask_flatten,
-            pos=lvl_pos_embed_flatten.transpose(0, 1), # (sum(h_i * w_i), b, hidden_dim)
-            refpoints_unsigmoid=refpoint_embed.transpose(0, 1), # (sum(h_i * w_i), b, 4)
+            pos=lvl_pos_embed_flatten.transpose(
+                0, 1
+            ),  # (sum(h_i * w_i), b, hidden_dim)
+            refpoints_unsigmoid=refpoint_embed.transpose(
+                0, 1
+            ),  # (sum(h_i * w_i), b, 4)
             level_start_index=level_start_index,
             spatial_shapes=spatial_shapes,
             valid_ratios=valid_ratios,
-            tgt_mask=attn_mask,
         )
         #########################################################
         # End Decoder
@@ -1281,7 +1287,8 @@ class TransformerEncoder(nn.Module):
             NOTE: h_i & w_i -> height and width of a feature_map from the list of feature_maps
             src: the input tensor to compute the attention of (b, sum(h_i * w_i), hidden_dim)
             pos: the positional embeddings to add to the input tensor sequence
-                 (b, sum(h_i * w_i), hidden_dim)
+                 (b, sum(h_i * w_i), hidden_dim); it appears that postional are added
+                 at every encoder layer and not just once before the encoder starts
             spatial_shapes: height and width of each feature_map level (num_level, 2)
             level_start_index: start point of level in sum(h_i * w_i) (num_level,);
                                e.g., the 1st level will start at index 0, the 2nd level will
@@ -1340,7 +1347,7 @@ class TransformerEncoder(nn.Module):
                 if self.deformable_encoder:
                     output = layer(
                         src=output,  # see `src` in the docstring for `output` description
-                        pos=pos,
+                        pos=pos,  # pos embeddings are added at every layer
                         reference_points=reference_points,
                         spatial_shapes=spatial_shapes,
                         level_start_index=level_start_index,
@@ -1509,13 +1516,42 @@ class TransformerDecoder(nn.Module):
         valid_ratios: Optional[Tensor] = None,
     ):
         ########## START HERE ###########
-        """
-        Input:
-            - tgt: nq, bs, d_model
-            - memory: hw, bs, d_model
-            - pos: hw, bs, d_model
-            - refpoints_unsigmoid: nq, bs, 2/4
-            - valid_ratios/spatial_shapes: bs, nlevel, 2
+        """TODO
+
+
+        Args:
+            NOTE: several of the parameters have their shape transposed upon input
+            tgt: combine noised class labels (randomly selected labels) from setup_contrastive_denoising
+                 and the extracted tgt_embed weight matrix
+                 (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
+            memory: raw encoded features directly from the output of the TransformerEncoder
+                    (sum(h_i * w_i), b, hidden_dim); no post processing was done like `output_memory`
+            tgt_mask: an attention mask where False = attend and True = mask/block attention;
+                      see the `attn_mask` return value in
+                      models.components.dino.setup_contrastive_denoising() for a longer description;
+                      also see detectors/models/README.md for a visual of this attn_mask
+            memory_mask: unused
+            tgt_key_padding_mask: unused
+            memory_key_padding_mask: the flattened padding mask which expresses which pixels were padded
+                                     in the input where True=padded and False=real_pixel
+                                     (b, sum(h_w, w_i)); sum(h_w, w_i) = the flattened feature_map dim
+            pos: the flattened positional embeddings (sum(h_i * w_i), b, hidden_dim);
+                 NOTE: these positionals were added at the start of each encoder layer
+            refpoints_unsigmoid: combined noised boxes with positive and negative queries
+                                 from setup_contrastive_denoising() with the detached reference box
+                                 anchors which were created from the encoded features and embedded
+                                 with an MLP (+ output_proposals);
+                                 shape (max_objects*num_cdn_group*2 + topk, b, 4) ~ (b, 1100, 4)
+            level_start_index: start index of the level in sum(h_i * w_i) shape (num_levels,);
+                               e.g., the 1st level will start at index 0, the 2nd level will
+                               start on index feature_map[0]_h * feature_map[0]_w, etc..
+                               because the 2nd dim of src is flattened across all feature_maps
+            spatial_shapes: height and width of each feature_map level (num_level, 2); no batch
+                            dimension bc these values should be the same across the batch
+            valid_ratios: a tensor of width and height ratios for each feature_map across the batch
+                          which expresses what percentage of the width & height contains 'real' (valid)
+                          pixels (i.e., not padded); shape (b, num_levels, 2) where 2 = width_ratios and height_ratios
+                          and 4 is the number of levels (num_feature_maps); num_levels is typically 4
         """
         output = tgt
 
