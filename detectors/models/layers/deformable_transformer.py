@@ -1515,9 +1515,7 @@ class TransformerDecoder(nn.Module):
         spatial_shapes: Optional[Tensor] = None,  # bs, num_levels, 2
         valid_ratios: Optional[Tensor] = None,
     ):
-        ########## START HERE ###########
         """TODO
-
 
         Args:
             NOTE: several of the parameters have their shape transposed upon input
@@ -1542,6 +1540,7 @@ class TransformerDecoder(nn.Module):
                                  anchors which were created from the encoded features and embedded
                                  with an MLP (+ output_proposals);
                                  shape (max_objects*num_cdn_group*2 + topk, b, 4) ~ (b, 1100, 4)
+                                 where 4 = (cx, cy, w, h)
             level_start_index: start index of the level in sum(h_i * w_i) shape (num_levels,);
                                e.g., the 1st level will start at index 0, the 2nd level will
                                start on index feature_map[0]_h * feature_map[0]_w, etc..
@@ -1556,10 +1555,16 @@ class TransformerDecoder(nn.Module):
         output = tgt
 
         intermediate = []
+        
+        # bound reference points between [0,1]
         reference_points = refpoints_unsigmoid.sigmoid()
+
         ref_points = [reference_points]
 
+        # Loop through each DeformableTransformerDecoderLayer; default 6 decoder layers
         for layer_id, layer in enumerate(self.layers):
+
+            ####################### START HERE ############
             # preprocess ref points
             if (
                 self.training
