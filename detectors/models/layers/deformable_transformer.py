@@ -21,10 +21,9 @@ from torch import Tensor, nn
 
 from detectors.models.components.dino import gen_encoder_output_proposals
 from detectors.models.layers.common import MLP, activation_map
+from detectors.models.layers.positional import gen_sineembed_for_position
 from detectors.models.ops.modules import MSDeformAttn
 from detectors.utils.misc import RandomBoxPerturber, inverse_sigmoid
-
-from .utils import MLP, _get_activation_fn, gen_sineembed_for_position
 
 
 class DeformableTransformer(nn.Module):
@@ -1098,8 +1097,43 @@ class DeformableTransformerDecoderLayer(nn.Module):
         """Forward pass through the deformable transformer decoder layer
 
         Args:
-            TODO
+            tgt: for the first decoder layer:
+                    the combined noised class labels (randomly selected labels) from
+                    setup_contrastive_denoising() and the extracted tgt_embed weight matrix
+                    (num_queries, b, hidden_dim) where num_queries = max_objects*num_cdn_group*2 + topk
+                 for the remaining decoder layers:
+                    the output from the previous decoder layer
+                    TODO: put shape
+            tgt_query_pos: the projected query (reference_point) positional embeddings
+                           (num_queries, b, hidden_dim)
+            tgt_query_sine_embed: the raw query (reference_point) positional embeddings
+                           (num_queries, b, hidden_dim*2); these ones are not projected with
+                           the MLP like tgt_query_pos are
+            tgt_key_padding_mask: None; unused in TransformerDecoder()
+            tgt_reference_points: the reference points scaled by valid_ratios
+                                  (num_queries, b, num_levels, 4) where 4 = (x, y, w, h)
+            memory: raw encoded features directly from the output of the TransformerEncoder
+                    (sum(h_i * w_i), b, hidden_dim); no post processing was done like `output_memory`
+            memory_key_padding_mask: the flattened padding mask which expresses which pixels were padded
+                                     in the input where True=padded and False=real_pixel
+                                     (b, sum(h_w, w_i)); sum(h_w, w_i) = the flattened feature_map dim
+            memory_level_start_index: start index of the level in sum(h_i * w_i) shape (num_levels,);
+                                      e.g., the 1st level will start at index 0, the 2nd level will
+                                      start on index feature_map[0]_h * feature_map[0]_w, etc..
+                                      because the 2nd dim of src is flattened across all feature_maps
+            memory_spatial_shapes: height and width of each feature_map level (num_level, 2); no batch
+                                   dimension bc these values should be the same across the batch
+            memory_pos: the flattened positional embeddings created in the Joiner()
+                        (sum(h_i * w_i), b, hidden_dim);
+                        NOTE: these positionals were added at the start of each encoder layer
+            self_attn_mask: an attention mask where False = attend and True = mask/block attention
+                            with shape (num_queries, num_queries);
+                            see the `attn_mask` return value in setup_contrastive_denoising() for a
+                            longer description;
+                            also see detectors/models/README.md for a visual of this attn_mask
+            cross_attn_mask: None; unused in TransformerDecoder()
         """
+        
         for funcname in self.module_seq:
             if funcname == "ffn":
                 tgt = self.forward_ffn(tgt)
@@ -1450,7 +1484,7 @@ class TransformerDecoder(nn.Module):
         self.num_feature_levels = num_feature_levels
         self.use_detached_boxes_dec_out = use_detached_boxes_dec_out
 
-        # a 2 layer MLP to embed TODO: write what this is used for
+        # a 2 layer MLP used to embed the reference point positional embeddings
         self.ref_point_head = MLP(
             input_dim=query_dim // 2 * d_model,  # default 512
             hidden_dim=d_model,
@@ -1520,7 +1554,7 @@ class TransformerDecoder(nn.Module):
 
         Args:
             NOTE: several of the parameters have their shape transposed upon input
-            tgt: combine noised class labels (randomly selected labels) from setup_contrastive_denoising
+            tgt: combined noised class labels (randomly selected labels) from setup_contrastive_denoising
                  and the extracted tgt_embed weight matrix
                  (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
             memory: raw encoded features directly from the output of the TransformerEncoder
@@ -1583,7 +1617,7 @@ class TransformerDecoder(nn.Module):
 
                     # Scale the ref boxes by the valid_ratios (proportion of image that is not padded)
                     # create new singles dim and concat the valid ratios along the last dim
-                    # (num_queries, b, 1, 4) * (1, b, num_levels, 4) = (num_queries, b, 4, 4)
+                    # (num_queries, b, 1, 4) * (1, b, num_levels, 4) = (num_queries, b, num_levels, 4)
                     reference_points_input = (
                         reference_points[:, :, None]
                         * torch.cat([valid_ratios, valid_ratios], -1)[None, :]
@@ -1593,7 +1627,11 @@ class TransformerDecoder(nn.Module):
                     reference_points_input = (
                         reference_points[:, :, None] * valid_ratios[None, :]
                     )
-                ########### START HEREE ############
+
+                # generate sinusoidal positional embeddings for the reference points (num_queries, b, 512);
+                # these are slightly different than the pos embeddings generated for the f_maps
+                # in the sense that the temperature parameter is 10000 (like in DETR) as opposed to
+                # 40 and instead of embedding just (x,ny) it embeds all 4 dims (x, y, w, h)
                 query_sine_embed = gen_sineembed_for_position(
                     reference_points_input[:, :, 0, :]
                 )  # nq, bs, 256*2
@@ -1604,15 +1642,22 @@ class TransformerDecoder(nn.Module):
                 reference_points_input = None
 
             # conditional query
+            # project the reference_point positional embeddings (num_queries, b, hidden_dim)
             raw_query_pos = self.ref_point_head(query_sine_embed)  # nq, bs, 256
+
+            assert raw_query_pos.shape[-1] == query_sine_embed.shape[-1] // 2
+
+            # None by default so query_pos = raw_query_pos
             pos_scale = self.query_scale(output) if self.query_scale is not None else 1
             query_pos = pos_scale * raw_query_pos
+
+            # skipped by default
             if not self.deformable_decoder:
                 query_sine_embed = query_sine_embed[
                     ..., : self.d_model
                 ] * self.query_pos_sine_scale(output)
 
-            # modulated HW attentions
+            # skipped by default; modulated HW attentions
             if not self.deformable_decoder and self.modulate_hw_attn:
                 refHW_cond = self.ref_anchor_head(output).sigmoid()  # nq, bs, 2
                 query_sine_embed[..., self.d_model // 2 :] *= (
@@ -1622,13 +1667,16 @@ class TransformerDecoder(nn.Module):
                     refHW_cond[..., 1] / reference_points[..., 3]
                 ).unsqueeze(-1)
 
-            # random drop some layers if needed
             dropflag = False
+
+            # skipped by default (no layer dropping); random drop some layers if needed
             if self.dec_layer_dropout_prob is not None:
                 prob = random.random()
                 if prob < self.dec_layer_dropout_prob[layer_id]:
                     dropflag = True
+
             if not dropflag:
+                # call the deformable transformer decoder layer
                 output = layer(
                     tgt=output,
                     tgt_query_pos=query_pos,
@@ -1647,7 +1695,7 @@ class TransformerDecoder(nn.Module):
             # iter update
             if self.bbox_embed is not None:
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
-                delta_unsig = self.bbox_embed[layer_id](output)
+                delta_unsig = self.box_embed[layer_id](output)
                 outputs_unsig = delta_unsig + reference_before_sigmoid
                 new_reference_points = outputs_unsig.sigmoid()
 

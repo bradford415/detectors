@@ -114,7 +114,7 @@ class PositionEmbeddingSineHW(nn.Module):
         )  # denominator
 
         # (b, h, w, 1) / (num_pos_feats,) = (b, h, w, num_pos_feats);  this essentially
-        # divides each scalar locations in x_embed num_pos_feats times to embed that location;
+        # divides each spatial locations in x_embed num_pos_feats times to embed that location;
         # this computes the full argument to sin/cos in the PE equation
         pos_x = x_embed[:, :, :, None] / dim_tx
 
@@ -168,7 +168,7 @@ def gen_sineembed_for_position(pos_tensor):
         pos_tensor: TODO (num_queries, b, 4) where 4 = (cx, cy, w, h)
 
     Returns:
-        the sinusoidal embeddings for the reference points (pos_tensor); shape (1100, 2, 512) 
+        the sinusoidal embeddings for the reference points (pos_tensor); shape (num_queries, b, 512)
         where 512 = 128*4 so each segment of 128 is x,y,w,h respectively
     """
     # Full unit circle value
@@ -188,12 +188,12 @@ def gen_sineembed_for_position(pos_tensor):
     x_embed = pos_tensor[:, :, 0] * scale
     y_embed = pos_tensor[:, :, 1] * scale
 
-    # this essentially divides each scalar locations in x_embed num_pos_feats times to 
-    # embed that location; (num_queries, b, 1) / (num_pos_feats,) = (num_queries,b, num_pos_feats);
+    # this broadcasts to divide each ref_point in x_embed for each num_pos_feats to
+    # embed that location; (num_queries, b, 1) / (num_pos_feats,) = (num_queries, b, num_pos_feats);
+    # e.g., x_embed[:, :, 0] / dim_t[0], x_embed[:, :, 1] / dim_t[1] ..., x_embed[:, :, 127] / dim_t[127]
     # this computes the full argument to sin/cos in the PE equation
     pos_x = x_embed[:, :, None] / dim_t
     pos_y = y_embed[:, :, None] / dim_t
-
 
     # Form the final positonal embeddings by alternating sin to the even positions and cos to the odd positions
     # (num_queries, b, num_pos_feats) -> (num_queries, b, num_pos_feats/2, 2) -> (num_queries, b, num_pos_feats)
@@ -206,14 +206,14 @@ def gen_sineembed_for_position(pos_tensor):
         (pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), dim=3
     ).flatten(2)
 
-    if pos_tensor.size(-1) == 2: # skipped
+    if pos_tensor.size(-1) == 2:  # skipped
         pos = torch.cat((pos_y, pos_x), dim=2)
     elif pos_tensor.size(-1) == 4:
         # Extract the width and scale [0, 2pi]
         w_embed = pos_tensor[:, :, 2] * scale
 
-        # divide by the frequencies (broadcasted) 
-        # (num_queries, b, 1) / (num_pos_feats) =  (num_queries, b, num_pos_feats)
+        # divide by the frequencies (broadcasted)
+        # (num_queries, b, 1) / (num_pos_feats) = (num_queries, b, num_pos_feats)
         pos_w = w_embed[:, :, None] / dim_t
 
         # form the final positonal embeddings by alternating sin & cos (even & odd) just
@@ -230,7 +230,8 @@ def gen_sineembed_for_position(pos_tensor):
         ).flatten(2)
 
         # combine all the positional embeddings into a single tensor
-        # (1100, 2, 512) where 512 = 128*4 so each segment of 128 is x,y,w,h respectively
+        # (num_queries, b, hidden_dim * 2) where hidden_dim * 2 = 128*4 so each segment of
+        # 128 is x,y,w,h respectively
         pos = torch.cat((pos_y, pos_x, pos_w, pos_h), dim=2)
     else:
         raise ValueError("Unknown pos_tensor shape(-1):{}".format(pos_tensor.size(-1)))
