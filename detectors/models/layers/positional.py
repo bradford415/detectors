@@ -10,7 +10,9 @@ class PositionEmbeddingSineHW(nn.Module):
     """Create 2D positional embeddings for the images patches/tokens passed into the encoder; the images patches
     correspond to the feature map of the backbone network
 
-    This implements the formulas PE(pos, 2i) = sin(pos / temperature_h^(2i/dim)) and PE(pos, 2i+1) = cos(pos / temperature_w^(2i/dim))
+    This implements the formulas:
+        PE(pos, 2i) = sin(pos / temperature_h^(2i/dim))    and
+        PE(pos, 2i+1) = cos(pos / temperature_w^(2i/dim))
 
     A lower temperature means positions change more rapidly while a higher temperature means positions change more slowly;
     intuitively this makes sense because a lower temperature means the fraction inside sin & cos will be higher and thus the sine and cosine
@@ -97,9 +99,13 @@ class PositionEmbeddingSineHW(nn.Module):
             )  # column normalize
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale  # row normalize
 
-        # Calculate the arguments [pos / temperature^(2i/dim)] to sine/cosine of the PE equation where i is the index of the emb_dim
-        # and dim is total dimensions;
-        # cosine argument
+        # Calculate the arguments [pos / temperature^(2i/dim)] to sin/cos of the PE equation where
+        # i is the index of the emb_dim and dim is total dimensions;
+        # NOTE: we perform integer division (dim_t // 2) in this code to group the dimensions into pairs
+        #       i.e., from [0, 1, 2, ..., 127] to [0, 0, 1, 1, ..., 63, 63], this allows us to
+        #       use the same frequency for sin & cos in the final positional embedding;
+        #       i.e., dim_tx[0] & dim_tx[1] share a frequency, dim_tx[2] & dim_tx[3] share a different one;
+        #       I believe this is slightly different than the original transformer paper
         dim_tx = torch.arange(
             self.num_pos_feats, dtype=torch.float32, device=image_patches.device
         )
@@ -108,15 +114,18 @@ class PositionEmbeddingSineHW(nn.Module):
         )  # denominator
 
         # (b, h, w, 1) / (num_pos_feats,) = (b, h, w, num_pos_feats);  this essentially
-        # divides each scalar locations in x_embed num_pos_feats times to embed that location
+        # divides each scalar locations in x_embed num_pos_feats times to embed that location;
+        # this computes the full argument to sin/cos in the PE equation
         pos_x = x_embed[:, :, :, None] / dim_tx
 
-        # sine argument
+        # Same as above but for the y positions
         dim_ty = torch.arange(
             self.num_pos_feats, dtype=torch.float32, device=image_patches.device
         )
         dim_ty = self.temperatureH ** (2 * (dim_ty // 2) / self.num_pos_feats)
         pos_y = y_embed[:, :, :, None] / dim_ty
+
+        assert len(dim_tx) == self.num_pos_feats and len(dim_ty) == self.num_pos_feats
 
         # Form the final positonal embeddings by alternating sin to the even positions and cos to the odd positions
         # (b, h, w, num_pos_feats) -> (b, h, w, num_pos_feats/2, 2) -> (b, h, w, num_pos_feats)
@@ -146,3 +155,83 @@ def build_positional_encodings():
         num_pos_feats:
 
     """
+    raise NotImplementedError
+
+
+def gen_sineembed_for_position(pos_tensor):
+    """Generate fixed sinusoidal embeddings very similar to PositionEmbeddingSineHW()
+    except the temperature is fixed at 10000 like in the original DETR;
+    since the temperature is the same we can use a single dim_t for the frequencies,
+    we don't need dim_tx and dim_ty as PositionEmbeddingSineHW()
+
+    Args:
+        pos_tensor: TODO (num_queries, b, 4) where 4 = (cx, cy, w, h)
+
+    Returns:
+        the sinusoidal embeddings for the reference points (pos_tensor); shape (1100, 2, 512) 
+        where 512 = 128*4 so each segment of 128 is x,y,w,h respectively
+    """
+    # Full unit circle value
+    scale = 2 * math.pi
+
+    # Calculate the arguments [pos / temperature^(2i/dim)] to sin/cos of the PE equation where
+    # i is the index of the emb_dim and dim is total dimensions;
+    # NOTE: we perform integer division (dim_t // 2) in this code to group the dimensions into pairs
+    #       i.e., from [0, 1, 2, ..., 127] to [0, 0, 1, 1, ..., 63, 63], this allows us to
+    #       use the same frequency for sin & cos in the final positional embedding;
+    #       i.e., dim_tx[0] & dim_tx[1] share a frequency, dim_tx[2] & dim_tx[3] share a different one;
+    #       I believe this is slightly different than the original transformer paper
+    dim_t = torch.arange(128, dtype=torch.float32, device=pos_tensor.device)
+    dim_t = 10000 ** (2 * (dim_t // 2) / 128)
+
+    # Scale the pos_tensor (reference_points) by 2pi; 0 = x, 1 = y
+    x_embed = pos_tensor[:, :, 0] * scale
+    y_embed = pos_tensor[:, :, 1] * scale
+
+    # this essentially divides each scalar locations in x_embed num_pos_feats times to 
+    # embed that location; (num_queries, b, 1) / (num_pos_feats,) = (num_queries,b, num_pos_feats);
+    # this computes the full argument to sin/cos in the PE equation
+    pos_x = x_embed[:, :, None] / dim_t
+    pos_y = y_embed[:, :, None] / dim_t
+
+
+    # Form the final positonal embeddings by alternating sin to the even positions and cos to the odd positions
+    # (num_queries, b, num_pos_feats) -> (num_queries, b, num_pos_feats/2, 2) -> (num_queries, b, num_pos_feats)
+    # NOTE: the dims (..., num_pos_feats/2, 2) stacks the sin values in the first column and the cos values in the second column
+    #       therefore, when you flatten the last two dimensions, the sin and cos values alternate
+    pos_x = torch.stack(
+        (pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), dim=3
+    ).flatten(2)
+    pos_y = torch.stack(
+        (pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), dim=3
+    ).flatten(2)
+
+    if pos_tensor.size(-1) == 2: # skipped
+        pos = torch.cat((pos_y, pos_x), dim=2)
+    elif pos_tensor.size(-1) == 4:
+        # Extract the width and scale [0, 2pi]
+        w_embed = pos_tensor[:, :, 2] * scale
+
+        # divide by the frequencies (broadcasted) 
+        # (num_queries, b, 1) / (num_pos_feats) =  (num_queries, b, num_pos_feats)
+        pos_w = w_embed[:, :, None] / dim_t
+
+        # form the final positonal embeddings by alternating sin & cos (even & odd) just
+        # as we did for x/y
+        pos_w = torch.stack(
+            (pos_w[:, :, 0::2].sin(), pos_w[:, :, 1::2].cos()), dim=3
+        ).flatten(2)
+
+        # repeat the above but for the h
+        h_embed = pos_tensor[:, :, 3] * scale
+        pos_h = h_embed[:, :, None] / dim_t
+        pos_h = torch.stack(
+            (pos_h[:, :, 0::2].sin(), pos_h[:, :, 1::2].cos()), dim=3
+        ).flatten(2)
+
+        # combine all the positional embeddings into a single tensor
+        # (1100, 2, 512) where 512 = 128*4 so each segment of 128 is x,y,w,h respectively
+        pos = torch.cat((pos_y, pos_x, pos_w, pos_h), dim=2)
+    else:
+        raise ValueError("Unknown pos_tensor shape(-1):{}".format(pos_tensor.size(-1)))
+    return pos

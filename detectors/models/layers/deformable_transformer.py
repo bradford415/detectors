@@ -378,8 +378,9 @@ class DeformableTransformer(nn.Module):
             )
 
     def get_valid_ratio(self, mask: torch.Tensor):
-        """Calculates the proportion of the image that is not padded (i.e., the valid part)
-        in both the height and width; this is where the padding mask is False (no padding)
+        """Calculates the propportion of the image that is not padded (i.e., the valid part)
+        in both the height and width; this is where the padding mask is False (no padding);
+        the max ratio value will be 1.0 for images with the H/W not padded at all
 
         Args:
             mask: the binary mask for a feature map which indicates where real pixels are (False)
@@ -596,7 +597,7 @@ class DeformableTransformer(nn.Module):
 
             # gather reference boxes along the features `dim` from the topk_proposal indices selected
             # by the class_embedding above; these reference boxes are initial anchor points for the decoder;
-            # to begin to refine into actual predicted boxes;the values of `index` are used to select the
+            # to begin to refine into actual predicted boxes; the values of `index` are used to select the
             # `row` (dim 1) and the column index (dim 2) of `index` selects the values in `src` along the
             # columns; see this post for how torch.gather() works:
             #   https://stackoverflow.com/questions/50999977/what-does-gather-do-in-pytorch-in-layman-terms
@@ -1550,12 +1551,14 @@ class TransformerDecoder(nn.Module):
             valid_ratios: a tensor of width and height ratios for each feature_map across the batch
                           which expresses what percentage of the width & height contains 'real' (valid)
                           pixels (i.e., not padded); shape (b, num_levels, 2) where 2 = width_ratios and height_ratios
-                          and 4 is the number of levels (num_feature_maps); num_levels is typically 4
+                          and 4 is the number of levels (num_feature_maps); num_levels is typically 4;
+                          a ratio of 1.0 means the H or W dimension has no padding
+                          (1.0 is also the highest it can be)
         """
         output = tgt
 
         intermediate = []
-        
+
         # bound reference points between [0,1]
         reference_points = refpoints_unsigmoid.sigmoid()
 
@@ -1564,8 +1567,7 @@ class TransformerDecoder(nn.Module):
         # Loop through each DeformableTransformerDecoderLayer; default 6 decoder layers
         for layer_id, layer in enumerate(self.layers):
 
-            ####################### START HERE ############
-            # preprocess ref points
+            # skipped by default (decoder_query_perturber=None)
             if (
                 self.training
                 and self.decoder_query_perturber is not None
@@ -1574,7 +1576,14 @@ class TransformerDecoder(nn.Module):
                 reference_points = self.decoder_query_perturber(reference_points)
 
             if self.deformable_decoder:
-                if reference_points.shape[-1] == 4:
+
+                if (
+                    reference_points.shape[-1] == 4
+                ):  # if reference points are in cxcywh format
+
+                    # Scale the ref boxes by the valid_ratios (proportion of image that is not padded)
+                    # create new singles dim and concat the valid ratios along the last dim
+                    # (num_queries, b, 1, 4) * (1, b, num_levels, 4) = (num_queries, b, 4, 4)
                     reference_points_input = (
                         reference_points[:, :, None]
                         * torch.cat([valid_ratios, valid_ratios], -1)[None, :]
@@ -1584,6 +1593,7 @@ class TransformerDecoder(nn.Module):
                     reference_points_input = (
                         reference_points[:, :, None] * valid_ratios[None, :]
                     )
+                ########### START HEREE ############
                 query_sine_embed = gen_sineembed_for_position(
                     reference_points_input[:, :, 0, :]
                 )  # nq, bs, 256*2
