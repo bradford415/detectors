@@ -676,8 +676,10 @@ class DeformableTransformer(nn.Module):
                 # embedded with an MLP (+ output_proposals) (b, max_objects*num_cdn_group*2 + topk, 4) ~ (b, 1100, 4)
                 refpoint_embed = torch.cat([refpoint_embed, refpoint_embed_], dim=1)
 
-                # Combine noised class labels (randomly selected labels) form setup_contrastive_denoising()
+                # Combine noised class labels (randomly selected labels) from setup_contrastive_denoising()
                 # and the extracted tgt_embed weight matrix (b, max_objects*num_cdn_group*2 + topk, hidden_dim)
+                # NOTE: I believe tgt is the learnable content queries & the GT+noise fed into the decoder
+                #       in the dino paper Figure 2
                 tgt = torch.cat([tgt, tgt_], dim=1)
             else:
                 refpoint_embed, tgt = refpoint_embed_, tgt_
@@ -910,8 +912,6 @@ class DeformableTransformerDecoderLayer(nn.Module):
     ):
         """Initalize the DeformableTransformerDecoderLayer
 
-
-
         Args:
             d_model: total dimension of the model (hidden_dim); default 256
             d_ffn: output dimesnion of the 1st linear layer
@@ -1004,14 +1004,41 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
         cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
     ):
-        ############### START HERE ######################
+        """Perform regular multiheaded self-attention on the tgt (this is not deformable attention)
+
+        this also adds the residual and layer normalization to the self-attn output
+        
+        NOTE: positional embeddings are only added to the query and key tensors,
+              not the value tensor (this is how DETR does it)
+
+        Args:
+            see forward() docstring for the args
+
+        Returns:
+            The self-attended tgt tensor of the same shape as the input `tgt` 
+            (num_queries, batch_size, hidden_dim)
+        """
         # self attention
         if self.self_attn is not None:
             if self.decoder_sa_type == "sa":
+                # Add positional embeddings to the tgt; tgt_query_pos the projected query
+                # (reference_point) positional embeddings created in gen_sineembed_for_position()
                 q = k = self.with_pos_embed(tgt, tgt_query_pos)
-                tgt2 = self.self_attn(q, k, tgt, attn_mask=self_attn_mask)[0]
+
+                # perform self-attention on the tgt with the positional embeddings
+                # NOTE that positional embeddings were only added to and q, k;
+                #      v contains the actual contnt so if we add positionals it could
+                #      interfere with the content; I don't think all self-attention
+                #      implementations do this but DETR does
+                tgt2 = self.self_attn(
+                    query=q, key=k, value=tgt, attn_mask=self_attn_mask
+                )[0]
+                
+                # Add the residual to the self-attn output and layer normalize; 
+                # dropout p=0.0 by default 
                 tgt = tgt + self.dropout2(tgt2)
                 tgt = self.norm2(tgt)
+            # skipped by default
             elif self.decoder_sa_type == "ca_label":
                 bs = tgt.shape[1]
                 k = v = self.label_embedding.weight[:, None, :].repeat(1, bs, 1)
@@ -1054,6 +1081,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
         cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
     ):
+        ##################### START HERE #######################
         # cross attention
         if self.key_aware_type is not None:
             if self.key_aware_type == "mean":
@@ -1097,11 +1125,17 @@ class DeformableTransformerDecoderLayer(nn.Module):
     ):
         """Forward pass through the deformable transformer decoder layer
 
+        Performs self-attention, cross-attention, and a two-layer ffn for every decoder layer
+
         Args:
             tgt: for the first decoder layer:
                     the combined noised class labels (randomly selected labels) from
                     setup_contrastive_denoising() and the extracted tgt_embed weight matrix
                     (num_queries, b, hidden_dim) where num_queries = max_objects*num_cdn_group*2 + topk
+                    NOTE: num_queries = num_cdn_group*max_objects*2 + topk ~ 200 + 900
+                          and I think these topk queries are the blue learnable content queries and
+                          the cdn_group are the yellow/brown GT+noise queries fed into the decoder
+                          in the DINO paper Figure 2
                  for the remaining decoder layers:
                     the output from the previous decoder layer
                     TODO: put shape
@@ -1137,7 +1171,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         assert self.module_seq == ["sa", "ca", "ffn"]
 
         # Call each decoder module in the order specified by self.module_seq
-        # reminder: the module or is ["sa", "ca", "ffn"] which stands for 
+        # reminder: the module or is ["sa", "ca", "ffn"] which stands for
         #           ["self-attention", "cross-attention", "feedforward network"];
         #           NOTE: this follows the original DETR decoder very closely (see the DETR paper figure 10)
         for funcname in self.module_seq:
@@ -1562,7 +1596,11 @@ class TransformerDecoder(nn.Module):
             NOTE: several of the parameters have their shape transposed upon input
             tgt: combined noised class labels (randomly selected labels) from setup_contrastive_denoising
                  and the extracted tgt_embed weight matrix
-                 (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
+                 (num_queries, b, hidden_dim)
+                NOTE: num_queries = num_cdn_group*max_objects*2 + topk ~ 200 + 900
+                      and I think these topk queries are the blue learnable content queries and
+                      the cdn_group are the yellow/brown GT+noise queries fed into the decoder
+                      in the DINO paper Figure 2
             memory: raw encoded features directly from the output of the TransformerEncoder
                     (sum(h_i * w_i), b, hidden_dim); no post processing was done like `output_memory`
             tgt_mask: an attention mask where False = attend and True = mask/block attention;
