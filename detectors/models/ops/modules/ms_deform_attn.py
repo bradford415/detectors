@@ -28,13 +28,22 @@ def _is_power_of_2(n):
 
 
 class MSDeformAttn(nn.Module):
-    def __init__(self, d_model=256, n_levels=4, n_heads=8, n_points=4):
-        """
-        Multi-Scale Deformable Attention Module
-        :param d_model      hidden dimension
-        :param n_levels     number of feature levels
-        :param n_heads      number of attention heads
-        :param n_points     number of sampling points per attention head per feature level
+    def __init__(
+        self, d_model: int = 256, n_levels: int = 4, n_heads: int = 8, n_points: int = 4
+    ):
+        """Multi-Scale Deformable Attention Module
+
+        NOTE: deformable attention does not have a `key` tensor; instead of using 
+              similarity between Q and K, it uses the query to predict where to sample 
+              (via learned offsets), and how much to weigh each sample (attention weights).
+
+        Args:
+            d_model: total dimension of the attn module; d_model will be split across heads
+                     d_model // n_heads
+            n_levels: number of multiscale feature maps; num_levels default 4
+            n_heads: number of attention heads
+            n_points: number of sampling points per attnention head per feature level
+                      TODO: better understand what this does
         """
         super().__init__()
         if d_model % n_heads != 0:
@@ -96,7 +105,39 @@ class MSDeformAttn(nn.Module):
         input_level_start_index,
         input_padding_mask=None,
     ):
-        """Perform multiscale deformable attention
+        """Perform multiscale deformable attention (self or cross attn)
+
+        NOTE: input_flatten is the `value` tensor and I don't think there's a concept
+              of a `key` tensor in deformable attention; instead of using similarity 
+              between Q and K, it uses the query to predict where to sample (via learned offsets), 
+              and how much to weigh each sample (attention weights).
+
+        Args:
+            query:             
+                for MSDeformAttn in the encoder:
+                    uses self-attn and query shape (b, sum(h_i * w_i), hidden_dim)
+                for MSDeformAttn in the decoder:
+                    uses cross-attn and query shape (b, num_queries, hidden_dim)
+            reference_points: the reference points scaled by valid_ratios
+                              (num_queries, b, num_levels, 4 or 2) where 4 = (x, y, w, h) and 2 = (x, y);
+                              during self-attn last dim = 2 and cross-attn last dim=4
+            input_flatten: raw encoded features directly from the output of the TransformerEncoder;
+                           these are the `values` in cross attention
+                           (b, sum(h_i * w_i), hidden_dim)
+            input_spatial_shapes: height and width of each feature_map level (num_level, 2); no batch
+                                   dimension bc these values should be the same across the batch
+            input_level_start_index:
+            input_padding_mask: flattened paddening mask expressing the locations from the original
+                                image which were padded, True=Padded (b, sum(h_i * w_i))
+        
+        Returns:
+            the self or cross attended output of of `query` which is the same shape
+            as query;
+
+            for MSDeformAttn in the encoder:
+                uses self-attn and output shape is (b, sum(h_i * w_i), hidden_dim)
+            for MSDeformAttn in the decoder:
+                uses cross-attn and output shape is (b, num_queries, hidden_dim)
 
         Args:
             query: TODO               (N, Length_{query}, C)
@@ -113,21 +154,41 @@ class MSDeformAttn(nn.Module):
         N, Len_in, _ = input_flatten.shape
         assert (input_spatial_shapes[:, 0] * input_spatial_shapes[:, 1]).sum() == Len_in
 
+        # project the raw, self-attended, encoder outputs to values (b, sum(h_i * w_i), hidden_dim)
         value = self.value_proj(input_flatten)
+
+        assert value.shape == input_flatten.shape
+
+        # mask the values tensor with 0s where the input images were padded;
+        # sets the entire embedding dim (256) to 0 where input_padding_mask=True
         if input_padding_mask is not None:
             value = value.masked_fill(input_padding_mask[..., None], float(0))
+
+        # reshape for multheaded attentnion (b, sum(h_i * w_i), num_heads, hidden_dim//num_heads)
         value = value.view(N, Len_in, self.n_heads, self.d_model // self.n_heads)
+
+        # generate offsets to apply around reference points and reshape to 
+        # (b, sum(h_i * w_i), num_heads, n_levels, n_points, 2)
         sampling_offsets = self.sampling_offsets(query).view(
             N, Len_q, self.n_heads, self.n_levels, self.n_points, 2
         )
+
+        # compute deformable attention weights for each sampled location,
+        # (b, sum(h_i * w_i), n_heads*n_levels*n_points) and reshape to 
+        # (b, sum(h_i * w_i), num_heads, n_levels*n_points)
         attention_weights = self.attention_weights(query).view(
             N, Len_q, self.n_heads, self.n_levels * self.n_points
         )
+
+        # softmax across the last dimension to make points sum to 1
+        # (b, sum(h_i * w_i), num_heads, n_levels, n_points)
         attention_weights = F.softmax(attention_weights, -1).view(
             N, Len_q, self.n_heads, self.n_levels, self.n_points
         )
-        # N, Len_q, n_heads, n_levels, n_points, 2
-        if reference_points.shape[-1] == 2:
+
+        # compute sampling locations based on the reference_points format;
+        # (N, Len_q, n_heads, n_levels, n_points, 2)
+        if reference_points.shape[-1] == 2: # for (x, y)
             offset_normalizer = torch.stack(
                 [input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1
             )
@@ -135,7 +196,7 @@ class MSDeformAttn(nn.Module):
                 reference_points[:, :, None, :, None, :]
                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
             )
-        elif reference_points.shape[-1] == 4:
+        elif reference_points.shape[-1] == 4: # for (x, y, w, h)
             sampling_locations = (
                 reference_points[:, :, None, :, None, :2]
                 + sampling_offsets
@@ -150,7 +211,10 @@ class MSDeformAttn(nn.Module):
                 )
             )
 
-        # for amp; this if statement was added by dino to support amp training
+        # apply deformable attention; sample features from value at sampling locations
+        # for amp; this if statement was added by dino to support amp training;
+        # converts to float32 for numerical stability then back to float16 before the
+        # output projection
         if value.dtype == torch.float16:
             # for mixed precision
             output = MSDeformAttnFunction.apply(
@@ -162,6 +226,8 @@ class MSDeformAttn(nn.Module):
                 self.im2col_step,
             )
             output = output.to(torch.float16)
+
+            # final output projection using a Linear layer (b, num_queries, hidden_dim)
             output = self.output_proj(output)
             return output
 
@@ -173,5 +239,6 @@ class MSDeformAttn(nn.Module):
             attention_weights,
             self.im2col_step,
         )
+
         output = self.output_proj(output)
         return output

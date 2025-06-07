@@ -981,6 +981,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, tgt):
+        ######## START HERE ###########
         tgt2 = self.linear2(self.dropout3(self.activation(self.linear1(tgt))))
         tgt = tgt + self.dropout4(tgt2)
         tgt = self.norm3(tgt)
@@ -1007,7 +1008,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         """Perform regular multiheaded self-attention on the tgt (this is not deformable attention)
 
         this also adds the residual and layer normalization to the self-attn output
-        
+
         NOTE: positional embeddings are only added to the query and key tensors,
               not the value tensor (this is how DETR does it)
 
@@ -1015,7 +1016,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
             see forward() docstring for the args
 
         Returns:
-            The self-attended tgt tensor of the same shape as the input `tgt` 
+            The self-attended tgt tensor of the same shape as the input `tgt`
             (num_queries, batch_size, hidden_dim)
         """
         # self attention
@@ -1033,9 +1034,9 @@ class DeformableTransformerDecoderLayer(nn.Module):
                 tgt2 = self.self_attn(
                     query=q, key=k, value=tgt, attn_mask=self_attn_mask
                 )[0]
-                
-                # Add the residual to the self-attn output and layer normalize; 
-                # dropout p=0.0 by default 
+
+                # Add the residual to the self-attn output and layer normalize;
+                # dropout p=0.0 by default
                 tgt = tgt + self.dropout2(tgt2)
                 tgt = self.norm2(tgt)
             # skipped by default
@@ -1081,8 +1082,26 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self_attn_mask: Optional[Tensor] = None,  # mask used for self-attention
         cross_attn_mask: Optional[Tensor] = None,  # mask used for cross-attention
     ):
-        ##################### START HERE #######################
+        """Perform deformable multiheaded cross-attention on the tgt
+
+
+        NOTE: positional embeddings are only added to the query and key tensors,
+              not the value tensor (this is how DETR does it)
+
+        Args:
+            tgt: the output from the multiheaded self-attn module (forward_sa())
+            tgt_reference_points: the reference points scaled by valid_ratios
+                                  (num_queries, b, num_levels, 4) where 4 = (x, y, w, h)
+            memory: raw encoded features directly from the output of the TransformerEncoder
+                    (sum(h_i * w_i), b, hidden_dim)
+            see forward() docstring for the remaining args
+
+        Returns:
+            the cross-attended tgt with `memory` (raw encoder output)
+            with a residual added and layer normalized (num_queries, b, hidden_dim)
+        """
         # cross attention
+        # skipped by default
         if self.key_aware_type is not None:
             if self.key_aware_type == "mean":
                 tgt = tgt + memory.mean(0, keepdim=True)
@@ -1092,14 +1111,23 @@ class DeformableTransformerDecoderLayer(nn.Module):
                 raise NotImplementedError(
                     "Unknown key_aware_type: {}".format(self.key_aware_type)
                 )
+            
+        # Perform deformable cross-attention on the tgt with the memory features
+        # (b, num_queries, hidden_dim) and then transposed (num_queries, b, hidden_dim)
         tgt2 = self.cross_attn(
-            self.with_pos_embed(tgt, tgt_query_pos).transpose(0, 1),
-            tgt_reference_points.transpose(0, 1).contiguous(),
-            memory.transpose(0, 1),
-            memory_spatial_shapes,
-            memory_level_start_index,
-            memory_key_padding_mask,
+            query=self.with_pos_embed(tgt, tgt_query_pos).transpose(
+                0, 1
+            ),  # (b, num_queries, hidden_dim)
+            reference_points=tgt_reference_points.transpose(
+                0, 1
+            ).contiguous(),  # (b, num_queries, num_levels, 4)
+            input_flatten=memory.transpose(0, 1),  # (b, sum(h_i * w_i), hidden_dim)
+            input_spatial_shapes=memory_spatial_shapes,
+            input_level_start_index=memory_level_start_index,
+            input_padding_mask=memory_key_padding_mask,
         ).transpose(0, 1)
+
+        # add a residual and layer normalize; dropout p=0.0 by default
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
