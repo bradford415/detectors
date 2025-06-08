@@ -33,8 +33,8 @@ class MSDeformAttn(nn.Module):
     ):
         """Multi-Scale Deformable Attention Module
 
-        NOTE: deformable attention does not have a `key` tensor; instead of using 
-              similarity between Q and K, it uses the query to predict where to sample 
+        NOTE: deformable attention does not have a `key` tensor; instead of using
+              similarity between Q and K, it uses the query to predict where to sample
               (via learned offsets), and how much to weigh each sample (attention weights).
 
         Args:
@@ -108,12 +108,12 @@ class MSDeformAttn(nn.Module):
         """Perform multiscale deformable attention (self or cross attn)
 
         NOTE: input_flatten is the `value` tensor and I don't think there's a concept
-              of a `key` tensor in deformable attention; instead of using similarity 
-              between Q and K, it uses the query to predict where to sample (via learned offsets), 
+              of a `key` tensor in deformable attention; instead of using similarity
+              between Q and K, it uses the query to predict where to sample (via learned offsets),
               and how much to weigh each sample (attention weights).
 
         Args:
-            query:             
+            query:
                 for MSDeformAttn in the encoder:
                     uses self-attn and query shape (b, sum(h_i * w_i), hidden_dim)
                 for MSDeformAttn in the decoder:
@@ -129,7 +129,7 @@ class MSDeformAttn(nn.Module):
             input_level_start_index:
             input_padding_mask: flattened paddening mask expressing the locations from the original
                                 image which were padded, True=Padded (b, sum(h_i * w_i))
-        
+
         Returns:
             the self or cross attended output of of `query` which is the same shape
             as query;
@@ -167,14 +167,14 @@ class MSDeformAttn(nn.Module):
         # reshape for multheaded attentnion (b, sum(h_i * w_i), num_heads, hidden_dim//num_heads)
         value = value.view(N, Len_in, self.n_heads, self.d_model // self.n_heads)
 
-        # generate offsets to apply around reference points and reshape to 
+        # generate offsets to apply around reference points and reshape to
         # (b, sum(h_i * w_i), num_heads, n_levels, n_points, 2)
         sampling_offsets = self.sampling_offsets(query).view(
             N, Len_q, self.n_heads, self.n_levels, self.n_points, 2
         )
 
         # compute deformable attention weights for each sampled location,
-        # (b, sum(h_i * w_i), n_heads*n_levels*n_points) and reshape to 
+        # (b, sum(h_i * w_i), n_heads*n_levels*n_points) and reshape to
         # (b, sum(h_i * w_i), num_heads, n_levels*n_points)
         attention_weights = self.attention_weights(query).view(
             N, Len_q, self.n_heads, self.n_levels * self.n_points
@@ -188,7 +188,7 @@ class MSDeformAttn(nn.Module):
 
         # compute sampling locations based on the reference_points format;
         # (N, Len_q, n_heads, n_levels, n_points, 2)
-        if reference_points.shape[-1] == 2: # for (x, y)
+        if reference_points.shape[-1] == 2:  # for (x, y)
             offset_normalizer = torch.stack(
                 [input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1
             )
@@ -196,7 +196,7 @@ class MSDeformAttn(nn.Module):
                 reference_points[:, :, None, :, None, :]
                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
             )
-        elif reference_points.shape[-1] == 4: # for (x, y, w, h)
+        elif reference_points.shape[-1] == 4:  # for (x, y, w, h)
             sampling_locations = (
                 reference_points[:, :, None, :, None, :2]
                 + sampling_offsets

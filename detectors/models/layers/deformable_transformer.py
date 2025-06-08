@@ -981,8 +981,23 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, tgt):
-        ######## START HERE ###########
-        tgt2 = self.linear2(self.dropout3(self.activation(self.linear1(tgt))))
+        """Forward pass through the ffn; the final module in the decoder layer
+
+        Args:
+            tgt: the tensor output from the cross-attention module forward_ca()
+                  (num_queries, b, hidden_dim)
+
+        Returns:
+            returns the ffn output of the same shape as the input `tgt`
+            (num_queries, b, hidden_dim)
+        """
+        # Linear project the tgt through a 2-layer ffn with dropout and activation
+        tgt2 = self.dropout3(
+            self.activation(self.linear1(tgt))
+        )  # (num_queries, b, d_ffn)
+        tgt2 = self.linear2(tgt)  # (num_queries, b, d_model)
+
+        # Add the residual and layer normalize
         tgt = tgt + self.dropout4(tgt2)
         tgt = self.norm3(tgt)
         return tgt
@@ -1111,7 +1126,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
                 raise NotImplementedError(
                     "Unknown key_aware_type: {}".format(self.key_aware_type)
                 )
-            
+
         # Perform deformable cross-attention on the tgt with the memory features
         # (b, num_queries, hidden_dim) and then transposed (num_queries, b, hidden_dim)
         tgt2 = self.cross_attn(
@@ -1195,6 +1210,11 @@ class DeformableTransformerDecoderLayer(nn.Module):
                             longer description;
                             also see detectors/models/README.md for a visual of this attn_mask
             cross_attn_mask: None; unused in TransformerDecoder()
+
+        Returns:
+            the output of the decoder layer after performing self-attention, cross-attention,
+            and a two-layer ffn; the output is of the same shape as the input `tgt`
+            (num_queries, batch_size, hidden_dim)
         """
         assert self.module_seq == ["sa", "ca", "ffn"]
 
@@ -1749,6 +1769,7 @@ class TransformerDecoder(nn.Module):
 
             if not dropflag:
                 # call the deformable transformer decoder layer
+                ################# START HEERERERE################
                 output = layer(
                     tgt=output,
                     tgt_query_pos=query_pos,
