@@ -661,8 +661,10 @@ class DeformableTransformer(nn.Module):
             )
             if self.embed_init_tgt:
                 # Extract the tgt_embed weight matrix and reshape the matrix, repeat for the new batch dim,
-                # and swap batch and obj_queries dim
+                # and swap batch and obj_queries dim;
                 # (900, hidden_dim) -> (900, 1, hidden_dim) -> (900, 2, hidden_dim) -> (2, 900, hidden_dim);
+                # NOTE: this uses the embedding layer like a learnable parameter matrix,
+                #       rather than an calling the embedding module (used to embed token indices)
                 # NOTE: unlike expand, repeat copies the tensor data (new memory) and repeat is differentiable
                 tgt_ = (
                     self.tgt_embed.weight[:, None, :].repeat(1, bs, 1).transpose(0, 1)
@@ -895,7 +897,21 @@ class DeformableTransformerEncoderLayer(nn.Module):
 
 
 class DeformableTransformerDecoderLayer(nn.Module):
-    """The deformable decoder layer for the transformer decoder used in DINO"""
+    """The deformable decoder layer for the transformer decoder used in DINO
+
+    Performs self-attention -> deformable cross-attention -> and a two-layer ffn
+
+    For the first decoder layer, self-attention is performed on the combined tensor of
+    noised class labels and the queries weight matrix tensor; for the remaining decoder layers,
+    self-attention is performed on the output of the previous decoder layer
+
+    deformable cross attention is performed on the self-attended output (queries) and the
+    raw encoded features from the encoder output (values); the same encoder output is used
+    at every decoder layer as the values tensor
+
+    two-layer ffn on the cross attended output
+
+    """
 
     def __init__(
         self,
@@ -1100,15 +1116,18 @@ class DeformableTransformerDecoderLayer(nn.Module):
         """Perform deformable multiheaded cross-attention on the tgt
 
 
-        NOTE: positional embeddings are only added to the query and key tensors,
+        NOTE: deformable attention does not have an explicit `key` tensor
+
+        NOTE: positional embeddings are only added to the query tensor,
               not the value tensor (this is how DETR does it)
 
         Args:
-            tgt: the output from the multiheaded self-attn module (forward_sa())
+            tgt: the output from the multiheaded self-attn module (forward_sa()); these are
+                 the queries
             tgt_reference_points: the reference points scaled by valid_ratios
                                   (num_queries, b, num_levels, 4) where 4 = (x, y, w, h)
             memory: raw encoded features directly from the output of the TransformerEncoder
-                    (sum(h_i * w_i), b, hidden_dim)
+                    (sum(h_i * w_i), b, hidden_dim); these are the values
             see forward() docstring for the remaining args
 
         Returns:
@@ -1768,8 +1787,8 @@ class TransformerDecoder(nn.Module):
                     dropflag = True
 
             if not dropflag:
-                # call the deformable transformer decoder layer
-                ################# START HEERERERE################
+                # call the deformable transformer decoder layer which performs
+                # self-attention, deformable cross-attention, and a two-layer ffn
                 output = layer(
                     tgt=output,
                     tgt_query_pos=query_pos,
@@ -1785,6 +1804,7 @@ class TransformerDecoder(nn.Module):
                     cross_attn_mask=memory_mask,
                 )
 
+            ############### START HERE ################
             # iter update
             if self.bbox_embed is not None:
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
