@@ -186,7 +186,8 @@ class DINO(nn.Module):
 
         # Initalize the weight & bias of the last layer in the bbox MLP to 0s
         # Intuition: setting last layer to 0s means the initial bbox prediction will always be
-        # the same (typically center of the img with fixed size) regardless of input
+        # the same (typically center of the img with fixed size) regardless of input; this will
+        # be updated after the first weight update step
         #   1. this "dummy" box gives the model a consistent starting point to learn from
         #   2. prevents wild, random box preds at the start
         nn.init.constant_(_bbox_embed.layers[-1].weight.data, 0)
@@ -221,7 +222,9 @@ class DINO(nn.Module):
             ValueError(f"Two stage type {two_stage_type} not supported")
 
         # If `standard` two_stage_type  (default is `standard`):
-        #   1. create an additional MLP bbox and Linear layer class module for the transformer.enc_out
+        #   1. create an additional MLP (which will be used to create reference points (cx, cy, w, h)
+        #      based on the encoder_output) and a Linear layer module (for class emebeddings) for the
+        #      transformer.enc_out
         #      TODO understand what this is and how it differs from self.transformer.decoder.bbox_embed
         #   2. if two_stage_embed_share=True (default is False) share the same MLP for the bboxes and
         #      the Linear layer for the class prediction, else create new modules (does not share parameters)
@@ -232,7 +235,7 @@ class DINO(nn.Module):
             if two_stage_bbox_embed_share:
                 assert decoder_pred_class_embed_share and decoder_pred_bbox_embed_share
                 self.transformer.enc_out_bbox_embed = _bbox_embed
-            else:
+            else:  # default case
                 self.transformer.enc_out_bbox_embed = copy.deepcopy(_bbox_embed)
 
             if two_stage_class_embed_share:

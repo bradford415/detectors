@@ -575,7 +575,7 @@ class DeformableTransformer(nn.Module):
             enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
 
             # embed the encoder output_memory into bbox embeddings through an MLP then add
-            # the inital output_proposals element-wise; this includes maksing out the padded
+            # the inital output_proposals element-wise; this includes masking out the padded
             # and invalid regions with "inf"
             # (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h)
             enc_outputs_coord_unselected = (
@@ -633,6 +633,10 @@ class DeformableTransformer(nn.Module):
             #      the initial reference points as "proposals" that the decoder then refines,
             #      rather than forcing the encoder to directly optimize these initial proposals to
             #      be perfect.
+            # NOTE: the MLP used to help create refpoint_embed_undetach only updates its parameters
+            #       where `refpoint_embed_undetach`` is used for computations, not where `refpoint_embed_`
+            #       is used since it was detached for the comp graph and prevents gradients from flowing
+            #       back
             refpoint_embed_ = refpoint_embed_undetach.detach()
 
             # Gather initial box proposals using the topk class embeds from the generated output proposoals
@@ -1609,7 +1613,11 @@ class TransformerDecoder(nn.Module):
 
         self.query_scale = None
 
+        # this will be set in DINO.__init__() and is a module list of 3-layer MLP modules
+        # to embed the bboxes after each decoder layer; the number of MLP modules is the number
+        # of decoder layers; by default these do not share parameters
         self.bbox_embed = None
+
         self.class_embed = None
 
         self.d_model = d_model
@@ -1707,6 +1715,8 @@ class TransformerDecoder(nn.Module):
         # bound reference points between [0,1]
         reference_points = refpoints_unsigmoid.sigmoid()
 
+        # save the initial reference_points in a list; later on after each decoder layer
+        # new reference points will be appended here
         ref_points = [reference_points]
 
         # Loop through each DeformableTransformerDecoderLayer; default 6 decoder layers
@@ -1724,7 +1734,7 @@ class TransformerDecoder(nn.Module):
 
                 if (
                     reference_points.shape[-1] == 4
-                ):  # if reference points are in cxcywh format
+                ):  # if reference points are in cxcywh format (default case)
 
                     # Scale the ref boxes by the valid_ratios (proportion of image that is not padded)
                     # create new singles dim and concat the valid ratios along the last dim
@@ -1789,6 +1799,7 @@ class TransformerDecoder(nn.Module):
             if not dropflag:
                 # call the deformable transformer decoder layer which performs
                 # self-attention, deformable cross-attention, and a two-layer ffn
+                # output shape (num_queries, b, hidden_dim)
                 output = layer(
                     tgt=output,
                     tgt_query_pos=query_pos,
@@ -1804,15 +1815,21 @@ class TransformerDecoder(nn.Module):
                     cross_attn_mask=memory_mask,
                 )
 
-            ############### START HERE ################
             # iter update
             if self.bbox_embed is not None:
+                # convert reference points to logits (num_queries, b, 4)
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
-                delta_unsig = self.box_embed[layer_id](output)
+
+                # embed the decoder_layer output into a bbox
+                # (num_queries, b, hidden_dim) -> (num_queries, b, 4) where 4 = (cx, cy, w, h)
+                delta_unsig = self.bbox_embed[layer_id](output)
+
+                # add the embedded decoder layer boxes w/ the reference point logits
+                # then apply sigmoid to bound [0, 1]
                 outputs_unsig = delta_unsig + reference_before_sigmoid
                 new_reference_points = outputs_unsig.sigmoid()
 
-                # select # ref points
+                # skipped by default; select # ref points
                 if (
                     self.dec_layer_number is not None
                     and layer_id != self.num_layers - 1
@@ -1834,17 +1851,32 @@ class TransformerDecoder(nn.Module):
                             topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
                         )  # unsigmoid
 
-                if self.rm_detach and "dec" in self.rm_detach:  # Look forward once
-                    reference_points = new_reference_points
-                else:  # look forward twice (DINO)
+
+                if self.rm_detach and "dec" in self.rm_detach: # skipped by default
+                    reference_points = new_reference_points 
+                else:  # implemented in DAB-DETR and DINO
+                    # remaining layers will use these new detached `reference_points`
+                    # even though they're not appened below
                     reference_points = new_reference_points.detach()
 
-                if self.use_detached_boxes_dec_out:  # Look forward once
+                # NOTE this is where the look forward twice module is implemented;
+                # Look forward twice (lft) is designed to influence the current layer's (layer i)
+                # parameters by losses of both layer i and layer i+1 (the next decoder layer) so
+                # it can "look forward"
+                if self.use_detached_boxes_dec_out:  # DAB-DETR uses this
                     ref_points.append(reference_points)
-                else:  # Look forward twice (DINO)
+                else: 
+                    # Look forward twice (DINO DETR uses this);
+                    # new_reference_points contains the 
+                    # intial reference points + the predicted decoder_layer bbox_embeds;
+                    # this is what gets passed outside the model and into the loss
                     ref_points.append(new_reference_points)
 
+            # store the raw decoder_layer outputs (before bbox_embed) for every 
+            # decoder layer and apply LayerNorm
             intermediate.append(self.norm(output))
+
+            # skipped by default
             if self.dec_layer_number is not None and layer_id != self.num_layers - 1:
                 if nq_now != select_number:
                     output = torch.gather(
@@ -1853,6 +1885,7 @@ class TransformerDecoder(nn.Module):
                         topk_proposals.unsqueeze(-1).repeat(1, 1, self.d_model),
                     )  # unsigmoid
 
+        
         return [
             [itm_out.transpose(0, 1) for itm_out in intermediate],
             [itm_refpoint.transpose(0, 1) for itm_refpoint in ref_points],

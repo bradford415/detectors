@@ -145,12 +145,8 @@ detector:
 
       embed_init_tgt: True
 
-      # According to this github issue: https://github.com/IDEA-Research/DINO/issues/77#issuecomment-1537355105
-      # the `look forward twice` (lft) mechanism is controlled by this parameter, but in the official
-      # repo this is disabled by default; they report best metrics with the lft mechanism so it's
-      # weird it's disabled by default; I'll have to play around with this parameter once I finish
-      # implementing; Actually, I think this default case does use look forward twice in the else case
-      # the if case is look forward once I think, so False seems correct
+      # this is the look-forward twice mechanism (lft); 
+      # False=lft which is what DINO uses and dab-detr uses True for this parameter
       use_detached_boxes_dec_out: False
 
       # Creates the decoder_query_bbox_pertuber; this is False by default and not used
