@@ -930,7 +930,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         decoder_sa_type="ca",
         module_seq=["sa", "ca", "ffn"],
     ):
-        """Initalize the DeformableTransformerDecoderLayer
+        """Initalize the deformable transformer decoder layer
 
         Args:
             d_model: total dimension of the model (hidden_dim); default 256
@@ -1528,7 +1528,16 @@ class TransformerEncoder(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    """The transformer decoder used in DINO"""
+    """The transformer decoder used in DINO
+    
+    The ultimate goal of the Decoder is to refine the intial reference points (anchor points)
+    by predicting offset corrections (`outputs_unsig = delta_unsig + reference_before_sigmoid`) 
+    at every decoder layer; these refined `reference_points` are then passed to the next decoder
+    layer
+
+    reference points are like bbox locations of where objects might be (cx, cy, w, h)
+
+    """
 
     def __init__(
         self,
@@ -1707,6 +1716,9 @@ class TransformerDecoder(nn.Module):
                           and 4 is the number of levels (num_feature_maps); num_levels is typically 4;
                           a ratio of 1.0 means the H or W dimension has no padding
                           (1.0 is also the highest it can be)
+        
+        Return:
+            TODO START HERE
         """
         output = tgt
 
@@ -1732,6 +1744,8 @@ class TransformerDecoder(nn.Module):
 
             if self.deformable_decoder:
 
+                # NOTE: these `reference_points` are refined at every decoder layer and the refined
+                #       `reference_poins` will be the input to the next decoder layer
                 if (
                     reference_points.shape[-1] == 4
                 ):  # if reference points are in cxcywh format (default case)
@@ -1805,7 +1819,7 @@ class TransformerDecoder(nn.Module):
                     tgt_query_pos=query_pos,
                     tgt_query_sine_embed=query_sine_embed,
                     tgt_key_padding_mask=tgt_key_padding_mask,
-                    tgt_reference_points=reference_points_input,
+                    tgt_reference_points=reference_points_input, # refpoints were sigmoided
                     memory=memory,
                     memory_key_padding_mask=memory_key_padding_mask,
                     memory_level_start_index=level_start_index,
@@ -1851,9 +1865,8 @@ class TransformerDecoder(nn.Module):
                             topk_proposals.unsqueeze(-1).repeat(1, 1, 4),
                         )  # unsigmoid
 
-
-                if self.rm_detach and "dec" in self.rm_detach: # skipped by default
-                    reference_points = new_reference_points 
+                if self.rm_detach and "dec" in self.rm_detach:  # skipped by default
+                    reference_points = new_reference_points
                 else:  # implemented in DAB-DETR and DINO
                     # remaining layers will use these new detached `reference_points`
                     # even though they're not appened below
@@ -1865,14 +1878,14 @@ class TransformerDecoder(nn.Module):
                 # it can "look forward"
                 if self.use_detached_boxes_dec_out:  # DAB-DETR uses this
                     ref_points.append(reference_points)
-                else: 
+                else:
                     # Look forward twice (DINO DETR uses this);
-                    # new_reference_points contains the 
+                    # new_reference_points contains the
                     # intial reference points + the predicted decoder_layer bbox_embeds;
                     # this is what gets passed outside the model and into the loss
                     ref_points.append(new_reference_points)
 
-            # store the raw decoder_layer outputs (before bbox_embed) for every 
+            # store the raw decoder_layer outputs (before bbox_embed) for every
             # decoder layer and apply LayerNorm
             intermediate.append(self.norm(output))
 
@@ -1885,7 +1898,7 @@ class TransformerDecoder(nn.Module):
                         topk_proposals.unsqueeze(-1).repeat(1, 1, self.d_model),
                     )  # unsigmoid
 
-        
+        # START HERE comment and comment return docstring
         return [
             [itm_out.transpose(0, 1) for itm_out in intermediate],
             [itm_refpoint.transpose(0, 1) for itm_refpoint in ref_points],
