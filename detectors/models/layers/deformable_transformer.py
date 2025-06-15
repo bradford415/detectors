@@ -1529,9 +1529,9 @@ class TransformerEncoder(nn.Module):
 
 class TransformerDecoder(nn.Module):
     """The transformer decoder used in DINO
-    
+
     The ultimate goal of the Decoder is to refine the intial reference points (anchor points)
-    by predicting offset corrections (`outputs_unsig = delta_unsig + reference_before_sigmoid`) 
+    by predicting offset corrections (`outputs_unsig = delta_unsig + reference_before_sigmoid`)
     at every decoder layer; these refined `reference_points` are then passed to the next decoder
     layer
 
@@ -1716,9 +1716,16 @@ class TransformerDecoder(nn.Module):
                           and 4 is the number of levels (num_feature_maps); num_levels is typically 4;
                           a ratio of 1.0 means the H or W dimension has no padding
                           (1.0 is also the highest it can be)
-        
+
         Return:
-            TODO START HERE
+            a two element list of
+                1. a list of raw intermediate decoder outputs (with LayerNorm applied) after
+                   each decoder layer len=num_decoder_layers; each element is transposed for 
+                   shape (b, num_queries, hidden_dim)
+                2. a list of the initial reference points and the refined reference points;
+                   the refined reference points are the predicted offsets; the list is 
+                   of length num_decoder_layers + 1 and each element is tranposed for 
+                   shape (b, num_queries, 4) 
         """
         output = tgt
 
@@ -1819,7 +1826,7 @@ class TransformerDecoder(nn.Module):
                     tgt_query_pos=query_pos,
                     tgt_query_sine_embed=query_sine_embed,
                     tgt_key_padding_mask=tgt_key_padding_mask,
-                    tgt_reference_points=reference_points_input, # refpoints were sigmoided
+                    tgt_reference_points=reference_points_input,  # refpoints were sigmoided
                     memory=memory,
                     memory_key_padding_mask=memory_key_padding_mask,
                     memory_level_start_index=level_start_index,
