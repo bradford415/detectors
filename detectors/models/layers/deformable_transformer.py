@@ -108,7 +108,7 @@ class DeformableTransformer(nn.Module):
             return_intermediate_dec:
             query_dim:
             num_patterns:
-            modulate_hw_attn:
+            modulate_hw_attn: hardcoded set to True but never actually used
             deformable_encoder:
             deformable_decoder:
             num_feature_levels:
@@ -220,7 +220,8 @@ class DeformableTransformer(nn.Module):
             module_seq=module_seq,
         )
 
-        # Initalize the transformer decoder
+        # Initalize the transformer decoder; responsible for refining intial reference points
+        # (anchor points) into predicted bboxes
         decoder_norm = nn.LayerNorm(d_model)
         self.decoder = TransformerDecoder(
             decoder_layer,
@@ -241,7 +242,7 @@ class DeformableTransformer(nn.Module):
 
         self.d_model = d_model
         self.nhead = nhead
-        self.dec_layers = num_decoder_layers
+        self.num_decoder_layers = num_decoder_layers
         self.num_obj_queries = num_obj_queries  # useful for single stage model only
         self.num_patterns = num_patterns
         if not isinstance(num_patterns, int):
@@ -303,13 +304,15 @@ class DeformableTransformer(nn.Module):
             self.init_ref_points(num_obj_queries)  # init self.refpoint_embed
 
         # Both these attributes are set in models.dino.DINO.__init__() in the two stage block;
-        # they're used to encode the encoder output to class embeddings and bbox embeddings
+        # they're used to encode the encoder output to class embeddings and bbox embeddings;
+        # by default, they both share parameters
         # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80;
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
-        # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
         self.enc_out_class_embed = (
             None  # topk proposals will be chosen from these embeded values
         )
+
+        # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
         self.enc_out_bbox_embed = None
 
         # evolution of anchors; skipped by default so can be ignored for now
@@ -423,7 +426,10 @@ class DeformableTransformer(nn.Module):
         refpoint_embed,
         tgt,
         attn_mask=None,
-    ):
+    ) -> tuple[
+        list,
+        list,
+    ]:
         """Call the DeformableTransformer
 
         Args:
@@ -445,20 +451,42 @@ class DeformableTransformer(nn.Module):
                                 value is None
                             see setup_contrastive_denoising() return docs variable `input_query_bbox` for more info
             tgt: during training:
-                    a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
-                    injected at random locations, this tensor was then embedded with nn.Embedding;
-                    approximately 25% of GT labels are randomly changed;
-                    shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
-                    during inference:
-                    value is None
+                 a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
+                 injected at random locations, this tensor was then embedded with nn.Embedding;
+                 approximately 25% of GT labels are randomly changed;
+                 shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
+                 during inference:
+                 value is None
             attn_mask: an attention mask where False = attend and True = mask/block attention;
-                        mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
-                        the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
-                        is composed of CDN groups and each CDN group is only allowed to attend to itself,
-                        therefore, the mask looks like stepsin the top left; to the right of the CDN groups
-                        are learnable_obj_queries and these are free to attend to one another so the right
-                        side of the mask is all False;
-                        see detectors/models/README.md for a visual of this attn_mask
+                       mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
+                       the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
+                       is composed of CDN groups and each CDN group is only allowed to attend to itself,
+                       therefore, the mask looks like stepsin the top left; to the right of the CDN groups
+                       are learnable_obj_queries and these are free to attend to one another so the right
+                       side of the mask is all False;
+                       see detectors/models/README.md for a visual of this attn_mask
+
+        Returns:
+            decoder outputs:
+                hs: a list of raw intermediate decoder outputs (with LayerNorm applied) after
+                    each decoder layer len=num_decoder_layers; shape (b, num_queries, hidden_dim);
+                    length of the list is num_decoder_layers
+                references: a list of the initial reference points and the refined reference points
+                            from the deocder; the refined reference points are the predicted offsets;
+                            the list is of length num_decoder_layers + 1 and each element has
+                            shape (b, num_queries, 4)
+            encoder outputs:
+                hs_enc: topk encoder output features that had padding locations masked to 0
+                        and linearly projected (1, b, topk, hidden_dim)
+                ref_enc: sigmoid of the topk reference boxes from the encoder `output_memory` which
+                         was embedded to boxes though an MLP and output proposals added
+                         (which are masked at padded and invalid locations with `inf`s)
+                         (1, b, topk, 4)
+            init_box_proposal: initial box proposals using the topk class embeds from the
+                               generated output proposals (gen_encoder_output_proposals()) and
+                               apply sigmoid() to each element; shape (b, topk, 4)
+                               (this is technically not an encoder output because it doesn't use
+                               any of the encoded feature values, just the shapes)
 
         """
         # Prepare the input for the encoder
@@ -720,14 +748,16 @@ class DeformableTransformer(nn.Module):
                 "unknown two_stage_type {}".format(self.two_stage_type)
             )
 
-        # Decode the features through the TransformerEncoder;
-        # pass the `memory`` straight from the encoder, not the `output_memory` that was masked and projected
-        # TODO, write the outputs and go through decoder if haven't already
+        # Call the TransformerDecoder to refine the intial reference points (anchor points);
+        # pass the `memory` straight from the encoder, not the `output_memory` that was masked and projected
+        # returns a list of raw intermediate decoder outputs after each decoder layer and a list of
+        # the intial and refined reference points (box locations) after each decoder layer;
+        # shape of each list element: hs (b, num_queries, hidden_dim), references (b, num_queries, 4)
         hs, references = self.decoder(
             tgt=tgt.transpose(
                 0, 1
             ),  # (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
-            memory=memory.transpose(0, 1),  # (sum(h_i * w_i), b, hidden_dim)
+            memory=memory.transpose(0, 1),  # (sum(h_i * w_i), b, hidden_dim);
             tgt_mask=attn_mask,
             memory_key_padding_mask=mask_flatten,
             pos=lvl_pos_embed_flatten.transpose(
@@ -740,31 +770,31 @@ class DeformableTransformer(nn.Module):
             spatial_shapes=spatial_shapes,
             valid_ratios=valid_ratios,
         )
-        #########################################################
-        # End Decoder
-        # hs: n_dec, bs, nq, d_model
-        # references: n_dec+1, bs, nq, query_dim
-        #########################################################
+        assert (
+            len(hs) == self.num_decoder_layers
+            and len(references) == self.num_decoder_layers + 1
+        )
 
-        #########################################################
-        # Begin postprocess
-        #########################################################
+        # slightly adjust encoder outputs
         if self.two_stage_type == "standard":
+
             if self.two_stage_keep_all_tokens:
                 hs_enc = output_memory.unsqueeze(0)
                 ref_enc = enc_outputs_coord_unselected.unsqueeze(0)
                 init_box_proposal = output_proposals
+            else:  # default case
 
-            else:
+                # topk encoder output features that had padding locations masked to 0
+                # and linearly projected (1, b, topk, hidden_dim)
                 hs_enc = tgt_undetach.unsqueeze(0)
+
+                # sigmoid of the topk reference boxes from the encoder `output_memory` which
+                # was embedded to boxes though an MLP and output proposals added
+                # (which are masked at padded and invalid locations with `inf`s)
+                # (1, b, topk, 4)
                 ref_enc = refpoint_embed_undetach.sigmoid().unsqueeze(0)
         else:
             hs_enc = ref_enc = None
-        #########################################################
-        # End postprocess
-        # hs_enc: (n_enc+1, bs, nq, d_model) or (1, bs, nq, d_model) or (n_enc, bs, nq, d_model) or None
-        # ref_enc: (n_enc+1, bs, nq, query_dim) or (1, bs, nq, query_dim) or (n_enc, bs, nq, d_model) or None
-        #########################################################
 
         return hs, references, hs_enc, ref_enc, init_box_proposal
         # hs: (n_dec, bs, nq, d_model)
@@ -1624,9 +1654,11 @@ class TransformerDecoder(nn.Module):
 
         # this will be set in DINO.__init__() and is a module list of 3-layer MLP modules
         # to embed the bboxes after each decoder layer; the number of MLP modules is the number
-        # of decoder layers; by default these do not share parameters
+        # of decoder layers; by default these share parameters like in the original DETR
         self.bbox_embed = None
 
+        # set in DINO.__init__(); ModuleList of the class prediction module for the output of
+        # each decoder layer; by default these share parameters
         self.class_embed = None
 
         self.d_model = d_model
@@ -1717,15 +1749,15 @@ class TransformerDecoder(nn.Module):
                           a ratio of 1.0 means the H or W dimension has no padding
                           (1.0 is also the highest it can be)
 
-        Return:
+        Returns:
             a two element list of
                 1. a list of raw intermediate decoder outputs (with LayerNorm applied) after
-                   each decoder layer len=num_decoder_layers; each element is transposed for 
+                   each decoder layer len=num_decoder_layers; each element is transposed for
                    shape (b, num_queries, hidden_dim)
                 2. a list of the initial reference points and the refined reference points;
-                   the refined reference points are the predicted offsets; the list is 
-                   of length num_decoder_layers + 1 and each element is tranposed for 
-                   shape (b, num_queries, 4) 
+                   the refined reference points are the predicted offsets; the list is
+                   of length num_decoder_layers + 1 and each element is tranposed for
+                   shape (b, num_queries, 4)
         """
         output = tgt
 
@@ -1905,7 +1937,7 @@ class TransformerDecoder(nn.Module):
                         topk_proposals.unsqueeze(-1).repeat(1, 1, self.d_model),
                     )  # unsigmoid
 
-        # START HERE comment and comment return docstring
+        # return a list of the raw decoder layer outputs and a list of the refined reference points
         return [
             [itm_out.transpose(0, 1) for itm_out in intermediate],
             [itm_refpoint.transpose(0, 1) for itm_refpoint in ref_points],
@@ -1967,7 +1999,7 @@ def build_deformable_transformer(
         return_intermediate_dec=transformer_args["return_intermediate_dec"],
         query_dim=transformer_args["query_dim"],
         num_patterns=transformer_args["num_patterns"],
-        modulate_hw_attn=True,
+        modulate_hw_attn=True,  # set to True but it's never actually used
         deformable_encoder=True,
         deformable_decoder=True,
         num_feature_levels=num_feature_levels,

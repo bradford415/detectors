@@ -402,7 +402,8 @@ def gen_encoder_output_proposals(
     Return:
         1. output_memory: the encoded features with padding filled with 0s (b, sum(h_i * w_i), hidden_dim)
         2. output_proposals: the initial box proposals (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h);
-           the proposals are normalized to [0, 1] (relative to the `real` pixels) and padded regions are filled with "inf"s;
+           the proposals are normalized to [0, 1] (relative to the `real` pixels), padded and invalid
+           regions are filled with "inf"s;
     """
     N_, S_, C_ = memory.shape
     base_scale = 4.0

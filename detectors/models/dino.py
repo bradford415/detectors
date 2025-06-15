@@ -165,8 +165,12 @@ class DINO(nn.Module):
 
             self.input_proj = nn.ModuleList(input_proj_list)
 
-        # Class embedding & bbox embedding; MLP will output dims of 4 (center_x, center_y, width, height) TODO: verify this
+        # Class prediction module for the output of each decoder layer
+        # Linear out is num_classs (for coco num_classes=91 which includes the background class)
         _class_embed = nn.Linear(in_features=_hidden_dim, out_features=num_classes)
+
+        # bbox prediction module for the output of each decoder layer
+        # MLP will output dims of 4 (center_x, center_y, width, height)
         _bbox_embed = MLP(
             input_dim=_hidden_dim, hidden_dim=_hidden_dim, out_dim=4, num_layers=3
         )
@@ -193,8 +197,8 @@ class DINO(nn.Module):
         nn.init.constant_(_bbox_embed.layers[-1].weight.data, 0)
         nn.init.constant_(_bbox_embed.layers[-1].bias.data, 0)
 
-        # Create a bbox MLP and class embed module for each decoder; if embed_share=True,
-        # use the same MLP for each bbox and share the parameters; default is False
+        # Create a bbox MLP and class embed module for each decoder layer; if embed_share=True,
+        # use the same MLP for each bbox and share the parameters; default is True
         if decoder_pred_bbox_embed_share:
             box_embed_layerlist = [
                 _bbox_embed for _ in range(transformer.num_decoder_layers)
@@ -376,7 +380,6 @@ class DINO(nn.Module):
             assert targets is None
             input_query_bbox = input_query_label = attn_mask = dn_meta = None
 
-        ############## START HERE ##########
         # TODO
         hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
             feature_maps,
@@ -411,6 +414,8 @@ def build_dino(
 
     # Set up arguments for deformable transformer
     standard_args = dino_args["standard"]
+
+    # DINO architecture parameters
     two_stage_args = dino_args["two_stage"]
     denoising_args = dino_args["denoising"]
     transformer_args = dino_args["transformer"]
@@ -419,6 +424,15 @@ def build_dino(
     # see models.layers.deformable_transformer.DeformableTransformer for function
     # descriptions
     transformer = build_deformable_transformer(**transformer_args)
+
+    # TODO: comment and consider putting in config
+    match_unstable_error = True
+
+    # the number of unique classes to sample from when generating denoising queries;
+    # in practice, I believe this should always equal num_classes
+    dn_labelbook_size = num_classes
+
+    ####### start here 
 
     # TODO: update the arguments so they're passed where they cam efomr
     model = DINO(

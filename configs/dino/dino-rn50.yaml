@@ -58,7 +58,7 @@ detector:
       # whether to learn the 
       learn_wh: False
       keep_all_tokens: False
-      two_stage_default_hw: 0.05 # TODO: figure out if this is used
+      two_stage_default_hw: 0.05
       bbox_embed_share: False
       class_embed_share: False
 
