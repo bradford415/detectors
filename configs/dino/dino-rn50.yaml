@@ -130,9 +130,9 @@ detector:
       rm_self_attn_layers: null
       rm_detach: null
 
-      # TODO: comment
-      dec_pred_class_embed_share: True
+      # whether to share the parameters of the prediction heads after each decoder layer;
       dec_pred_bbox_embed_share: True
+      dec_pred_class_embed_share: True
 
       # the type of self-attention to use in the decoder; if "sa"
       # use a standard multiheaded self-attention module, not deformable attn

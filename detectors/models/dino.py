@@ -434,7 +434,7 @@ def build_dino(
 
     ####### start here 
 
-    # TODO: update the arguments so they're passed where they cam efomr
+    # Instantiate the DINO detector model
     model = DINO(
         backbone=backbone,
         transformer=transformer,

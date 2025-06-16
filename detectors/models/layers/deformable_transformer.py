@@ -1873,7 +1873,7 @@ class TransformerDecoder(nn.Module):
                 # convert reference points to logits (num_queries, b, 4)
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
 
-                # embed the decoder_layer output into a bbox
+                # predict the bbox offset corrections for the decoder lyaer
                 # (num_queries, b, hidden_dim) -> (num_queries, b, 4) where 4 = (cx, cy, w, h)
                 delta_unsig = self.bbox_embed[layer_id](output)
 
