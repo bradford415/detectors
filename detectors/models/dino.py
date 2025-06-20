@@ -432,8 +432,6 @@ def build_dino(
     # in practice, I believe this should always equal num_classes
     dn_labelbook_size = num_classes
 
-    ####### start here 
-
     # Instantiate the DINO detector model
     model = DINO(
         backbone=backbone,
@@ -455,3 +453,6 @@ def build_dino(
         denoise_label_noise_ratio=dino_args["denoise_label_noise_ratio"],
         denoise_labelbook_size=dino_args["denoise_labelbook_size"],
     )
+
+
+    # build matcher; TODO: comment more
