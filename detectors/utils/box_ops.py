@@ -30,7 +30,7 @@ def xywh2xyxy(boxes: torch.Tensor):
 
 def box_cxcywh_to_xyxy(x: torch.Tensor):
     """Converts bboxes from (cx, cy, w, h) (yolo format) to (tl_x, tl_y, br_x, br_y)
-    
+
     Args:
         x: bounding boxes in (cx, cy, w, h) format; shape (num_boxes, 4)
     """
@@ -170,9 +170,9 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor):
 
 
     Args:
-        boxes1: the first set of bboxes to compute the IoU between (num_boxes_1, 4); 
+        boxes1: the first set of bboxes to compute the IoU between (num_boxes_1, 4);
               the box format must be (tl_x, tl_y, br_x, br_y)
-        boxes2: the second set of bboxes to compute the IoU between (num_boxes_2, 4); 
+        boxes2: the second set of bboxes to compute the IoU between (num_boxes_2, 4);
               the box format must be (tl_x, tl_y, br_x, br_y)
 
     Returns:
@@ -184,7 +184,7 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor):
     area2 = box_area(boxes2)
 
     # compute the top_left coordinate of the boxes intersection between a single box in
-    # `boxes1` with every box in `boxes2`, and do this for all boxes in `boxes1` 
+    # `boxes1` with every box in `boxes2`, and do this for all boxes in `boxes1`
     # shape (num_boxes_1, num_boxes_2, 2)
     lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])
 
@@ -192,7 +192,7 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor):
     # (num_boxes_1, num_boxes_2, 2)
     rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])
 
-    # compute the width and height among all box intersection coordinates 
+    # compute the width and height among all box intersection coordinates
     # (bottom_right - top_left); shape (num_boxes_1, num_boxes_2, 2)
     wh = (rb - lt).clamp(min=0)
 
@@ -205,12 +205,9 @@ def box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor):
     # shape (num_boxes_1, num_boxes_2)
     union = area1[:, None] + area2 - inter
 
-
     # compute the IoU with element-wise division (num_boxes_1, num_boxes_2)
     iou = inter / (union + 1e-6)
     return iou, union
-
-
 
 
 def generalized_box_iou(boxes1, boxes2):
@@ -218,28 +215,34 @@ def generalized_box_iou(boxes1, boxes2):
     Generalized IoU from https://giou.stanford.edu/
 
     Args:
-        boxes1: the first set of boxes to compute the giou over; 
+        boxes1: the first set of boxes to compute the giou over;
                 boxes should be in (x0, y0, x1, y1) format (i.e., top_left & bottom_right);
                 shape (num_boxes, 4)
-        boxes2: the second set of boxes to compute the giou over; 
+        boxes2: the second set of boxes to compute the giou over;
                 boxes should be in (x0, y0, x1, y1) format (i.e., top_left & bottom_right);
                 shape (num_boxes, 4)
 
-    Returns a [N, M] pairwise matrix, where N = len(boxes1)
-    and M = len(boxes2)
+    Returns:
+        a [N, M] pairwise matrix, where N = num_boxes_1 and M = num_boxes_2
     """
     # degenerate boxes gives inf / nan results
     # so do an early check
     assert (boxes1[:, 2:] >= boxes1[:, :2]).all()
     assert (boxes2[:, 2:] >= boxes2[:, :2]).all()
 
-    ######### START HERE #######
+    # compute the iou & union between each box in `boxes1` with every box in `boxes2`;
+    # iou & union shape (num_boxes_1, num_boxes_2)
     iou, union = box_iou(boxes1, boxes2)
 
+    # compute the top_left and bottom_right coords of the intersection box between each box
+    # in `boxes1` with every box in `boxes2` (num_boxes_1, num_boxes_2, 2)
     lt = torch.min(boxes1[:, None, :2], boxes2[:, :2])
     rb = torch.max(boxes1[:, None, 2:], boxes2[:, 2:])
 
-    wh = (rb - lt).clamp(min=0)  # [N,M,2]
+    # compute the width/height of the interesected box (num_boxes_1, num_boxes_2, 2)
+    wh = (rb - lt).clamp(min=0)
+
+    # compute the area by multiplying the intersected box's width & height (num_boxes_1, num_boxes_2)
     area = wh[:, :, 0] * wh[:, :, 1]
 
     return iou - (area - union) / area

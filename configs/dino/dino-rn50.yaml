@@ -26,6 +26,14 @@ criterion_params:
   # TODO: comment
   aux_loss: True # TODO: might need to move this? 
 
+# parameters for the Hungarian Matcher
+matcher:
+  type: "hungarian"
+  set_cost_class: 2.0
+  set_cost_bbox: 5.0
+  set_cost_giou: 2.0
+  focal_alpha: 0.25
+
 detector:
   name: "dino"
 

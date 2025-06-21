@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from detectors.data.data import NestedTensor
 from detectors.models.backbones.backbone import Joiner, build_dino_backbone
 from detectors.models.components.dino import setup_contrastive_denoising
+from detectors.models.components.matcher import build_matcher
 from detectors.models.layers.common import MLP
 from detectors.models.layers.deformable_transformer import (
     DeformableTransformer,
@@ -397,6 +398,7 @@ def build_dino(
     backbone_args: dict[str, any],
     dino_args: dict[str, any],
     criterion_args: dict[str, any],
+    matcher_args: dict[str, any],
 ):
     """Build the DINO detector
 
@@ -407,6 +409,7 @@ def build_dino(
         denoising_args: parameters used for the denoising queries
         transformer_args: parameters used for DINO and the deformable transformer
         dino_args: General DINO parameters that are not as specific as some
+        matcher_args: the parameters for the hungarian matcher class
 
     """
 
@@ -454,5 +457,15 @@ def build_dino(
         denoise_labelbook_size=dino_args["denoise_labelbook_size"],
     )
 
-    # build matcher; TODO: comment more
-    matcher =
+    # build the hungarian matcher object to match predicted object detections to ground-truth
+    # annotations in a one-to-one manner; since DETR predicts a fixed-size set of predictions,
+    # we need a way to assign each ground-truth object to one unique prediction to compute a loss;
+    # the matcher ensures each predicted object is assigned to at most one ground-truth object;
+    # the hungarian algorithm finds the optimal (lowest-cost) matching between the predicted boxes
+    # and gt boxes; the cost function for matching is weight combination of the classification cost,
+    # bbox L1 distance, and generalized iou cost;
+    # NOTE: DINO uses the focal loss for the classification cost (unlike original DETR) to help
+    #       handle class imbalance more effectively
+    matcher = build_matcher(**matcher_args)
+
+    #### START HERE ####
