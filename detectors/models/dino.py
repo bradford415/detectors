@@ -15,6 +15,7 @@ from detectors.models.layers.deformable_transformer import (
     DeformableTransformer,
     build_deformable_transformer,
 )
+from detectors.postprocessing.postprocess import PostProcess
 
 
 class DINO(nn.Module):
@@ -31,7 +32,6 @@ class DINO(nn.Module):
                           contrastive denoising (CDN) rejects useless anchors (i.e., no object);
                           if an image has n GT boxes, a CDN group will have 2*n queries (i.e., each GT box)
                           has a positive & negative query;
-                          TODO: understand what these "anchors" are
                           There are two types of denoising queries:
                             - positive queries are slightly noised gt boxes & labels; the model
                               is expected to recover the correct box & label from this noise
@@ -401,9 +401,10 @@ def build_dino(
     criterion_args: dict[str, any],
     matcher_args: dict[str, any],
     loss_args: dict[str, any],
+    postprocess_args: dict[str, any],
     device: torch.device,
 ):
-    """Build the DINO detector
+    """Build the DINO detector, loss function, and the postprocessor
 
     Args:
 
@@ -414,6 +415,14 @@ def build_dino(
         dino_args: parameters used for the dino architecture; should contain parameters for
                    `general`, `two-stage`, `denoising`, and `transformer`
         matcher_args: the parameters for the hungarian matcher class
+
+    Returns:
+        1. the DINO detector model
+        2. the loss function used in DINO
+        3. the postprocessor (only used during inference)
+            - prepares the prediction output for the coco api
+            - rescales bbox prediction back to the original input size
+              (not needed during training since the gt boxes are resized )
 
     """
     device = torch.device(device)
@@ -549,5 +558,11 @@ def build_dino(
         )
         criterion.to(device)
 
-        postprocessors = {'bbox': PostProcess(num_select=args.num_select, nms_iou_threshold=args.nms_iou_threshold)}
+        postprocessors = {
+            "bbox": PostProcess(
+                num_select=postprocess_args["num_select"],
+                nms_iou_threshold=postprocess_args["nms_iou_threshold"],
+            )
+        }
 
+    return model, criterion, postprocessors
