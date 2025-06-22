@@ -19,6 +19,13 @@ def get_rank():
     return dist.get_rank()
 
 
+def get_world_size():
+    """returns the number of processes (GPUs) being used in the distributed training setup"""
+    if not is_dist_avail_and_initialized():
+        return 1
+    return dist.get_world_size()
+
+
 def is_main_process() -> bool:
     """Whether the current process is the main process"""
     return get_rank() == 0

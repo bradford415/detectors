@@ -22,9 +22,8 @@ positional_embedding_params:
   # row/col normalize the poisitonal coordinates [0, 2pi)
   normalize: True
 
-criterion_params:
-  # TODO: comment
-  aux_loss: True # TODO: might need to move this? 
+# TODO: comment
+aux_loss: True # TODO: might need to move this? 
 
 # parameters for the Hungarian Matcher
 matcher:
@@ -33,6 +32,18 @@ matcher:
   set_cost_bbox: 5.0
   set_cost_giou: 2.0
   focal_alpha: 0.25
+
+# TODO: comment
+loss_weights:
+  cls_loss_coef: 1.0
+  bbox_loss_coef: 5.0
+  giou_loss_coef: 2.0
+  iterm_loss_ceof: 1.0
+
+# TODO: comment
+postprocess:
+  num_select: 300
+  nms_iou_threshold: -1
 
 detector:
   name: "dino"

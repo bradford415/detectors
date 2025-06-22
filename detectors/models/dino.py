@@ -6,6 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from detectors.data.data import NestedTensor
+from detectors.losses.dino_loss import SetCriterion
 from detectors.models.backbones.backbone import Joiner, build_dino_backbone
 from detectors.models.components.dino import setup_contrastive_denoising
 from detectors.models.components.matcher import build_matcher
@@ -399,6 +400,8 @@ def build_dino(
     dino_args: dict[str, any],
     criterion_args: dict[str, any],
     matcher_args: dict[str, any],
+    loss_args: dict[str, any],
+    device: torch.device,
 ):
     """Build the DINO detector
 
@@ -408,17 +411,19 @@ def build_dino(
                        see models.backbones.backbone.build_backbone() for parameter descriptions
         denoising_args: parameters used for the denoising queries
         transformer_args: parameters used for DINO and the deformable transformer
-        dino_args: General DINO parameters that are not as specific as some
+        dino_args: parameters used for the dino architecture; should contain parameters for
+                   `general`, `two-stage`, `denoising`, and `transformer`
         matcher_args: the parameters for the hungarian matcher class
 
     """
+    device = torch.device(device)
 
     backbone: Joiner = build_dino_backbone(**backbone_args)
 
-    # Set up arguments for deformable transformer
-    standard_args = dino_args["standard"]
+    # set up general dino args which get passed around alots
 
-    # DINO architecture parameters
+    # unpack the DINO architecture parameters
+    standard_args = dino_args["standard"]
     two_stage_args = dino_args["two_stage"]
     denoising_args = dino_args["denoising"]
     transformer_args = dino_args["transformer"]
@@ -469,3 +474,80 @@ def build_dino(
     matcher = build_matcher(**matcher_args)
 
     #### START HERE ####
+
+    # prepare weight dict; create a copy to save these params w/o the denoising params
+    weight_dict = {
+        "loss_ce": loss_args["cls_loss_coef"],
+        "loss_bbox": loss_args["bbox_loss_coef"],
+        "loss_giou": loss_args["giou_loss_coef"],
+    }
+    clean_weight_dict_wo_dn = copy.deepcopy(weight_dict)
+
+    # for denoising training, add the same params as above but for the dn key
+    weight_dict["loss_ce_dn"] = loss_args["cls_loss_coef"]
+    weight_dict["loss_bbox_dn"] = loss_args["bbox_loss_coef"]
+    weight_dict["loss_giou_dn"] = loss_args["giou_loss_coef"]
+
+    # NOTE: removed mask keys bc unused
+
+    # copy dict w/ denoising params
+    clean_weight_dict = copy.deepcopy(weight_dict)
+
+    # update the `weight_dict` w/ a copy of the dictionary keys for each decoder
+    # layer (except the last one) with the the decoder_layer_index appended
+    # (e.g., "loss_ce_0, loss_ce_1, ..., loss_ce_<num_decoder_layers-1>")
+    if criterion_args["aux_loss"]:
+
+        num_decoder_layers = transformer_args["num_decoder_layers"]
+
+        aux_weight_dict = {}
+        for i in range(num_decoder_layers - 1):
+            aux_weight_dict.update(
+                {k + f"_{i}": v for k, v in clean_weight_dict.items()}
+            )
+        weight_dict.update(aux_weight_dict)
+
+    # add 3 keys (to `weight_dict`) for the intermdiate loss weights:
+    #   loss_ce_interm loss_bbox_interm, loss_giou_interm
+    # multiplies interm_loss_coef*_coeff_weight_dict*initial_loss_coefs to get the coeffs
+    # but the default case is just 1.0 for both coeffs, so these new_key_vals=initial_key_vals
+    if two_stage_args["type"] != "no":
+        interm_weight_dict = {}
+
+        no_interm_box_loss = False
+
+        _coeff_weight_dict = {
+            "loss_ce": 1.0,
+            "loss_bbox": 1.0 if not no_interm_box_loss else 0.0,
+            "loss_giou": 1.0 if not no_interm_box_loss else 0.0,
+        }
+
+        # default: 1.0
+        interm_loss_coef = loss_args["interm_loss_coef"]
+
+        interm_weight_dict.update(
+            {
+                k + f"_interm": v * interm_loss_coef * _coeff_weight_dict[k]
+                for k, v in clean_weight_dict_wo_dn.items()
+            }
+        )
+        weight_dict.update(interm_weight_dict)
+
+        losses = [
+            "labels",
+            "boxes",
+            "cardinality",
+        ]  # NOTE: removing mask loss since unused
+
+        # create the loss function used in dino and move to gpu
+        criterion = SetCriterion(
+            num_classes,
+            matcher=matcher,
+            weight_dict=weight_dict,
+            focal_alpha=matcher_args["focal_alpha"],
+            losses=losses,
+        )
+        criterion.to(device)
+
+        postprocessors = {'bbox': PostProcess(num_select=args.num_select, nms_iou_threshold=args.nms_iou_threshold)}
+
