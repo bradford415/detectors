@@ -86,6 +86,9 @@ def main(
     )
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
+    
+    
+    ############ START HERE - initialize distributed training
 
     # Save configuration files and parameters
     reproduce.save_configs(
