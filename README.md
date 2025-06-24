@@ -26,8 +26,10 @@ make install_reqs
 ## Training a model
 This project is designed to use the configuration specified in `scripts/configs/`, but for ease of use the CLI arguments specified below will overwrite the main default config parameters for quick setup.
 
+## Single-GPU training
 ### Training from scratch
 ```bash
+# yolov3 with a darknet53 backbone
 python scripts/train.py --dataset_root "/path/to/coco"
 ```
 
@@ -39,6 +41,12 @@ python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --backbone_weights
 ### Resume training from a checkpoint
 ```bash
 python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path "/path/to/checkpoint_weights.pt"
+```
+
+## Multi-GPU Training
+```bash
+# distributed training dino w/ a resnet50 backbone
+torchrun --nproc_per_node=<num_gpus> scripts/train.py configs/train-coco-dino-rn50.yaml configs/dino/dino-rn50.yaml
 ```
 
 ## Inferencing
