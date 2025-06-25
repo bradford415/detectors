@@ -74,6 +74,10 @@ cuda:
   # List of GPU devices to use
   gpus: [0]
 
+  # the communications library to use for distributed training; default for cuda should be 
+  # "nccl" prounounced "nickel"
+  backend: "nccl"
+
 
 # Reproducibility information
 reproducibility:

@@ -12,7 +12,6 @@ from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
 
 from detectors.evaluate import evaluate, load_model_checkpoint
-from detectors.utils import misc
 from detectors.visualize import plot_loss, plot_mAP, visualize_norm_img_tensors
 
 log = logging.getLogger(__name__)

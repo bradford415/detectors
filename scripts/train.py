@@ -2,25 +2,21 @@ import datetime
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Tuple
-
-from detectors.solvers import schedulers
+from typing import Any, Dict, Optional
 
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 import torch
+import torch.distributed as dist
 import yaml
 from fire import Fire
-from torch import nn
 from torch.utils.data import DataLoader
 
 from detectors.data.coco_ds import build_coco
-from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
 from detectors.losses import loss_map
 from detectors.models import detectors_map
 from detectors.models.backbones import backbone_map
-from detectors.models.backbones.darknet import Darknet
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
 from detectors.utils import reproduce
@@ -86,8 +82,7 @@ def main(
     )
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
-    
-    
+
     ############ START HERE - initialize distributed training
 
     # Save configuration files and parameters
@@ -106,6 +101,10 @@ def main(
         format="%(message)s",
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
+
+    # TODO: verify this works; Suppress logs from non-zero ranks
+    if dist.is_initialized() and dist.get_rank() != 0:
+        log.setLevel(logging.WARNING)  # or ERROR to suppress even more
 
     log.info("initializing...\n")
     log.info("writing outputs to %s", str(output_path))
