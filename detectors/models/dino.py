@@ -482,8 +482,6 @@ def build_dino(
     #       handle class imbalance more effectively
     matcher = build_matcher(**matcher_args)
 
-    #### START HERE ####
-
     # prepare weight dict; create a copy to save these params w/o the denoising params
     weight_dict = {
         "loss_ce": loss_args["cls_loss_coef"],

@@ -40,7 +40,7 @@ def is_main_process() -> bool:
 def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
     """Initalize torch distributed mode (multi-gpu training); each process calls this method
 
-    Sets the gpu to use for each process and initalizes the process gropu
+    Sets the gpu to use for each process and initalizes the process group
 
     Extracts the following information:
         world_size: the total number of processes (GPUs) across all nodes;
@@ -93,5 +93,5 @@ def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
     # blocks all processes (in the process group) from continuing until every process has
     # reached this barrier; it ensures all processes are synchronized at a this point in the code
     torch.distributed.barrier()
-    
+
     ######## start here - verify this is finished and continue (need to call this in train.py i think)

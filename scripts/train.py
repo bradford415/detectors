@@ -21,6 +21,7 @@ from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
 from detectors.utils import reproduce
 from detectors.utils.script import initialize_anchors
+from detectors.utils import distributed
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
@@ -46,12 +47,18 @@ def main(
         checkpoint_path: path to the weights of the entire detector model; this can be used to resume training or inference;
                          if this parameter is not None, the backbone_weights will be ignored
     """
+
     # Load configuration files
     with open(base_config_path, "r") as f:
         base_config = yaml.safe_load(f)
 
     with open(model_config_path, "r") as f:
         model_config = yaml.safe_load(f)
+
+    # initalize torch distributed mode by setting the communication between all procceses
+    # and assigning the GPU to use for each proccess; 
+    # NOTE: in general, each proccess should run most commands in the program except saving to disk
+    distributed.init_distributed_mode(backend=base_config["cuda"]["backend"])
 
     # Override configuration parameters if CLI arguments are provided; this allows external users
     # to easily run the project without messing with the configuration files
