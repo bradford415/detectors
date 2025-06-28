@@ -128,7 +128,7 @@ def main(
         log.info("\nNOTE: training from scratch; no pretrained weights provided")
 
     # Apply reproducibility seeds
-    reproduce.reproducibility(**base_config["reproducibility"])
+    reproduce.set_seeds(**base_config["reproducibility"])
 
     # Extract training and val params
     train_args = base_config["train"]
