@@ -18,8 +18,8 @@ def is_dist_avail_and_initialized() -> bool:
     return True
 
 
-def get_rank():
-    """Returns the current process rank (id); 0 for main process"""
+def get_global_rank():
+    """Returns the current global process rank (id); 0 for main process"""
     if not is_dist_avail_and_initialized():
         return 0
     return dist.get_rank()
@@ -34,7 +34,7 @@ def get_world_size():
 
 def is_main_process() -> bool:
     """Whether the current process is the main process"""
-    return get_rank() == 0
+    return get_global_rank() == 0
 
 
 def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
@@ -55,9 +55,17 @@ def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
         dist_url: the distributed URL that specifies how the different processes in a distributed
                   pytorch job discover and communicate with each other during initialization; pytorch
                   default is "env://"
+
+    Returns:
+        1. world size
+        2. global_rank (proccess/gpu id out of all processes/gpus across all nodes)
+        3. local_rank id (process/gpu id from only the current node)
+        4. whether distributed training is being used (torchrun)
     """
+    distruted_mode = False
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         log.info("using torch distributed mode")
+        distruted_mode =  True
 
         world_size = int(os.environ["WORLD_SIZE"])
         global_rank = int(os.environ["RANK"])
@@ -74,7 +82,7 @@ def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
         world_size = 1
         global_rank = 0
         local_rank = 0
-        return world_size, global_rank, local_rank
+        return world_size, global_rank, local_rank, distruted_mode
 
     # set the gpu number to use for the current process/gpu;
     # e.g., if process/gpu 2 is running this statement, this process will be assigned gpu 2 because
@@ -94,4 +102,4 @@ def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
     # reached this barrier; it ensures all processes are synchronized at a this point in the code
     torch.distributed.barrier()
 
-    ######## start here - verify this is finished and continue (need to call this in train.py i think)
+    return world_size, global_rank, local_rank, distruted_mode

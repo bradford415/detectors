@@ -9,14 +9,26 @@ import numpy as np
 import torch
 import yaml
 
+from detectors.utils import distributed
+
 log = logging.getLogger(__name__)
 
 
-def reproducibility(seed: int) -> None:
-    """Set the seed for the sources of randomization. This allows for more reproducible results"""
+def set_seeds(seed: int) -> None:
+    """Set the seed for the sources of randomization; allows for more reproducible results"""
 
+    # applying a slightly different seed for each process allows for diversity across
+    # proccesses such that they do not produce the same random numbers; the same seed
+    # could to poor training behavior
+    seed = seed + distributed.get_global_rank()
+
+    # sets the seed for PyTorch's CPU and CUDA random number generators.
     torch.manual_seed(seed)
+    
+    # sets numpy's RNG
     np.random.seed(seed)
+
+    # sets pure python's RNG
     random.seed(seed)
 
 

@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -58,7 +59,11 @@ def main(
     # initalize torch distributed mode by setting the communication between all procceses
     # and assigning the GPU to use for each proccess; 
     # NOTE: in general, each proccess should run most commands in the program except saving to disk
-    distributed.init_distributed_mode(backend=base_config["cuda"]["backend"])
+    world_size, global_rank, local_rank, distruted_mode = distributed.init_distributed_mode(backend=base_config["cuda"]["backend"])
+
+    # stagger each process by 20 ms; I don't think this is required but it helps prevent I/O
+    # contention on shared file systems like EFS
+    time.sleep(global_rank * 0.02)
 
     # Override configuration parameters if CLI arguments are provided; this allows external users
     # to easily run the project without messing with the configuration files
