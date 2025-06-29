@@ -14,6 +14,9 @@ exp_name: "development"
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetection"
 
+# max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info
+num_classes: 91
+
 # Log the train progress every n steps
 log_train_steps: 20
 

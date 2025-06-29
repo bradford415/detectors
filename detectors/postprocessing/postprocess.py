@@ -39,6 +39,7 @@ class PostProcess(nn.Module):
                             that the shorter side to a fixed size (usually 800) and and the longer
                             side does not exceed 1333 (keeps aspect ratio), then the images are
                             converted to a NestedTensor and padded)
+                           NOTE: not used during training
         """
         num_select = self.num_select
         out_logits, out_bbox = outputs["pred_logits"], outputs["pred_boxes"]

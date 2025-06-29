@@ -60,7 +60,7 @@ def _create_dino(num_classes: int, detector_args: dict[str, any]):
     ############### START HERE --- unpack the args appropriately bl
     model, criterion, postprocessor = detectors_map["dino"](
         num_classes=num_classes,
-        backbone_args=detector_args["backbone_args"],
+        backbone_args=detector_args["backbone_params"],
         dino_args=detector_args["dino_args"],
         criterion_args=detector_args["criterion_args"],
         matcher_args=detector_args["matcher_args"],

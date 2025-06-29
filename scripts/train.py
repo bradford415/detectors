@@ -15,13 +15,15 @@ from torch.utils.data import DataLoader
 
 from detectors.data.coco_ds import build_coco
 from detectors.data.collate_functions import collate_fn
-from detectors.losses import loss_map
+from detectors.losses import SetCriterion, Yolov3Loss, Yolov4Loss
 from detectors.models.create import create_detector
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
 from detectors.utils import distributed, reproduce
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
+
+loss_map = {"yolov3": Yolov3Loss, "yolov4": Yolov4Loss, "dino": SetCriterion}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -253,6 +255,17 @@ def main(
     # TODO:
     if detector_name == "yolov3":
         criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
+    elif detector_name == "dino":
+        num_decoder_layers = detector_params["architecture_params"]["transformer"][
+            "num_decoder_layers"
+        ]
+        criterion = loss_map[detector_name](
+            num_classes=base_config["num_classes"],
+            num_decoder_layers=num_decoder_layers,
+            loss_args=model_config["loss_weights"],
+            matcher_args=model_config["matcher"],
+            device=device,
+        )
     else:
         ValueError(f"loss function for {detector_name} not implemented")
 

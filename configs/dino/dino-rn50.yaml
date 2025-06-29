@@ -16,9 +16,6 @@ params:
     # row/col normalize the poisitonal coordinates [0, 2pi)
     normalize: True
 
-  # TODO: comment
-  aux_loss: True # TODO: might need to move this? 
-
   # parameters for the Hungarian Matcher
   matcher:
     type: "hungarian"
@@ -29,6 +26,8 @@ params:
 
   # TODO: comment
   loss_weights:
+    # TODO: comment
+    aux_loss: True
     cls_loss_coef: 1.0
     bbox_loss_coef: 5.0
     giou_loss_coef: 2.0

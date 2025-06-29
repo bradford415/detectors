@@ -70,7 +70,15 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
         self.prepare = PreprocessCoco()
 
-        # TODO: make this 91 for detr-based and 80 for yolo-based; or put num_classes in config hmmm
+        # TODO: make this 91 for detr-based and 80 for yolo-based; or put num_classes in config
+        # for DINO DETR, num_classes should always be set to the max_class_id + 1; if you check the COCO 2017 file
+        # `instances_train2017.json` and look at the "categories" key, the max_id is "90" for "toothbrush" therefore
+        # for DINO DETR we should set num_classes=91; example, if you have a dataset with ids 1-20, num_classes=21;
+        # an example of different datasets is shown in the DINO code here:
+        # https://github.com/IDEA-Research/DINO/blob/8758cf02146f306dc36babab4fff1f09c114c682/models/dino/dino.py#L721;
+        # as reminder, COCO file indexing typically starts with 1;
+        # NOTE: there's technicall an id=91=hairbrush but this is not included in the official annotation file so the max
+        #       id in application is 90
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         # basically it's so they don't need a class mapping since the 80 `thing` classes which are actually
         # in the dataset are not contiguous; these missing objects will be treated as the background class
