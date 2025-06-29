@@ -16,13 +16,10 @@ from torch.utils.data import DataLoader
 from detectors.data.coco_ds import build_coco
 from detectors.data.collate_functions import collate_fn
 from detectors.losses import loss_map
-from detectors.models import detectors_map
-from detectors.models.backbones import backbone_map
+from detectors.models.create import create_detector
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
-from detectors.utils import reproduce
-from detectors.utils.script import initialize_anchors
-from detectors.utils import distributed
+from detectors.utils import distributed, reproduce
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
@@ -57,9 +54,11 @@ def main(
         model_config = yaml.safe_load(f)
 
     # initalize torch distributed mode by setting the communication between all procceses
-    # and assigning the GPU to use for each proccess; 
+    # and assigning the GPU to use for each proccess;
     # NOTE: in general, each proccess should run most commands in the program except saving to disk
-    world_size, global_rank, local_rank, distruted_mode = distributed.init_distributed_mode(backend=base_config["cuda"]["backend"])
+    world_size, global_rank, local_rank, distruted_mode = (
+        distributed.init_distributed_mode(backend=base_config["cuda"]["backend"])
+    )
 
     # stagger each process by 20 ms; I don't think this is required but it helps prevent I/O
     # contention on shared file systems like EFS
@@ -92,20 +91,21 @@ def main(
         / base_config["exp_name"]
         / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
     )
-    output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "training.log"
 
-    ############ START HERE - initialize distributed training
+    # create output directory and save configuration files on main process
+    if global_rank == 0:
+        output_path.mkdir(parents=True, exist_ok=True)
 
-    # Save configuration files and parameters
-    reproduce.save_configs(
-        config_dicts=[
-            (base_config, "base_config.yaml"),
-            (model_config, "model_config.yaml"),
-        ],
-        # solver_dict=(solver_config.to_dict(), "solver_config.json"),
-        output_path=output_path / "reproduce",
-    )
+        # Save configuration files and parameters
+        reproduce.save_configs(
+            config_dicts=[
+                (base_config, "base_config.yaml"),
+                (model_config, "model_config.yaml"),
+            ],
+            # solver_dict=(solver_config.to_dict(), "solver_config.json"),
+            output_path=output_path / "reproduce",
+        )
 
     # Configure logger that prints to a log file and stdout
     logging.basicConfig(
@@ -135,7 +135,6 @@ def main(
 
     batch_size = train_args["batch_size"]
     effective_bs = train_args["effective_batch_size"]
-    epochs = train_args["epochs"]
 
     val_batch_size = train_args["batch_size"]
 
@@ -173,15 +172,18 @@ def main(
     # Set device specific characteristics
     use_cpu = False
     if torch.cuda.is_available():
+        # setup cuda
         device = torch.device("cuda")
         log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
         for gpu in range(len(base_config["cuda"]["gpus"])):
             log.info("    -%s", torch.cuda.get_device_name(gpu))
     elif torch.mps.is_available():
+        # setup mps (apple silicon)
         base_config["dataset"]["root"] = base_config["dataset"]["root_mac"]
         device = torch.device("mps")
         log.info("Using: %s", device)
     else:
+        # setup cpu
         use_cpu = True
         device = torch.device("cpu")
         log.info("Using CPU")
@@ -218,23 +220,13 @@ def main(
     )
 
     detector_name = model_config["detector"]
+    detector_params = model_config["params"]
 
-    if "dino" in detector_name:
-        from detectors.models.backbones.backbone import build_backbone
-
-        issa_backbone = build_backbone()
-    breakpoint()
-
-    if "yolo" in detector_name:  # TODO: should just put this in a create_model.py file
-        anchors, num_anchors = initialize_anchors(base_config["priors"]["anchors"])
-
-    # Initalize the detector backbone; typically some feature extractor
-    backbone_name = model_config["backbone"]["name"]
-    if backbone_name in model_config["backbone"]:
-        backbone_params = model_config["backbone"][backbone_name]
-    else:
-        backbone_params = {}
-    backbone = backbone_map[backbone_name](**backbone_params)
+    model = create_detector(
+        detector_name=detector_name,
+        detector_args=detector_params,
+        num_classes=dataset_train.num_classes,
+    )
 
     if base_config["train"]["backbone_weights"] is not None:
         log.info("\nloading pretrained weights into the backbone\n")
@@ -243,19 +235,11 @@ def main(
             weights_only=True,
             map_location=torch.device(device),
         )
+
+        # TODO fix this
         backbone.load_state_dict(
             bb_weights["state_dict"], strict=False
         )  # "state_dict" is the key to model state_dict for the pretrained weights I found
-
-    # detector args
-    model_components = {
-        "backbone": backbone,
-        "num_classes": dataset_train.num_classes,
-        "anchors": anchors,
-    }
-
-    # Initialize detection model and transfer to GPU
-    model = detectors_map[detector_name](**model_components)
 
     # Compute and log the number of params in the model
     reproduce.count_parameters(model)
@@ -274,7 +258,7 @@ def main(
 
     ## TODO: log the backbone, neck, head, and detector used.
     log.info("\nmodel architecture")
-    log.info("\tbackbone: %s", backbone_name)
+    log.info("\tbackbone: %s", model_config["detector"]["backbone_name"])
     log.info("\tdetector: %s", model_config["detector"])
 
     # Extract the train arguments from base config

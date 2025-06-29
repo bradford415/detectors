@@ -65,7 +65,7 @@ def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
     distruted_mode = False
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         log.info("using torch distributed mode")
-        distruted_mode =  True
+        distruted_mode = True
 
         world_size = int(os.environ["WORLD_SIZE"])
         global_rank = int(os.environ["RANK"])

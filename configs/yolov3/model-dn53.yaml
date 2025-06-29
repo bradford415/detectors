@@ -4,14 +4,15 @@
 
 detector: "yolov3"
 
-backbone:
-  name: "darknet53"
+params:
+  backbone:
+    name: "darknet53"
 
-# Piror information to help the object detection model
-priors:
-  # List of anchor points (w,h); alternates between w,h -> num_anchors is len(anchors)/2; anchors are ONLY for w,h;
-  # In YoloV3 (section 2.3 of paper) they choose 9 clusters (w/h pairs) and divide them evenly across each scale, therefore, 3 anchors per scale
-  anchors:
-    - [[10, 13], [16, 30],  [33, 23]]
-    - [[30, 61],  [62, 45],  [59, 119]]
-    - [[116, 90], [156, 198], [373, 326]]
+  # Piror information to help the object detection model
+  priors:
+    # List of anchor points (w,h); alternates between w,h -> num_anchors is len(anchors)/2; anchors are ONLY for w,h;
+    # In YoloV3 (section 2.3 of paper) they choose 9 clusters (w/h pairs) and divide them evenly across each scale, therefore, 3 anchors per scale
+    anchors:
+      - [[10, 13], [16, 30],  [33, 23]]
+      - [[30, 61],  [62, 45],  [59, 119]]
+      - [[116, 90], [156, 198], [373, 326]]

@@ -24,7 +24,7 @@ def set_seeds(seed: int) -> None:
 
     # sets the seed for PyTorch's CPU and CUDA random number generators.
     torch.manual_seed(seed)
-    
+
     # sets numpy's RNG
     np.random.seed(seed)
 

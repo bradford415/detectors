@@ -6,50 +6,46 @@
 ---
 detector: "dino"
 
-backbone: "resnet50"
+params:
+  positional_embedding_params:
+    # The height and width temperature of the positional embedding equation (attention is all you need);
+    # see models.layers.positional for more details
+    pe_temperature_h: 40
+    pe_temperature_w: 40
 
-backbone_params:
-  return_levels: [1, 2, 3]
-  backbone_freeze_keywords: TODO see if I need this
+    # row/col normalize the poisitonal coordinates [0, 2pi)
+    normalize: True
 
+  # TODO: comment
+  aux_loss: True # TODO: might need to move this? 
 
-positional_embedding_params:
-  # The height and width temperature of the positional embedding equation (attention is all you need);
-  # see models.layers.positional for more details
-  pe_temperature_h: 40
-  pe_temperature_w: 40
+  # parameters for the Hungarian Matcher
+  matcher:
+    type: "hungarian"
+    set_cost_class: 2.0
+    set_cost_bbox: 5.0
+    set_cost_giou: 2.0
+    focal_alpha: 0.25
 
-  # row/col normalize the poisitonal coordinates [0, 2pi)
-  normalize: True
+  # TODO: comment
+  loss_weights:
+    cls_loss_coef: 1.0
+    bbox_loss_coef: 5.0
+    giou_loss_coef: 2.0
+    iterm_loss_ceof: 1.0
 
-# TODO: comment
-aux_loss: True # TODO: might need to move this? 
+  # TODO: comment
+  postprocess:
+    num_select: 300
+    nms_iou_threshold: -1
 
-# parameters for the Hungarian Matcher
-matcher:
-  type: "hungarian"
-  set_cost_class: 2.0
-  set_cost_bbox: 5.0
-  set_cost_giou: 2.0
-  focal_alpha: 0.25
+  backbone_name: "resnet50"
+  backbone_params:
+    return_levels: [1, 2, 3]
+    backbone_freeze_keywords: TODO see if I need this
 
-# TODO: comment
-loss_weights:
-  cls_loss_coef: 1.0
-  bbox_loss_coef: 5.0
-  giou_loss_coef: 2.0
-  iterm_loss_ceof: 1.0
-
-# TODO: comment
-postprocess:
-  num_select: 300
-  nms_iou_threshold: -1
-
-detector:
-  name: "dino"
-
-  # Section D.4 of the DINO paper gives parameters used
-  params:
+  architecture_params:
+    # parameters for the detector architecture; section D.4 of the DINO paper gives parameters used
     standard:
       num_feature_levels: 4
 
@@ -62,8 +58,6 @@ detector:
       # TODO: this might not be used? I could leave it in and just use not implemented error
       random_refpoints_xy: False
       fix_refpoints_hw: -1 # comment the options
-
-    # Other DINO params (maybe put these under their own key)
 
     # Two stage refers to how the learned obj queries are initalized to the decoder;
     # for the standard two-stage (Section 3.4):
@@ -141,7 +135,6 @@ detector:
       # Adds a 
       add_channel_attention: False
 
-
       # Used to initalize TransformerDecoder attributes in __init__()
       # TODO write a little more about rm_dec_query_scale if needed
       dec_layer_number: null
@@ -174,13 +167,3 @@ detector:
       dec_noise_params:
         dln_xy_noise: 0.2
         dln_hw_noise: 0.2
-
-
-
-
-
-
-  
-
-
-
