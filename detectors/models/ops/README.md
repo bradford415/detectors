@@ -1,6 +1,6 @@
 ### Troubleshooting Multiscale Deformable Attention Installation (MSDA)
 Code updates I had to make (should already be implemented):
-* change `type()` to `scaler_type()`
+* in `ms_deform_attn_cuda.cu` on line `64` & `134` change `value.type()` to `value.scaler_type()`
 
 Additional steps I had to follow to install MSDA:
 * Updated Windows GPU drivers through the NVIDIA App (previously called GeForce Experience) and restarted my PC, then installed/upgraded cuda toolkit through the runfile option
