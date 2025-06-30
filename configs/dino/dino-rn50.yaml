@@ -25,9 +25,11 @@ params:
     focal_alpha: 0.25
 
   # TODO: comment
+  aux_loss: True
+
+  # TODO: comment
   loss_weights:
     # TODO: comment
-    aux_loss: True
     cls_loss_coef: 1.0
     bbox_loss_coef: 5.0
     giou_loss_coef: 2.0
@@ -38,12 +40,21 @@ params:
     num_select: 300
     nms_iou_threshold: -1
 
-  backbone_name: "resnet50"
-  backbone_params:
-    return_levels: [1, 2, 3]
+  backbone:
+    name: "resnet50"
+
+    # the indices of interemediate feature map scales to return from the backbone;
+    # most backbones have 4 different `levels` which each correpond to a different 
+    # feature map scale where index 0 is the highest spatial resolution and index 3 is
+    # the lowest (the final feature maps before performing classification); 
+    # DINO DETR uses `num_feature_levels` (4) feature_maps so since the default is to extract 
+    # only 3 from the backbone, a 4th will be created through an additional CNN 
+    # (downsampled by 2 from the lowest resolution)
+    bb_level_inds: [1, 2, 3]
+
     backbone_freeze_keywords: TODO see if I need this
 
-  architecture_params:
+  detector_params:
     # parameters for the detector architecture; section D.4 of the DINO paper gives parameters used
     standard:
       num_feature_levels: 4
@@ -94,9 +105,12 @@ params:
 
     # deformable attention params; also contains some general dino params
     transformer:
-      # total dimension & number of heads of the transformer encoder/decoder; hidden_dim
-      # will be split across num_heads so hidden_dim % num_heads = 0
+      # total dimension of the feature vectors passed to the transformer encoder/decoder;
+      # hiddne_dim will be split across num_heads so hidden_dim % num_heads = 0; the multiscale 
+      # feature maps from the backbone are projected to this dimension (b, hidden_dim, h, w)
       hidden_dim: 256
+
+      # number of attention heads in the transformer encoder/decoder
       num_heads: 8
 
       # Number of learnable object queries that are input into the decoder; maximum number of object 

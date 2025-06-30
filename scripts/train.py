@@ -17,6 +17,7 @@ from detectors.data.coco_ds import build_coco
 from detectors.data.collate_functions import collate_fn
 from detectors.losses import SetCriterion, Yolov3Loss, Yolov4Loss
 from detectors.models.create import create_detector
+from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
 from detectors.utils import distributed, reproduce
@@ -229,6 +230,19 @@ def main(
         detector_args=detector_params,
         num_classes=dataset_train.num_classes,
     )
+    model.to(device)
+
+    # Initalize postprocessor if using DINO DETR
+    if "postprocess" in detector_params:
+        # converts the models output to the expected output by the coco api, during inference
+        # and visualization only; not used during training
+        postprocess_args = detector_params["postprocess"]
+        postprocessors = {
+            "bbox": PostProcess(
+                num_select=postprocess_args["num_select"],
+                nms_iou_threshold=postprocess_args["nms_iou_threshold"],
+            )
+        }
 
     if base_config["train"]["backbone_weights"] is not None:
         log.info("\nloading pretrained weights into the backbone\n")
@@ -246,14 +260,11 @@ def main(
     # Compute and log the number of params in the model
     reproduce.count_parameters(model)
 
-    # model = Darknet("scripts/configs/yolov4.cfg")
-    model.to(device)
-
     ## TODO: Apply weights init maybe
 
     # initalize loss with specific args
-    # TODO:
     if detector_name == "yolov3":
+        # TODO: fix yolov3
         criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
     elif detector_name == "dino":
         num_decoder_layers = detector_params["architecture_params"]["transformer"][

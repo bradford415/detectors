@@ -291,12 +291,13 @@ class DeformableTransformer(nn.Module):
                 )
                 nn.init.normal_(self.pat_embed_for_2stage)
 
+            # skipped
             if two_stage_add_query_num > 0:
                 self.tgt_embed = nn.Embedding(self.two_stage_add_query_num, d_model)
 
-            if two_stage_learn_wh:
+            if two_stage_learn_wh:  # skipped
                 self.two_stage_wh_embedding = nn.Embedding(1, 2)
-            else:
+            else:  # default case
                 self.two_stage_wh_embedding = None
 
         # skipped by default
@@ -451,12 +452,12 @@ class DeformableTransformer(nn.Module):
                                 value is None
                             see setup_contrastive_denoising() return docs variable `input_query_bbox` for more info
             tgt: during training:
-                 a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
-                 injected at random locations, this tensor was then embedded with nn.Embedding;
-                 approximately 25% of GT labels are randomly changed;
-                 shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
+                    a tensor with GT-truth classes and randomly selected classes (from the enitre ontology)
+                    injected at random locations, this tensor was then embedded with nn.Embedding;
+                    approximately 25% of GT labels are randomly changed;
+                    shape (batch_size, max_objects_batch*denoise_number_per_cdn_group*2, hidden_dim)
                  during inference:
-                 value is None
+                    value is None
             attn_mask: an attention mask where False = attend and True = mask/block attention;
                        mask has shape (tgt_size, tgt_size) tgt_size=all_dn_queries + learnable object queries
                        the region of the mask attn_mask[:all_dn_queries, :all_dn_queries] (top_left)
@@ -478,7 +479,7 @@ class DeformableTransformer(nn.Module):
             encoder outputs:
                 hs_enc: topk encoder output features that had padding locations masked to 0
                         and linearly projected (1, b, topk, hidden_dim)
-                ref_enc: sigmoid of the topk reference boxes from the encoder `output_memory` which
+                ref_enc: sigmoid of the topk classes from the encoder `output_memory` which
                          was embedded to boxes though an MLP and output proposals added
                          (which are masked at padded and invalid locations with `inf`s)
                          (1, b, topk, 4)
@@ -1733,7 +1734,10 @@ class TransformerDecoder(nn.Module):
             refpoints_unsigmoid: combined noised boxes with positive and negative queries
                                  from setup_contrastive_denoising() with the detached reference box
                                  anchors which were created from the encoded features and embedded
-                                 with an MLP (+ output_proposals);
+                                 with an MLP (+ output_proposals); these will be used as initial
+                                 reference points, the decoder_layer will predicted and refine offsets
+                                 and these offsets will be used to predict the bboxes from these
+                                 initial reference points;
                                  shape (max_objects*num_cdn_group*2 + topk, b, 4) ~ (b, 1100, 4)
                                  where 4 = (cx, cy, w, h)
             level_start_index: start index of the level in sum(h_i * w_i) shape (num_levels,);
@@ -1770,7 +1774,8 @@ class TransformerDecoder(nn.Module):
         # new reference points will be appended here
         ref_points = [reference_points]
 
-        # Loop through each DeformableTransformerDecoderLayer; default 6 decoder layers
+        # Loop through each DeformableTransformerDecoderLayer and refine the intial reference
+        # points to create bbox offset predictions; default 6 decoder layers
         for layer_id, layer in enumerate(self.layers):
 
             # skipped by default (decoder_query_perturber=None)
@@ -1784,7 +1789,7 @@ class TransformerDecoder(nn.Module):
             if self.deformable_decoder:
 
                 # NOTE: these `reference_points` are refined at every decoder layer and the refined
-                #       `reference_poins` will be the input to the next decoder layer
+                #       `reference_points` will be the input to the next decoder layer
                 if (
                     reference_points.shape[-1] == 4
                 ):  # if reference points are in cxcywh format (default case)
@@ -1908,7 +1913,7 @@ class TransformerDecoder(nn.Module):
                     reference_points = new_reference_points
                 else:  # implemented in DAB-DETR and DINO
                     # remaining layers will use these new detached `reference_points`
-                    # even though they're not appened below
+                    # even though they're not appended below
                     reference_points = new_reference_points.detach()
 
                 # NOTE this is where the look forward twice module is implemented;

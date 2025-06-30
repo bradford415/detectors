@@ -13,7 +13,7 @@ from detectors.models.layers.deformable_transformer import (
     DeformableTransformer,
     build_deformable_transformer,
 )
-from detectors.postprocessing.postprocess import PostProcess
+from detectors.utils.misc import inverse_sigmoid
 
 
 class DINO(nn.Module):
@@ -308,14 +308,15 @@ class DINO(nn.Module):
         features, pos_encodings = self.backbone(samples)
 
         # Extract and project the feature maps and padding masks from the NestedTensors
+        # feature_maps shape after projection (b, hidden_dim, h_i, w_i)
         feature_maps = []
         masks = []
         for level, feat_map in enumerate(features):
             img_tens, mask = feat_map.decompose()
 
-            img_tens = self.input_proj[level](img_tens)
+            img_tens = self.input_proj[leel](img_tens)
             feature_maps.append(img_tens)
-            masks.append(mask)
+            masks.append(mask)v
 
             assert mask is not None
 
@@ -380,7 +381,15 @@ class DINO(nn.Module):
             assert targets is None
             input_query_bbox = input_query_label = attn_mask = dn_meta = None
 
-        # TODO
+        # Forward pass through the full DeformableTransformer; returns the:
+        #   1. raw decoder outputs from each layer (b, num_queries, hidden_dim) - unbounded
+        #   2. initial & predicted bboxes from each layer (b, num_queries, 4) - normalized [0, 1]
+        #   3. topk encoder output features that had padding locations masked to 0
+        #       and linearly projected (1, b, topk, hidden_dim)
+        #   4. topk encoder output coords used as initial reference points for the decoder
+        #      this is what is refined after every decoder layer to get bbox predictions
+        #   5. initial box proposals using the topk class embeds from the
+        #      generated output proposals (b, topk, 4) - normalized [0, 1]
         hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
             feature_maps,
             masks,
@@ -389,6 +398,60 @@ class DINO(nn.Module):
             input_query_label,
             attn_mask,
         )
+        
+        assert len(hs) == self.transformer.num_decoder_layers
+        
+        ########################## START HERE $$$$$$$$$$$$$$$$$$$$$ 
+        # In case num object=0
+        hs[0] += self.label_enc.weight[0,0]*0.0
+
+        # deformable-detr-like anchor update
+        # reference_before_sigmoid = inverse_sigmoid(reference[:-1]) # n_dec, bs, nq, 4
+        outputs_coord_list = []
+        for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(zip(reference[:-1], self.bbox_embed, hs)):
+            layer_delta_unsig = layer_bbox_embed(layer_hs)
+            layer_outputs_unsig = layer_delta_unsig  + inverse_sigmoid(layer_ref_sig)
+            layer_outputs_unsig = layer_outputs_unsig.sigmoid()
+            outputs_coord_list.append(layer_outputs_unsig)
+        outputs_coord_list = torch.stack(outputs_coord_list)        
+
+        outputs_class = torch.stack([layer_cls_embed(layer_hs) for
+                                     layer_cls_embed, layer_hs in zip(self.class_embed, hs)])
+        if self.dn_number > 0 and dn_meta is not None:
+            outputs_class, outputs_coord_list = \
+                dn_post_process(outputs_class, outputs_coord_list,
+                                dn_meta,self.aux_loss,self._set_aux_loss)
+        out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord_list[-1]}
+        if self.aux_loss:
+            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord_list)
+
+
+        # for encoder output
+        if hs_enc is not None:
+            # prepare intermediate outputs
+            interm_coord = ref_enc[-1]
+            interm_class = self.transformer.enc_out_class_embed(hs_enc[-1])
+            out['interm_outputs'] = {'pred_logits': interm_class, 'pred_boxes': interm_coord}
+            out['interm_outputs_for_matching_pre'] = {'pred_logits': interm_class, 'pred_boxes': init_box_proposal}
+
+            # prepare enc outputs
+            if hs_enc.shape[0] > 1:
+                enc_outputs_coord = []
+                enc_outputs_class = []
+                for layer_id, (layer_box_embed, layer_class_embed, layer_hs_enc, layer_ref_enc) in enumerate(zip(self.enc_bbox_embed, self.enc_class_embed, hs_enc[:-1], ref_enc[:-1])):
+                    layer_enc_delta_unsig = layer_box_embed(layer_hs_enc)
+                    layer_enc_outputs_coord_unsig = layer_enc_delta_unsig + inverse_sigmoid(layer_ref_enc)
+                    layer_enc_outputs_coord = layer_enc_outputs_coord_unsig.sigmoid()
+
+                    layer_enc_outputs_class = layer_class_embed(layer_hs_enc)
+                    enc_outputs_coord.append(layer_enc_outputs_coord)
+                    enc_outputs_class.append(layer_enc_outputs_class)
+
+                out['enc_outputs'] = [
+                    {'pred_logits': a, 'pred_boxes': b} for a, b in zip(enc_outputs_class, enc_outputs_coord)
+                ]
+
+        out['dn_meta'] = dn_meta
 
 
 def build_dino(
@@ -396,35 +459,25 @@ def build_dino(
     num_classes: int,
     backbone_args: dict[str, any],
     dino_args: dict[str, any],
-    criterion_args: dict[str, any],
-    matcher_args: dict[str, any],
-    loss_args: dict[str, any],
-    postprocess_args: dict[str, any],
-    device: torch.device,
+    aux_loss: bool = True
 ):
     """Build the DINO detector, loss function, and the postprocessor
 
     Args:
-
         backbone_args: parameters specifically for the build_backbone() function;
                        see models.backbones.backbone.build_backbone() for parameter descriptions
         denoising_args: parameters used for the denoising queries
         transformer_args: parameters used for DINO and the deformable transformer
         dino_args: parameters used for the dino architecture; should contain parameters for
-                   `general`, `two-stage`, `denoising`, and `transformer`
-        matcher_args: the parameters for the hungarian matcher class
+                   `standard`, `two-stage`, `denoising`, and `transformer`
+        aux_loss:
 
     Returns:
-        1. the DINO detector model
-        3. the postprocessor (only used during inference)
-            - prepares the prediction output for the coco api
-            - rescales bbox prediction back to the original input size
-              (not needed during training since the gt boxes are resized )
+        the DINO detector model
 
     """
-    device = torch.device(device)
-
-    backbone: Joiner = build_dino_backbone(**backbone_args)
+    breakpoint()
+    backbone: Joiner = build_dino_backbone(name=backbone_args["name"], **backbone_args)
 
     # set up general dino args which get passed around alots
 
@@ -454,7 +507,7 @@ def build_dino(
         num_obj_queries=dino_args["num_obj_queries"],
         num_heads=dino_args["num_heads"],
         num_feature_levels=dino_args["num_feature_levels"],
-        aux_loss=criterion_args["aux_loss"],
+        aux_loss=aux_loss,
         query_dim=dino_args["query_dim"],
         two_stage_type=dino_args["two_stage_type"],
         two_stage_add_query_num=dino_args["two_stage_add_query_num"],
@@ -468,13 +521,4 @@ def build_dino(
         denoise_labelbook_size=dino_args["denoise_labelbook_size"],
     )
 
-    # converts the models output to the expected output by the coco api, during inference
-    # and visualization only; not used during training
-    postprocessors = {
-        "bbox": PostProcess(
-            num_select=postprocess_args["num_select"],
-            nms_iou_threshold=postprocess_args["nms_iou_threshold"],
-        )
-    }
-
-    return model, postprocessors
+    return model

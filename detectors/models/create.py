@@ -1,6 +1,7 @@
 from typing import Optional
 
 from detectors.models.backbones import backbone_map
+from detectors.postprocessing.postprocess import PostProcess
 from detectors.utils.script import initialize_anchors
 
 from .dino import build_dino
@@ -36,43 +37,47 @@ def create_detector(
     """
 
     if detector_name == "yolov3":
-        model = _create_yolov3()
+        model = _create_yolov3(detector_name, num_classes, detector_args)
     elif detector_name == "yolov4":
         raise NotImplementedError
     elif detector_name == "dino":
-        model = _create_dino(num_classes, detector_args)
+        model = _create_dino(detector_name, num_classes, detector_args)
     else:
         raise ValueError(f"detctor: {detector_name} not recognized")
 
     return model
 
 
-def _create_dino(num_classes: int, detector_args: dict[str, any]):
+def _create_dino(detector_name: str, num_classes: int, detector_args: dict[str, any]):
     """Create the dino detector, loss function, and postprocessor
 
     TODO: consider intializing the criterion/postprocessor separate from the model
 
     Args:
+        detector_name: now of the object detection model
+        num_classes: the max_obj_id + 1 (background); for coco this should be 91
         detector_args: a dictionary of parameters specific to the build_dino() function;
                        see models.dino.build_dino() docstring for these parameters
     """
-    breakpoint()
-    ############### START HERE --- unpack the args appropriately bl
-    model, criterion, postprocessor = detectors_map["dino"](
+    model = detectors_map[detector_name](
         num_classes=num_classes,
         backbone_args=detector_args["backbone_params"],
-        dino_args=detector_args["dino_args"],
-        criterion_args=detector_args["criterion_args"],
-        matcher_args=detector_args["matcher_args"],
-        loss_args=detector_args["loss_args"],
-        postprocess_args=detector_args["postprocess_args"],
-        device=detector_args["device"],
+        dino_args=detector_args["detector_params"],
+        aux_loss=detector_args["aux_loss"],
     )
-    return model, criterion, postprocessor
+    return model
 
 
-def _create_yolov3(detector_args: dict[str, any], anchors):
-    """TODO"""
+def _create_yolov3(
+    detector_name: str, num_classes: str, detector_args: dict[str, any], anchors
+):
+    """TODO
+
+    Args:
+        detector_name: the name of the object detector to use
+        num_classes: the number of classes in the dataset; for coco this should be 80 and
+                     these mapping should be contiguous
+    """
 
     anchors, num_anchors = initialize_anchors(anchors)
 
@@ -86,7 +91,7 @@ def _create_yolov3(detector_args: dict[str, any], anchors):
     # detector args
     model_components = {
         "backbone": backbone,
-        "num_classes": dataset_train.num_classes,
+        "num_classes": num_classes,
         "anchors": anchors,
     }
     # Initialize detection model and transfer to GPU
