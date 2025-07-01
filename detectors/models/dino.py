@@ -369,7 +369,7 @@ class DINO(nn.Module):
                     num_queries=self.num_obj_queries,
                     num_classes=self.num_classes,
                     hidden_dim=self.hidden_dim,
-                    label_enc=self.label_enc,
+                    label_enc=self.label_encoding,
                     targets=targets,
                     denoise_number=self.denoise_number,
                     denoise_label_noise_ratio=self.denoise_label_noise_ratio,
@@ -398,25 +398,42 @@ class DINO(nn.Module):
             input_query_label,
             attn_mask,
         )
-        
+
         assert len(hs) == self.transformer.num_decoder_layers
+        assert len(reference) == self.transformer.num_decoder_layers + 1
         
-        ########################## START HERE $$$$$$$$$$$$$$$$$$$$$ 
-        # In case num object=0
-        hs[0] += self.label_enc.weight[0,0]*0.0
+        # In case there are no ground-truth objects in the image (i.e., negative images, num_objects=0);
+        # if so self.label_encoding embedding module will never be indexed and my not be included in the
+        # computation graph (for the embedding module, only indices that were indexed are added to the 
+        # computational graph); this will cause a warning or error when trying to compute the loss;
+        # so this operation does nothing (adds 0s)  
+        hs[0] += self.label_encoding.weight[0,0]*0.0
 
         # deformable-detr-like anchor update
         # reference_before_sigmoid = inverse_sigmoid(reference[:-1]) # n_dec, bs, nq, 4
         outputs_coord_list = []
         for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(zip(reference[:-1], self.bbox_embed, hs)):
-            layer_delta_unsig = layer_bbox_embed(layer_hs)
+            
+            # predict the reference point offset (delta), these are adjustments the model wants to 
+            # apply to the reference points; this is the same bbox_embed (shared parameters) 
+            # called in the Decoder that embedded the decoder_layer output to box prediction offsets
+            layer_delta_unsig = layer_bbox_embed(layer_hs) 
+            
+            # add the pred offsets to the reference points (in the logit space) and then
+            # convert back to normalized box coordinates for final bbox predictions 
             layer_outputs_unsig = layer_delta_unsig  + inverse_sigmoid(layer_ref_sig)
             layer_outputs_unsig = layer_outputs_unsig.sigmoid()
             outputs_coord_list.append(layer_outputs_unsig)
+
+        # convert bbox predictions to a tensor (num_decoder_layers, b, num_queries, 4)
         outputs_coord_list = torch.stack(outputs_coord_list)        
 
+        # conver the decoder outputs to class predictions (num_decoder_layers, b, num_queries, num_classes);
+        # unlike bbox_embed, this is the first time class_embed is called
         outputs_class = torch.stack([layer_cls_embed(layer_hs) for
                                      layer_cls_embed, layer_hs in zip(self.class_embed, hs)])
+        
+        ##################### START HERE #####################
         if self.dn_number > 0 and dn_meta is not None:
             outputs_class, outputs_coord_list = \
                 dn_post_process(outputs_class, outputs_coord_list,

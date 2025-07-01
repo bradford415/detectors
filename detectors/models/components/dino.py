@@ -490,3 +490,20 @@ def gen_encoder_output_proposals(
     output_memory = output_memory.masked_fill(~output_proposals_valid, float(0))
 
     return output_memory, output_proposals
+
+
+def dn_post_process(outputs_class, outputs_coord, dn_meta, aux_loss, _set_aux_loss):
+    """
+        post process of dn after output from the transformer
+        put the dn part in the dn_meta
+    """
+    if dn_meta and dn_meta['pad_size'] > 0:
+        output_known_class = outputs_class[:, :, :dn_meta['pad_size'], :]
+        output_known_coord = outputs_coord[:, :, :dn_meta['pad_size'], :]
+        outputs_class = outputs_class[:, :, dn_meta['pad_size']:, :]
+        outputs_coord = outputs_coord[:, :, dn_meta['pad_size']:, :]
+        out = {'pred_logits': output_known_class[-1], 'pred_boxes': output_known_coord[-1]}
+        if aux_loss:
+            out['aux_outputs'] = _set_aux_loss(output_known_class, output_known_coord)
+        dn_meta['output_known_lbs_bboxes'] = out
+    return outputs_class, outputs_coord
