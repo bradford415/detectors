@@ -305,15 +305,16 @@ class DeformableTransformer(nn.Module):
             self.init_ref_points(num_obj_queries)  # init self.refpoint_embed
 
         # Both these attributes are set in models.dino.DINO.__init__() in the two stage block;
-        # they're used to encode the encoder output to class embeddings and bbox embeddings;
-        # by default, they both share parameters
+        # they're used to encode the encoder output to class embeddings and bbox embeddings to select
+        # the topk proposals for the decoder (this is called after the TransformerEncoder);
+        # there's an option to share these layers with the decoder prediction heads but False by default
         # class_embed is of type Linear(hidden, num_classes) - for coco num_classes=91 not 80;
         # explanation for why 91 instead of 80: https://github.com/facebookresearch/detr/issues/23#issuecomment-636322576
         self.enc_out_class_embed = (
             None  # topk proposals will be chosen from these embeded values
         )
 
-        # bbox_embed is a 3 layer MLP with hidden_dims=256 and output_dim=4
+        # bbox_embed is a single 3 layer MLP with hidden_dims=256 and output_dim=4; there' an op
         self.enc_out_bbox_embed = None
 
         # evolution of anchors; skipped by default so can be ignored for now
@@ -705,6 +706,7 @@ class DeformableTransformer(nn.Module):
             else:
                 tgt_ = tgt_undetach.detach()
 
+            # combine the denoise queries with the top
             if refpoint_embed is not None:
                 # Combine noised boxes with positive and negative queries from setup_contrastive_denoising()
                 # with the detached reference box anchors which were created from the encoded features and
@@ -712,7 +714,7 @@ class DeformableTransformer(nn.Module):
                 refpoint_embed = torch.cat([refpoint_embed, refpoint_embed_], dim=1)
 
                 # Combine noised class labels (randomly selected labels) from setup_contrastive_denoising()
-                # and the extracted tgt_embed weight matrix (b, max_objects*num_cdn_group*2 + topk, hidden_dim)
+                # and the extracted tgt_embed weight matrix (b, num_dn_queries + topk, hidden_dim)
                 # NOTE: I believe tgt is the learnable content queries & the GT+noise fed into the decoder
                 #       in the dino paper Figure 2
                 tgt = torch.cat([tgt, tgt_], dim=1)

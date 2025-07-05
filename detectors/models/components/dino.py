@@ -16,7 +16,7 @@ def setup_contrastive_denoising(
     denoise_label_noise_ratio,
     denoise_box_noise_scale,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """TODO
+    """Create the denoising queries used during training
 
     Section 3.3 and Figure 3 of DINO paper
 
@@ -57,18 +57,18 @@ def setup_contrastive_denoising(
                       see detectors/models/README.md for a visual of this attn_mask
         4. denoise_meta: a dicionary which stores the computed values used to build the denoising queries
                          as metadata; has the following keys:
-                            1. pad_size: total number of denoising_queries (default 200)
+                            1. pad_size: total number of denoising_queries
                             2. num_dn_group: the number of denoising_queries per CDN group
                                              (this should vary by batch)
-
 
     """
     if training:
         # Double the number of denoise_queries to create positive and negative queries;
         #   - positive queries are slightly noised gt boxes & labels; the model is expected to recover
-        #     the correct box & lable from this noise
+        #     the correct box & label from this noise
         #   - negative queries are incorrect labels or heavily noised boxes that do not match any object
-        #     and the model should not output any confident prediction for these
+        #     and the model should predict the `no object` class 
+        #     (it should not output any confident prediction for real classes)
         denoise_number *= 2
 
         # Create a list of tensors (num_objects,) filled with 1s for each sample
@@ -132,8 +132,8 @@ def setup_contrastive_denoising(
         known_bboxs = boxes.repeat(2 * denoise_number, 1)
 
         # Create copies of the repeated known_labels and known_bbox
-        known_labels_expand = known_labels.clone()  # (num_objects*denoise_number*2,)
-        known_bbox_expand = known_bboxs.clone()  # (num_objects*denoise_number*2, 4)
+        known_labels_expand = known_labels.clone() # (num_objects*denoise_number*2,)
+        known_bbox_expand = known_bboxs.clone() # (num_objects*denoise_number*2, 4)
 
         # inject random class labels into known_labels_expand (num_objects*denoise_number*2,)
         if denoise_label_noise_ratio > 0:
@@ -492,18 +492,56 @@ def gen_encoder_output_proposals(
     return output_memory, output_proposals
 
 
-def dn_post_process(outputs_class, outputs_coord, dn_meta, aux_loss, _set_aux_loss):
+def dn_post_process(
+    outputs_class: torch.Tensor,
+    outputs_coord: torch.Tensor,
+    dn_meta,
+    aux_loss: bool,
+    _set_aux_loss: callable,
+):
+    """Post processes the preictions from each layer by separating the denoising query predictions [:pad_size]
+    and the learnable
+
+    Args:
+        outputs_class: class predictions created from the raw decoder layer outputs (outside the decoder)
+                       (num_decoder_layers, b, num_queries, num_classes)
+        outputs_coord: bbox predcitions created from the raw decoder layer outputs (outside the decoder)
+                       (num_decoder_layers, b, num_queries, 4) where 4 = (cx, cy, w, h)
+        dn_meta: a dicionary which stores the computed values used to build the denoising queries
+                 as metadata; has the following keys:
+                    1. pad_size: total number of denoising_queries
+                    2. num_dn_group: the number of denoising_queries per CDN group
+                       (this should vary by batch)
+        aux_loss: whether to use the auxilliary loss (a loss at each decoder layer)
+        _set_aux_loss: a function to extract the output class logit predictions and bboxes from every
+                       decoder except the last; creates a list of dictionaries
+    
+    Returns:
+
     """
-        post process of dn after output from the transformer
-        put the dn part in the dn_meta
-    """
-    if dn_meta and dn_meta['pad_size'] > 0:
-        output_known_class = outputs_class[:, :, :dn_meta['pad_size'], :]
-        output_known_coord = outputs_coord[:, :, :dn_meta['pad_size'], :]
-        outputs_class = outputs_class[:, :, dn_meta['pad_size']:, :]
-        outputs_coord = outputs_coord[:, :, dn_meta['pad_size']:, :]
-        out = {'pred_logits': output_known_class[-1], 'pred_boxes': output_known_coord[-1]}
+    # if denoising was applied
+    if dn_meta and dn_meta["pad_size"] > 0:
+
+        # Extracts the denoising predictions (fake queries) from the beginning of the decoder output
+        # (num_layers, b, pad_size, num_classes) & (num_layers, b, pad_size, 4)
+        output_known_class = outputs_class[:, :, : dn_meta["pad_size"], :]
+        output_known_coord = outputs_coord[:, :, : dn_meta["pad_size"], :]
+
+        # Extract the real object queries
+        # (num_layers, b, num_queries-pad_size, num_classes) & (num_layers, b, num_queries-pad_size, 4)
+        outputs_class = outputs_class[:, :, dn_meta["pad_size"] :, :]
+        outputs_coord = outputs_coord[:, :, dn_meta["pad_size"] :, :]
+
+        # extract the outputs from the last decoder layer
+        out = {
+            "pred_logits": output_known_class[-1],  # (b, pad_size, num_classes)
+            "pred_boxes": output_known_coord[-1],  # (b, pad_size, 4)
+        }
+
+        # extract the output logits and bbox preds from every decoder output except the last
+        # (i.e., auxilliary outputs); creates a list of dicts with keys "pred_logits" & "pred_dict_boxes"
         if aux_loss:
-            out['aux_outputs'] = _set_aux_loss(output_known_class, output_known_coord)
-        dn_meta['output_known_lbs_bboxes'] = out
+            out["aux_outputs"] = _set_aux_loss(output_known_class, output_known_coord)
+        dn_meta["output_known_lbs_bboxes"] = out
+
     return outputs_class, outputs_coord

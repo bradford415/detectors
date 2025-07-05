@@ -7,7 +7,10 @@ from torch.nn import functional as F
 
 from detectors.data.data import NestedTensor
 from detectors.models.backbones.backbone import Joiner, build_dino_backbone
-from detectors.models.components.dino import setup_contrastive_denoising
+from detectors.models.components.dino import (
+    dn_post_process,
+    setup_contrastive_denoising,
+)
 from detectors.models.layers.common import MLP
 from detectors.models.layers.deformable_transformer import (
     DeformableTransformer,
@@ -198,7 +201,8 @@ class DINO(nn.Module):
         nn.init.constant_(_bbox_embed.layers[-1].bias.data, 0)
 
         # Create a bbox MLP and class embed module for each decoder layer; if embed_share=True,
-        # use the same MLP for each bbox and share the parameters; default is True
+        # use the same MLP for each bbox & same Linear module for each class pred and share the
+        # parameters; default is True for both
         if decoder_pred_bbox_embed_share:
             box_embed_layerlist = [
                 _bbox_embed for _ in range(transformer.num_decoder_layers)
@@ -229,10 +233,8 @@ class DINO(nn.Module):
         #   1. create an additional MLP (which will be used to create reference points (cx, cy, w, h)
         #      based on the encoder_output) and a Linear layer module (for class emebeddings) for the
         #      transformer.enc_out
-        #      TODO understand what this is and how it differs from self.transformer.decoder.bbox_embed
         #   2. if two_stage_embed_share=True (default is False) share the same MLP for the bboxes and
         #      the Linear layer for the class prediction, else create new modules (does not share parameters)
-        #      TODO understand this two stage type more and the difference between the differnt bbox/cls modules created
         self.two_stage_type = two_stage_type
         self.two_stage_add_query_num = two_stage_add_query_num
         if two_stage_type != "no":
@@ -314,9 +316,9 @@ class DINO(nn.Module):
         for level, feat_map in enumerate(features):
             img_tens, mask = feat_map.decompose()
 
-            img_tens = self.input_proj[leel](img_tens)
+            img_tens = self.input_proj[level](img_tens)
             feature_maps.append(img_tens)
-            masks.append(mask)v
+            masks.append(mask)
 
             assert mask is not None
 
@@ -401,74 +403,116 @@ class DINO(nn.Module):
 
         assert len(hs) == self.transformer.num_decoder_layers
         assert len(reference) == self.transformer.num_decoder_layers + 1
-        
+
         # In case there are no ground-truth objects in the image (i.e., negative images, num_objects=0);
         # if so self.label_encoding embedding module will never be indexed and my not be included in the
-        # computation graph (for the embedding module, only indices that were indexed are added to the 
+        # computation graph (for the embedding module, only indices that were indexed are added to the
         # computational graph); this will cause a warning or error when trying to compute the loss;
-        # so this operation does nothing (adds 0s)  
-        hs[0] += self.label_encoding.weight[0,0]*0.0
+        # so this operation does nothing (adds 0s)
+        hs[0] += self.label_encoding.weight[0, 0] * 0.0
 
         # deformable-detr-like anchor update
         # reference_before_sigmoid = inverse_sigmoid(reference[:-1]) # n_dec, bs, nq, 4
         outputs_coord_list = []
-        for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(zip(reference[:-1], self.bbox_embed, hs)):
-            
-            # predict the reference point offset (delta), these are adjustments the model wants to 
-            # apply to the reference points; this is the same bbox_embed (shared parameters) 
+        for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(
+            zip(reference[:-1], self.bbox_embed, hs)
+        ):
+
+            # predict the reference point offset (delta), these are adjustments the model wants to
+            # apply to the reference points; this is the same bbox_embed (shared parameters)
             # called in the Decoder that embedded the decoder_layer output to box prediction offsets
-            layer_delta_unsig = layer_bbox_embed(layer_hs) 
-            
+            layer_delta_unsig = layer_bbox_embed(layer_hs)
+
             # add the pred offsets to the reference points (in the logit space) and then
-            # convert back to normalized box coordinates for final bbox predictions 
-            layer_outputs_unsig = layer_delta_unsig  + inverse_sigmoid(layer_ref_sig)
+            # convert back to normalized box coordinates for final bbox predictions
+            layer_outputs_unsig = layer_delta_unsig + inverse_sigmoid(layer_ref_sig)
             layer_outputs_unsig = layer_outputs_unsig.sigmoid()
             outputs_coord_list.append(layer_outputs_unsig)
 
         # convert bbox predictions to a tensor (num_decoder_layers, b, num_queries, 4)
-        outputs_coord_list = torch.stack(outputs_coord_list)        
+        # where 4 = (cx, cy, w, h)
+        outputs_coord_list = torch.stack(outputs_coord_list)
 
-        # conver the decoder outputs to class predictions (num_decoder_layers, b, num_queries, num_classes);
+        # convert the decoder outputs to class predictions (num_decoder_layers, b, num_queries, num_classes);
         # unlike bbox_embed, this is the first time class_embed is called
-        outputs_class = torch.stack([layer_cls_embed(layer_hs) for
-                                     layer_cls_embed, layer_hs in zip(self.class_embed, hs)])
-        
-        ##################### START HERE #####################
-        if self.dn_number > 0 and dn_meta is not None:
-            outputs_class, outputs_coord_list = \
-                dn_post_process(outputs_class, outputs_coord_list,
-                                dn_meta,self.aux_loss,self._set_aux_loss)
-        out = {'pred_logits': outputs_class[-1], 'pred_boxes': outputs_coord_list[-1]}
-        if self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss(outputs_class, outputs_coord_list)
+        outputs_class = torch.stack(
+            [
+                layer_cls_embed(layer_hs)
+                for layer_cls_embed, layer_hs in zip(self.class_embed, hs)
+            ]
+        )
 
+        ##################### START HERE #####################
+        # TODO: understand when this if statement is not used, maybe inference?
+        if self.dn_number > 0 and dn_meta is not None:
+            outputs_class, outputs_coord_list = dn_post_process(
+                outputs_class,
+                outputs_coord_list,
+                dn_meta,
+                self.aux_loss,
+                self._set_aux_loss,
+            )
+        out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}
+        if self.aux_loss:
+            out["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord_list)
 
         # for encoder output
         if hs_enc is not None:
             # prepare intermediate outputs
             interm_coord = ref_enc[-1]
             interm_class = self.transformer.enc_out_class_embed(hs_enc[-1])
-            out['interm_outputs'] = {'pred_logits': interm_class, 'pred_boxes': interm_coord}
-            out['interm_outputs_for_matching_pre'] = {'pred_logits': interm_class, 'pred_boxes': init_box_proposal}
+            out["interm_outputs"] = {
+                "pred_logits": interm_class,
+                "pred_boxes": interm_coord,
+            }
+            out["interm_outputs_for_matching_pre"] = {
+                "pred_logits": interm_class,
+                "pred_boxes": init_box_proposal,
+            }
 
             # prepare enc outputs
             if hs_enc.shape[0] > 1:
                 enc_outputs_coord = []
                 enc_outputs_class = []
-                for layer_id, (layer_box_embed, layer_class_embed, layer_hs_enc, layer_ref_enc) in enumerate(zip(self.enc_bbox_embed, self.enc_class_embed, hs_enc[:-1], ref_enc[:-1])):
+                for layer_id, (
+                    layer_box_embed,
+                    layer_class_embed,
+                    layer_hs_enc,
+                    layer_ref_enc,
+                ) in enumerate(
+                    zip(
+                        self.enc_bbox_embed,
+                        self.enc_class_embed,
+                        hs_enc[:-1],
+                        ref_enc[:-1],
+                    )
+                ):
                     layer_enc_delta_unsig = layer_box_embed(layer_hs_enc)
-                    layer_enc_outputs_coord_unsig = layer_enc_delta_unsig + inverse_sigmoid(layer_ref_enc)
+                    layer_enc_outputs_coord_unsig = (
+                        layer_enc_delta_unsig + inverse_sigmoid(layer_ref_enc)
+                    )
                     layer_enc_outputs_coord = layer_enc_outputs_coord_unsig.sigmoid()
 
                     layer_enc_outputs_class = layer_class_embed(layer_hs_enc)
                     enc_outputs_coord.append(layer_enc_outputs_coord)
                     enc_outputs_class.append(layer_enc_outputs_class)
 
-                out['enc_outputs'] = [
-                    {'pred_logits': a, 'pred_boxes': b} for a, b in zip(enc_outputs_class, enc_outputs_coord)
+                out["enc_outputs"] = [
+                    {"pred_logits": a, "pred_boxes": b}
+                    for a, b in zip(enc_outputs_class, enc_outputs_coord)
                 ]
 
-        out['dn_meta'] = dn_meta
+        out["dn_meta"] = dn_meta
+
+    @torch.jit.unused
+    def _set_aux_loss(self, outputs_class, outputs_coord):
+        # this is a workaround to make torchscript happy, as torchscript
+        # doesn't support dictionary with non-homogeneous values, such
+        # as a dict having both a Tensor and a list.
+        return [
+            {"pred_logits": a, "pred_boxes": b}
+            for a, b in zip(outputs_class[:-1], outputs_coord[:-1])
+        ]
 
 
 def build_dino(
@@ -476,7 +520,7 @@ def build_dino(
     num_classes: int,
     backbone_args: dict[str, any],
     dino_args: dict[str, any],
-    aux_loss: bool = True
+    aux_loss: bool = True,
 ):
     """Build the DINO detector, loss function, and the postprocessor
 
@@ -493,7 +537,6 @@ def build_dino(
         the DINO detector model
 
     """
-    breakpoint()
     backbone: Joiner = build_dino_backbone(name=backbone_args["name"], **backbone_args)
 
     # set up general dino args which get passed around alots
