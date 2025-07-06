@@ -67,7 +67,7 @@ def setup_contrastive_denoising(
         #   - positive queries are slightly noised gt boxes & labels; the model is expected to recover
         #     the correct box & label from this noise
         #   - negative queries are incorrect labels or heavily noised boxes that do not match any object
-        #     and the model should predict the `no object` class 
+        #     and the model should predict the `no object` class
         #     (it should not output any confident prediction for real classes)
         denoise_number *= 2
 
@@ -132,8 +132,8 @@ def setup_contrastive_denoising(
         known_bboxs = boxes.repeat(2 * denoise_number, 1)
 
         # Create copies of the repeated known_labels and known_bbox
-        known_labels_expand = known_labels.clone() # (num_objects*denoise_number*2,)
-        known_bbox_expand = known_bboxs.clone() # (num_objects*denoise_number*2, 4)
+        known_labels_expand = known_labels.clone()  # (num_objects*denoise_number*2,)
+        known_bbox_expand = known_bboxs.clone()  # (num_objects*denoise_number*2, 4)
 
         # inject random class labels into known_labels_expand (num_objects*denoise_number*2,)
         if denoise_label_noise_ratio > 0:
@@ -499,8 +499,18 @@ def dn_post_process(
     aux_loss: bool,
     _set_aux_loss: callable,
 ):
-    """Post processes the preictions from each layer by separating the denoising query predictions [:pad_size]
-    and the learnable
+    """Post processes the predictions from each layer by separating the denoising query predictions
+    [:pad_size] and the learnable queries [pad_size:] (learnable queries are indices of the topk
+    output_memory from the encoder)
+
+    Additionally, updates the dn_meta dict to include the `output_known_lbs_bboxes` key which is
+    a dict of:
+        "pred_logits": last dec layer output class logits (dn queries),  # (b, pad_size, num_classes)
+        "pred_boxes": last dec layer output bbox pred (dn queries), # (b, pad_size, 4)
+        "output_known_lbs_bboxes": list of dicts with keys "pred_logits" & "pred_dict_boxes"
+                                   where each element is the class logits and bbox preds for the
+                                   learnable queries (not dn) for dec_layer_output[:-1]
+        ""
 
     Args:
         outputs_class: class predictions created from the raw decoder layer outputs (outside the decoder)
@@ -515,8 +525,11 @@ def dn_post_process(
         aux_loss: whether to use the auxilliary loss (a loss at each decoder layer)
         _set_aux_loss: a function to extract the output class logit predictions and bboxes from every
                        decoder except the last; creates a list of dictionaries
-    
+
     Returns:
+        the predictions from each decoder layer from the learnable queries (non-dn queries)
+            1. class logits (b, pad_size, num_classes)
+            2. bboxes (b, pad_size, 4)
 
     """
     # if denoising was applied
@@ -532,14 +545,14 @@ def dn_post_process(
         outputs_class = outputs_class[:, :, dn_meta["pad_size"] :, :]
         outputs_coord = outputs_coord[:, :, dn_meta["pad_size"] :, :]
 
-        # extract the outputs from the last decoder layer
+        # extract the outputs from the last decoder layer's dn queries
         out = {
             "pred_logits": output_known_class[-1],  # (b, pad_size, num_classes)
             "pred_boxes": output_known_coord[-1],  # (b, pad_size, 4)
         }
 
         # extract the output logits and bbox preds from every decoder output except the last
-        # (i.e., auxilliary outputs); creates a list of dicts with keys "pred_logits" & "pred_dict_boxes"
+        # (i.e., auxilliary outputs); creates a list of dicts with keys "pred_logits" & "pred_boxes"
         if aux_loss:
             out["aux_outputs"] = _set_aux_loss(output_known_class, output_known_coord)
         dn_meta["output_known_lbs_bboxes"] = out
