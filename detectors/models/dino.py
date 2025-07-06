@@ -442,9 +442,13 @@ class DINO(nn.Module):
             ]
         )
 
-        ##################### START HERE #####################
         # TODO: understand when this if statement is not used, maybe inference?
         if self.dn_number > 0 and dn_meta is not None:
+            # separate the dn query predictions and the learnable query preds (class logits and bboxes);
+            # store the dn preds in the dn_meta dict and extract the learnable queries preds for every
+            # decoder layer; 
+            # outputs_class (num_dec_layers, b, num_learn_queries, num_classes)
+            # outputs_coord_list (num_dec_layers, b, num_learn_queries, 4)
             outputs_class, outputs_coord_list = dn_post_process(
                 outputs_class,
                 outputs_coord_list,
@@ -452,6 +456,8 @@ class DINO(nn.Module):
                 self.aux_loss,
                 self._set_aux_loss,
             )
+
+        ######## START HERE ########
         out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}
         if self.aux_loss:
             out["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord_list)

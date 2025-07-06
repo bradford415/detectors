@@ -528,8 +528,9 @@ def dn_post_process(
 
     Returns:
         the predictions from each decoder layer from the learnable queries (non-dn queries)
-            1. class logits (b, pad_size, num_classes)
-            2. bboxes (b, pad_size, 4)
+            1. class logits (num_dec_layers, b, num_learn_queries, num_classes)
+            2. bboxes (num_dec_layers, b, num_learn_queries, 4)
+            * num_learn_queries = num_queries defined in config (topk))
 
     """
     # if denoising was applied
