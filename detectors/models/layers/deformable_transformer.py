@@ -1764,9 +1764,9 @@ class TransformerDecoder(nn.Module):
                    each decoder layer len=num_decoder_layers; each element is transposed for
                    shape (b, num_queries, hidden_dim)
                 2. a list of the initial reference points and the refined reference points;
-                   the refined reference points are the predicted offsets; the list is
-                   of length num_decoder_layers + 1 and each element is tranposed for
-                   shape (b, num_queries, 4)
+                   the refined reference points are the predicted offsets + the reference points
+                   from the previous layer; the list is of length num_decoder_layers + 1 and 
+                   each element is tranposed for shape (b, num_queries, 4)
         """
         output = tgt
 
@@ -1917,6 +1917,8 @@ class TransformerDecoder(nn.Module):
                 if self.rm_detach and "dec" in self.rm_detach:  # skipped by default
                     reference_points = new_reference_points
                 else:  # implemented in DAB-DETR and DINO
+                    # detach new reference points so that they do not affect the current layers
+                    # backpropagation (Fig 6. (a))
                     # remaining layers will use these new detached `reference_points`
                     # even though they're not appended below
                     reference_points = new_reference_points.detach()
@@ -1931,7 +1933,7 @@ class TransformerDecoder(nn.Module):
                     # Look forward twice (DINO DETR uses this);
                     # new_reference_points contains the
                     # intial reference points + the predicted decoder_layer bbox_embeds;
-                    # this is what gets passed outside the model and into the loss
+                    # this is what gets passed outside the model and into the loss TODO this isn't quite right
                     ref_points.append(new_reference_points)
 
             # store the raw decoder_layer outputs (before bbox_embed) for every

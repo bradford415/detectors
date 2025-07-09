@@ -411,13 +411,17 @@ class DINO(nn.Module):
         # so this operation does nothing (adds 0s)
         hs[0] += self.label_encoding.weight[0, 0] * 0.0
 
-        # deformable-detr-like anchor update
+        # deformable-detr-like anchor update;
         # reference_before_sigmoid = inverse_sigmoid(reference[:-1]) # n_dec, bs, nq, 4
+        # predict the offsets and add them to the reference points for each bbox prediction head;
+        # each reference point for each layer was already refined once in the decoder; each
+        # consecutive reference point is refined from the previous one;
+        # this is the same process as inside the decoder where the dec_output is passed through
+        # the detection bbox head to get offset predictions and the reference points are refined
         outputs_coord_list = []
         for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(
             zip(reference[:-1], self.bbox_embed, hs)
         ):
-
             # predict the reference point offset (delta), these are adjustments the model wants to
             # apply to the reference points; this is the same bbox_embed (shared parameters)
             # called in the Decoder that embedded the decoder_layer output to box prediction offsets
@@ -483,12 +487,12 @@ class DINO(nn.Module):
                 "pred_boxes": init_box_proposal,
             }
 
-            ##### START HERE #####
-
             # prepare enc outputs
             if hs_enc.shape[0] > 1:
                 enc_outputs_coord = []
                 enc_outputs_class = []
+                
+                # 
                 for layer_id, (
                     layer_box_embed,
                     layer_class_embed,
@@ -517,6 +521,7 @@ class DINO(nn.Module):
                     for a, b in zip(enc_outputs_class, enc_outputs_coord)
                 ]
 
+        ########## START HERE, coment then comment return docstring
         out["dn_meta"] = dn_meta
 
     @torch.jit.unused
