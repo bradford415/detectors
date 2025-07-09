@@ -573,7 +573,10 @@ class DeformableTransformer(nn.Module):
                 input_hw = None
 
             # mask out padded & invalid output_memory locations and generate
-            # inital bbox proposals (b, sum(h_i * w_i), 4); see function docstrings for more info
+            # inital bbox anchors (b, sum(h_i * w_i), 4); these bbox anchors will have offset
+            # predictions added to them (offsets found by passing enc output through an MLP); 
+            # see function docstrings for more info
+            # NOTE: output proposals only uses the memory shapes and not the actual encoded values
             output_memory, output_proposals = gen_encoder_output_proposals(
                 memory, mask_flatten, spatial_shapes, input_hw
             )
@@ -604,9 +607,9 @@ class DeformableTransformer(nn.Module):
             # (b, sum(h_i * w_i), num_classes) for coco num_classes=91
             enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
 
-            # embed the encoder output_memory into bbox embeddings through an MLP then add
-            # the inital output_proposals element-wise; this includes masking out the padded
-            # and invalid regions with "inf"
+            # compute the initial bbox coordinates by predicting offsets from the encoder output
+            # and adding them, element-wise, to the inital anchor boxes (output_proposals); this includes masking out 
+            # the paddedand invalid regions with "inf"
             # (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h)
             enc_outputs_coord_unselected = (
                 self.enc_out_bbox_embed(output_memory) + output_proposals

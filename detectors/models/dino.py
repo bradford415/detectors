@@ -388,8 +388,8 @@ class DINO(nn.Module):
         #   2. initial & predicted bboxes from each layer (b, num_queries, 4) - normalized [0, 1]
         #   3. topk encoder output features that had padding locations masked to 0
         #       and linearly projected (1, b, topk, hidden_dim)
-        #   4. topk encoder output coords used as initial reference points for the decoder
-        #      this is what is refined after every decoder layer to get bbox predictions
+        #   4. topk encoder output boxes used as initial reference points for the decoder
+        #      this is what is refined after every decoder layer to get bbox predictions (1, b, topk, 4)
         #   5. initial box proposals using the topk class embeds from the
         #      generated output proposals (b, topk, 4) - normalized [0, 1]
         hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
@@ -446,7 +446,7 @@ class DINO(nn.Module):
         if self.dn_number > 0 and dn_meta is not None:
             # separate the dn query predictions and the learnable query preds (class logits and bboxes);
             # store the dn preds in the dn_meta dict and extract the learnable queries preds for every
-            # decoder layer; 
+            # decoder layer;
             # outputs_class (num_dec_layers, b, num_learn_queries, num_classes)
             # outputs_coord_list (num_dec_layers, b, num_learn_queries, 4)
             outputs_class, outputs_coord_list = dn_post_process(
@@ -457,24 +457,33 @@ class DINO(nn.Module):
                 self._set_aux_loss,
             )
 
-        ######## START HERE ########
+        # create dict of the logits and bboxes preds from the last decoder layer and add a
+        # a list of logits and bboxes preds for every decoder layer but the last (aux_outputs)
         out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}
         if self.aux_loss:
             out["aux_outputs"] = self._set_aux_loss(outputs_class, outputs_coord_list)
 
         # for encoder output
         if hs_enc is not None:
-            # prepare intermediate outputs
+            # prepare intermediate outputs by embededing the topk (learnable queries) 
+            # enc outputs to classes and then storing this class embedding and the topk enc out
+            # bboxes which were embedded in the Transformer
             interm_coord = ref_enc[-1]
             interm_class = self.transformer.enc_out_class_embed(hs_enc[-1])
             out["interm_outputs"] = {
-                "pred_logits": interm_class,
-                "pred_boxes": interm_coord,
+                "pred_logits": interm_class, # (b, topk, num_classes)
+                "pred_boxes": interm_coord, # (b, topk, 4) 
             }
+
+            # store the same intermediate class and the initial box proposals 
+            # (which are the topk indices of output proposals from gen_output_proposals()
+            #  with offset predictions added from the enc_out)
             out["interm_outputs_for_matching_pre"] = {
                 "pred_logits": interm_class,
                 "pred_boxes": init_box_proposal,
             }
+
+            ##### START HERE #####
 
             # prepare enc outputs
             if hs_enc.shape[0] > 1:

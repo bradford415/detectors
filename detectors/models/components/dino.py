@@ -375,7 +375,9 @@ def gen_encoder_output_proposals(
     spatial_shapes: torch.Tensor,
     learned_wh=None,
 ):
-    """Generate initial dense bbox proposals:
+    """Generate initial dense bbox proposals; these bbox proposals will have offset
+       predictions added to them (offsets found by passing enc output through an MLP):
+
         1. for each feature in every feature map (b, sum(h_i* w_i), 4)
         2. 4 = (cx, cy, w, h) where cx, cy are grid coordinates for each feature_map
         3. 0.5 is added to select the `pixel center`
@@ -388,6 +390,9 @@ def gen_encoder_output_proposals(
 
     This function also masks out the padded and invalid locations of the encoded features (memory)
     with 0s; invalid locations are the same as the bbox proposals
+
+    NOTE: output_proposals are technically not an encoder output because it doesn't use
+          any of the encoded feature values, just the shapes of its output
 
     Args:
         memory: encoded features form the TransformerEncoder (b, sum(h_i * w_i), hidden_dim)
