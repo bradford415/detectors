@@ -574,7 +574,7 @@ class DeformableTransformer(nn.Module):
 
             # mask out padded & invalid output_memory locations and generate
             # inital bbox anchors (b, sum(h_i * w_i), 4); these bbox anchors will have offset
-            # predictions added to them (offsets found by passing enc output through an MLP); 
+            # predictions added to them (offsets found by passing enc output through an MLP);
             # see function docstrings for more info
             # NOTE: output proposals only uses the memory shapes and not the actual encoded values
             output_memory, output_proposals = gen_encoder_output_proposals(
@@ -608,7 +608,7 @@ class DeformableTransformer(nn.Module):
             enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
 
             # compute the initial bbox coordinates by predicting offsets from the encoder output
-            # and adding them, element-wise, to the inital anchor boxes (output_proposals); this includes masking out 
+            # and adding them, element-wise, to the inital anchor boxes (output_proposals); this includes masking out
             # the paddedand invalid regions with "inf"
             # (b, sum(h_i * w_i), 4) where 4 = (cx, cy, w, h)
             enc_outputs_coord_unselected = (
@@ -1765,7 +1765,7 @@ class TransformerDecoder(nn.Module):
                    shape (b, num_queries, hidden_dim)
                 2. a list of the initial reference points and the refined reference points;
                    the refined reference points are the predicted offsets + the reference points
-                   from the previous layer; the list is of length num_decoder_layers + 1 and 
+                   from the previous layer; the list is of length num_decoder_layers + 1 and
                    each element is tranposed for shape (b, num_queries, 4)
         """
         output = tgt

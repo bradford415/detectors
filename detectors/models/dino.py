@@ -303,6 +303,25 @@ class DINO(nn.Module):
                         boxes: (num_objects, 4) normalized [0, 1] and in [cx, cy, w, h] format TODO verify this form
                         labels: (num_objects,) the class id for each object
                         other coco metadata
+
+        Returns:
+            out: a dictionary with the following keys:
+                pred_logits: predicted class logits for only learnable queries (non dn queries) from
+                             last decoder layer (b, num_learn_queries, num_classes)
+                pred_boxes: predicted bboxes for only learnable queries (non dn queries) from the
+                            last decoder layer (b, num_queries, 4) where 4 = (cx, cy, w, h)
+                aux_outputs: list of dicts with predicted class logits and bboxes for only learable queries
+                            for each decoder layer except the last one; contains the keys
+                            `pred_logits` and `pred_boxes`:
+                                pred_logits: (b, num_learn_queries, num_classes)
+                                pred_boxes: (b, num_learn_queries, 4) where 4 = (cx, cy, w, h)
+                interm_outputs: predicted class logits and bboxes from the encoder output for the
+                                learnable queries (non-dn queries); contains two keys:
+                                    pred_logits: (b, num_learn_queries, num_classes)
+                                    pred_boxes: (b, num_learn_queries, 4) where 4 = (cx, cy, w, h)
+                                    ################ START HERE comment the remaninder of the docstring
+                interm_outputs_for_matching_pre: TODO
+                dn_meta:
         """
         # Extract features through the backbone and build positional embeddings;
         # features -> list of NestedTensors for each feature_map level
@@ -469,17 +488,17 @@ class DINO(nn.Module):
 
         # for encoder output
         if hs_enc is not None:
-            # prepare intermediate outputs by embededing the topk (learnable queries) 
+            # prepare intermediate outputs by embededing the topk (learnable queries)
             # enc outputs to classes and then storing this class embedding and the topk enc out
             # bboxes which were embedded in the Transformer
             interm_coord = ref_enc[-1]
             interm_class = self.transformer.enc_out_class_embed(hs_enc[-1])
             out["interm_outputs"] = {
-                "pred_logits": interm_class, # (b, topk, num_classes)
-                "pred_boxes": interm_coord, # (b, topk, 4) 
+                "pred_logits": interm_class,  # (b, topk, num_classes)
+                "pred_boxes": interm_coord,  # (b, topk, 4)
             }
 
-            # store the same intermediate class and the initial box proposals 
+            # store the same intermediate class and the initial box proposals
             # (which are the topk indices of output proposals from gen_output_proposals()
             #  with offset predictions added from the enc_out)
             out["interm_outputs_for_matching_pre"] = {
@@ -487,12 +506,12 @@ class DINO(nn.Module):
                 "pred_boxes": init_box_proposal,
             }
 
-            # prepare enc outputs
+            # skipped by default; prepare enc outputs
             if hs_enc.shape[0] > 1:
                 enc_outputs_coord = []
                 enc_outputs_class = []
-                
-                # 
+
+                #
                 for layer_id, (
                     layer_box_embed,
                     layer_class_embed,
@@ -521,8 +540,10 @@ class DINO(nn.Module):
                     for a, b in zip(enc_outputs_class, enc_outputs_coord)
                 ]
 
-        ########## START HERE, coment then comment return docstring
+        # add the modified dn_meta to the output dict to finish the forward pass
         out["dn_meta"] = dn_meta
+
+        return out
 
     @torch.jit.unused
     def _set_aux_loss(self, outputs_class, outputs_coord):
