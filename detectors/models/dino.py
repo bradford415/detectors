@@ -305,7 +305,7 @@ class DINO(nn.Module):
                         other coco metadata
 
         Returns:
-            out: a dictionary with the following keys:
+            a dictionary with the following keys:
                 pred_logits: predicted class logits for only learnable queries (non dn queries) from
                              last decoder layer (b, num_learn_queries, num_classes)
                 pred_boxes: predicted bboxes for only learnable queries (non dn queries) from the
