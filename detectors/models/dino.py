@@ -311,7 +311,7 @@ class DINO(nn.Module):
                 pred_boxes: predicted bboxes for only learnable queries (non dn queries) from the
                             last decoder layer (b, num_queries, 4) where 4 = (cx, cy, w, h)
                 aux_outputs: list of dicts with predicted class logits and bboxes for only learable queries
-                            for each decoder layer except the last one; contains the keys
+                             (topk) for each decoder layer except the last one; contains the keys
                             `pred_logits` and `pred_boxes`:
                                 pred_logits: (b, num_learn_queries, num_classes)
                                 pred_boxes: (b, num_learn_queries, 4) where 4 = (cx, cy, w, h)
@@ -319,9 +319,27 @@ class DINO(nn.Module):
                                 learnable queries (non-dn queries); contains two keys:
                                     pred_logits: (b, num_learn_queries, num_classes)
                                     pred_boxes: (b, num_learn_queries, 4) where 4 = (cx, cy, w, h)
-                                    ################ START HERE comment the remaninder of the docstring
-                interm_outputs_for_matching_pre: TODO
-                dn_meta:
+                interm_outputs_for_matching_pre: predicted class logits from the encoder output and the
+                                                 initial box proposals (which are the topk indices of
+                                                 output proposals from gen_output_proposals()
+                                                 with offset predictions added from the enc_out); keys:
+                                                    pred_logits: (b, topk, num_classes)
+                                                    pred_boxes: (b, topk, 4) where 4 = (cx, cy, w, h)
+                dn_meta: a dictionary of metadata for the denoising queries with keys:
+                         pad_size: the number of denoising queries
+                         num_dn_group: the number of denoising_queries per CDN group
+                         output_known_lbs_bboxes: a dict with keys:
+                            pred_logits: predicted class logits for the denoising queries
+                                         (b, pad_size, num_classes) pad_size=num_dn_queries
+                            pred_boxes: predicted bboxes for the denoising queries
+                                        (b, pad_size, 4)
+                            aux_outputs: a list of dicts of predictions for each decoder layer except
+                                         the last with keys:
+                                            pred_logits: predicted class logits for the denoising queries
+                                                         (b, pad_size, num_classes)
+                                            pred_boxes: predicted bboxes for the denoising queries
+                                                        (b, pad_size, 4)
+
         """
         # Extract features through the backbone and build positional embeddings;
         # features -> list of NestedTensors for each feature_map level
@@ -453,7 +471,7 @@ class DINO(nn.Module):
             outputs_coord_list.append(layer_outputs_unsig)
 
         # convert bbox predictions to a tensor (num_decoder_layers, b, num_queries, 4)
-        # where 4 = (cx, cy, w, h)
+        # where 4 = (cx, cy, w, h) and num_queries = num_learn_queries (topk) + num_dn_queries
         outputs_coord_list = torch.stack(outputs_coord_list)
 
         # convert the decoder outputs to class predictions (num_decoder_layers, b, num_queries, num_classes);

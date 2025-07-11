@@ -754,15 +754,14 @@ class DeformableTransformer(nn.Module):
                 "unknown two_stage_type {}".format(self.two_stage_type)
             )
 
-        # Call the TransformerDecoder to refine the intial reference points (anchor points);
+        # Call the TransformerDecoder to refine the intial reference points (anchor points) into bbox
+        # predictions;
         # pass the `memory` straight from the encoder, not the `output_memory` that was masked and projected
         # returns a list of raw intermediate decoder outputs after each decoder layer and a list of
         # the intial and refined reference points (box locations) after each decoder layer;
         # shape of each list element: hs (b, num_queries, hidden_dim), references (b, num_queries, 4)
         hs, references = self.decoder(
-            tgt=tgt.transpose(
-                0, 1
-            ),  # (max_objects*num_cdn_group*2 + topk, b, hidden_dim)
+            tgt=tgt.transpose(0, 1),  # (num_dn_queries + topk, b, hidden_dim)
             memory=memory.transpose(0, 1),  # (sum(h_i * w_i), b, hidden_dim);
             tgt_mask=attn_mask,
             memory_key_padding_mask=mask_flatten,

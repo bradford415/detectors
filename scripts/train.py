@@ -231,6 +231,8 @@ def main(
         num_classes=dataset_train.num_classes,
     )
     model.to(device)
+    
+    ######### START HERE  - try running code now ####
 
     # Initalize postprocessor if using DINO DETR
     if "postprocess" in detector_params:

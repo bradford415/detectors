@@ -79,7 +79,8 @@ def setup_contrastive_denoising(
         # list of num_objects in each image
         known_num = [sum(k) for k in known]
 
-        # Adjust the denoise_number depending on the maxi number of objects for an image in the batch
+        # Dynamically adjust the denoise_number depending on the max number of objects
+        # for an image in the batch
         if int(max(known_num)) == 0:
             # if there's no objects in any image in the batch set dn number to 1
             denoise_number = 1
@@ -95,7 +96,8 @@ def setup_contrastive_denoising(
             elif denoise_number < 1:
                 denoise_number = 1
 
-        # This case triggers if max(known_num)*2 > denoise_number
+        # Safegaurd to ensure dn_number never = 0 or else this could break the dn_logic, for
+        # example, division by 0; this case triggers if max(known_num)*2 > denoise_number
         if denoise_number == 0:
             denoise_number = 1
 
@@ -512,10 +514,9 @@ def dn_post_process(
     a dict of:
         "pred_logits": last dec layer output class logits (dn queries),  # (b, pad_size, num_classes)
         "pred_boxes": last dec layer output bbox pred (dn queries), # (b, pad_size, 4)
-        "output_known_lbs_bboxes": list of dicts with keys "pred_logits" & "pred_dict_boxes"
-                                   where each element is the class logits and bbox preds for the
-                                   learnable queries (not dn) for dec_layer_output[:-1]
-        ""
+        "aux_outputs": list of dicts with keys "pred_logits" & "pred_dict_boxes"
+                       where each element is the class logits and bbox preds for the
+                       learnable queries (not dn) for dec_layer_output[:-1]
 
     Args:
         outputs_class: class predictions created from the raw decoder layer outputs (outside the decoder)
