@@ -31,6 +31,9 @@ This project is designed to use the configuration specified in `scripts/configs/
 ```bash
 # yolov3 with a darknet53 backbone
 python scripts/train.py --dataset_root "/path/to/coco"
+
+# dino detr
+python scripts/train.py configs/train-coco-dino-rn50.yaml configs/dino/dino-rn50.yaml
 ```
 
 ### Training from scratch with a pre-trained backbone
