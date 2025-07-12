@@ -40,7 +40,7 @@ class DeformableTransformer(nn.Module):
     def __init__(
         self,
         d_model=256,
-        nhead=8,
+        num_heads=8,
         num_obj_queries=900,
         num_encoder_layers=6,
         num_decoder_layers=6,
@@ -97,7 +97,8 @@ class DeformableTransformer(nn.Module):
             num_heads:
             num_obj_queries: number of learnable object queries; this is the max num of objects
                              DINO can detect single image; each query predicts a class label
-                             (including background/no_object) and a bbox
+                             (including background/no_object) and a bbox; these are seperate from
+                             dn_queries
             num_encoder_layers:
             num_decoder_layers:
             num_unicoder_layers:
@@ -180,7 +181,7 @@ class DeformableTransformer(nn.Module):
                 dropout,
                 activation,
                 num_feature_levels,
-                nhead,
+                num_heads,
                 enc_n_points,
             )
         else:
@@ -211,7 +212,7 @@ class DeformableTransformer(nn.Module):
             dropout,
             activation,
             num_feature_levels,
-            nhead,
+            num_heads,
             dec_n_points,
             use_deformable_box_attn=use_deformable_box_attn,
             box_attn_type=box_attn_type,
@@ -241,7 +242,7 @@ class DeformableTransformer(nn.Module):
         )
 
         self.d_model = d_model
-        self.nhead = nhead
+        self.num_heads = num_heads
         self.num_decoder_layers = num_decoder_layers
         self.num_obj_queries = num_obj_queries  # useful for single stage model only
         self.num_patterns = num_patterns
@@ -1972,13 +1973,20 @@ def _get_clones(module: nn.Module, N: int, layer_share: bool = False):
 
 
 def build_deformable_transformer(
-    num_feature_levels, two_stage_params, transformer_args: dict[str, any]
+    num_feature_levels: int,
+    query_dim: int,
+    num_patterns: int,
+    two_stage_args: dict[str, any],
+    transformer_args: dict[str, any],
 ):
     """Builds the deformable transformer module
 
     Args:
-        num_feature_levels: TODO
-        two_stage_params: TODO
+        num_feature_levels: number of multiscale feature maps extracted from the backbone
+        query_dim: the dimension of the reference point queries;
+                   typically 4 for (cx, cy, w, h) or 2 for (x, y)
+        num_patterns:TODO
+        two_stage_args: TODO
         transformer_args: TODO
     """
 
@@ -1992,24 +2000,28 @@ def build_deformable_transformer(
             w_noise_scale=dec_noise_params["dln_hw_noise"],
             h_noise_scale=dec_noise_params["dln_hw_noise"],
         )
+    else:
+        decoder_query_perturber = None
 
     # False = Look forward twice (which is what DINO implements)
-    use_detached_boxes_dec_out = use_detached_boxes_dec_out
+    use_detached_boxes_dec_out = transformer_args["use_detached_boxes_dec_out"]
+
+    ####### start here and try initailize deformable transformer ########
 
     return DeformableTransformer(
         d_model=transformer_args["hidden_dim"],
         num_heads=transformer_args["num_heads"],
-        num_queries=transformer_args["num_queries"],
+        num_obj_queries=transformer_args["num_queries"],
         num_encoder_layers=transformer_args["num_encoder_layers"],
         num_unicoder_layers=transformer_args["num_unicoder_layers"],
         num_decoder_layers=transformer_args["num_decoder_layers"],
-        dim_feedforward=transformer_args["ff_layer"],
+        dim_feedforward=transformer_args["feedforward_dim"],
         dropout=transformer_args["dropout"],
         activation=transformer_args["activation"],
         normalize_before=transformer_args["pre_norm"],
         return_intermediate_dec=transformer_args["return_intermediate_dec"],
-        query_dim=transformer_args["query_dim"],
-        num_patterns=transformer_args["num_patterns"],
+        query_dim=query_dim,
+        num_patterns=num_patterns,
         modulate_hw_attn=True,  # set to True but it's never actually used
         deformable_encoder=True,
         deformable_decoder=True,
@@ -2023,11 +2035,11 @@ def build_deformable_transformer(
         add_channel_attention=transformer_args["add_channel_attention"],
         add_pos_value=transformer_args["add_pos_value"],
         random_refpoints_xy=False,
-        two_stage_type=two_stage_params["type"],
-        two_stage_pat_embed=two_stage_params["pat_embed"],
-        two_stage_add_query_num=two_stage_params["add_query_num"],
-        two_stage_learn_wh=two_stage_params["learn_wh"],
-        two_stage_keep_all_tokens=two_stage_params["keep_all_tokens"],
+        two_stage_type=two_stage_args["type"],
+        two_stage_pat_embed=two_stage_args["pat_embed"],
+        two_stage_add_query_num=two_stage_args["add_query_num"],
+        two_stage_learn_wh=two_stage_args["learn_wh"],
+        two_stage_keep_all_tokens=two_stage_args["keep_all_tokens"],
         dec_layer_number=transformer_args["dec_layer_number"],
         rm_dec_query_scale=transformer_args["rm_dec_query_scale"],
         rm_self_attn_layers=transformer_args["rm_self_attn_layers"],

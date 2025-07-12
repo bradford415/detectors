@@ -301,7 +301,14 @@ def build_dino_backbone(
     temperature_w: int = 40,
     normalize: bool = True,
     bb_level_inds: list[int] = [1, 2, 3],
-    backbone_freeze_keywords: Optional[list[str]] = ["layer1", "conv1", "bn1", "layer2", "layer3", "layer4"],
+    backbone_freeze_keywords: Optional[list[str]] = [
+        "layer1",
+        "conv1",
+        "bn1",
+        "layer2",
+        "layer3",
+        "layer4",
+    ],
 ):
     """Build the backbone class specfiically for the DINO detector.
 

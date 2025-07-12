@@ -250,8 +250,9 @@ class DINO(nn.Module):
             else:
                 self.transformer.enc_out_class_embed = copy.deepcopy(_class_embed)
 
-            # TODO: understand what this does and comment (default is 0 so this method not called)
             self.refpoint_embed = None
+
+            # default is 0 so this method is never called
             if self.two_stage_add_query_num > 0:  # (default is 0)
                 self.init_ref_points(two_stage_add_query_num)
 
@@ -609,7 +610,13 @@ def build_dino(
     # Initialize the deformable transformer used in DINO;
     # see models.layers.deformable_transformer.DeformableTransformer for function
     # descriptions
-    transformer = build_deformable_transformer(**transformer_args)
+    transformer = build_deformable_transformer(
+        num_feature_levels=standard_args["num_feature_levels"],
+        query_dim=standard_args["query_dim"],
+        num_patterns=standard_args["num_patterns"],
+        two_stage_args=two_stage_args,
+        transformer_args=transformer_args,
+    )
 
     # TODO: comment and consider putting in config
     match_unstable_error = True

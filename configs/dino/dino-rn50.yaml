@@ -122,8 +122,8 @@ params:
       num_decoder_layers: 6
       num_unicoder_layers: 0 # ? not sure what this is
 
-      # dimension of feedforward layer
-      ff_dim: 2048
+      # dimension of feedforward hidden layer at the end of each encoder & decoder layer
+      feedforward_dim: 2048
 
       # dropout value and activation function for the encoder and decoder
       dropout: 0.0
@@ -145,8 +145,9 @@ params:
       # TODO: comment
       box_attn_type: "roi_align"
 
-      # Adds a 
+      # Adds a  TODO
       add_channel_attention: False
+      add_pos_value: False
 
       # Used to initalize TransformerDecoder attributes in __init__()
       # TODO write a little more about rm_dec_query_scale if needed
