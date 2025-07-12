@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 import torch
 from torch import Tensor, nn
@@ -293,20 +295,23 @@ class Joiner(nn.Sequential):
 
 
 def build_dino_backbone(
-    backbone_name: str = "resnet50",
+    name: str = "resnet50",
     hidden_dim: int = 256,
     temperature_h: int = 40,
     temperature_w: int = 40,
     normalize: bool = True,
     bb_level_inds: list[int] = [1, 2, 3],
+    backbone_freeze_keywords: Optional[list[str]] = ["layer1", "conv1", "bn1", "layer2", "layer3", "layer4"],
 ):
     """Build the backbone class specfiically for the DINO detector.
 
     Args:
-        hidden_dim: TODO
+        name: name of the backbone network to use
+        hidden_dim: dimension of the embeddings in the transformer
         temperature_h: The height temperature of the positional embedding equation (attention is all you need)
         temperature_w The width temperature of the positional embedding equation (attention is all you need)
         normalize: whether to normalize and scale positional coordinates from [0, 2pi)
+        backbone_freeze_keywords: TODO see if I need this; i think this is just for swin
     """
     # Initalize the positional embedding module to create positional embeddings
     # for the images patches (output of backbone) before passing into the transformer encoder
@@ -318,18 +323,18 @@ def build_dino_backbone(
     )
 
     # build the resnet backbone; NOTE: the Backbone class is very specific to resnet
-    if "resnet" in backbone_name:
+    if "resnet" in name:
         backbone = Backbone(
-            backbone_name=backbone_name,
+            backbone_name=name,
             train_backbone=True,
             bb_level_inds=bb_level_inds,
             batch_norm=FrozenBatchNorm2d,  # do not update the bn statistics while training; only use the pretrained bn statistics
         )
-    elif "swin" in backbone_name:
+    elif "swin" in name:
         # TODO: build the swin backbone at a later point
         raise NotImplementedError
     else:
-        raise ValueError(f"Backbone {backbone_name} not implemented")
+        raise ValueError(f"Backbone {name} not implemented")
 
     # Module which calls the backbone, extracts the feature maps, and creates
     # positional embeddings for each feature map

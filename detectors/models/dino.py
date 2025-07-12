@@ -596,7 +596,7 @@ def build_dino(
         the DINO detector model
 
     """
-    backbone: Joiner = build_dino_backbone(name=backbone_args["name"], **backbone_args)
+    backbone: Joiner = build_dino_backbone(**backbone_args)
 
     # set up general dino args which get passed around alots
 

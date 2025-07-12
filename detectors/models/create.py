@@ -61,8 +61,8 @@ def _create_dino(detector_name: str, num_classes: int, detector_args: dict[str, 
     """
     model = detectors_map[detector_name](
         num_classes=num_classes,
-        backbone_args=detector_args["backbone_params"],
-        dino_args=detector_args["detector_params"],
+        backbone_args=detector_args["backbone"],
+        dino_args=detector_args["detector"],
         aux_loss=detector_args["aux_loss"],
     )
     return model

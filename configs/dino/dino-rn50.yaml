@@ -52,10 +52,10 @@ params:
     # (downsampled by 2 from the lowest resolution)
     bb_level_inds: [1, 2, 3]
 
-    backbone_freeze_keywords: TODO see if I need this
+    backbone_freeze_keywords: # TODO see if I need this; i think this is just for swin
 
-  detector_params:
-    # parameters for the detector architecture; section D.4 of the DINO paper gives parameters used
+  # parameters for the detector architecture; section D.4 of the DINO paper gives parameters used
+  detector:
     standard:
       num_feature_levels: 4
 
