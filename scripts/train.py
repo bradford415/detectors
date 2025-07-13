@@ -206,6 +206,25 @@ def main(
     dataset_val = dataset_map[base_config["dataset_name"]](
         dataset_split="val", dev_mode=dev_mode, **dataset_kwargs
     )
+    
+    if distributed_mode:
+        #### START HERE, read about distributed samplers
+        sampler_train = DistributedSampler(dataset_train)
+        sampler_val = DistributedSampler(dataset_val, shuffle=False)
+    else:
+        # using RandomSampler and SequentialSampler w/ default parameters is the same as using 
+        # shuffle=True and shuffle=False in the DataLoader, respectively; if you pass a Sampler into
+        # the DataLoader, you cannot set the shuffle parameter (mutually exclusive)
+        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        
+    # create a batch sampler for train but not val which means val will only use a batch_size=1
+    # TODO set batch size; similar as above, when you set shuffle in the DataLoader it automatically wraps
+    # RandomSampler and SequentialSampler in a BatchSampler
+    batch_sampler_train = torch.utils.data.BatchSampler(
+        sampler_train, args.batch_size, drop_last=True)
+
+    ####### start here, look at collate_fns
 
     # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
     # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
@@ -232,10 +251,13 @@ def main(
     )
     model.to(device)
     
+    # Wrap the base model in ddp and store a pointer to the model without ddp; when saving the model
+    # we want to save the model without ddp for portablility; ddpm wraps the model with additional 
+    # logic and parameters that are not serializable
     model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=args.find_unused_params)
-        model_without_ddp = model.module
+    if distributed_mode:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=False)
+        model_without_ddp = model.module # this line is technically not needed but helps for clarity
 
     # Initalize postprocessor if using DINO DETR
     if "postprocess" in detector_params:
@@ -287,7 +309,6 @@ def main(
     else:
         ValueError(f"loss function for {detector_name} not implemented")
 
-    ## TODO: log the backbone, neck, head, and detector used.
     log.info("\nmodel architecture")
     log.info("\tbackbone: %s", detector_params["backbone"]["name"])
     log.info("\tdetector: %s", model_config["detector"])
