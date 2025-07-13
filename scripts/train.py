@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 from detectors.data.coco_ds import build_coco
 from detectors.data.collate_functions import collate_fn
-from detectors.losses import SetCriterion, Yolov3Loss, Yolov4Loss
+from detectors.losses import create_dino_loss, Yolov3Loss, Yolov4Loss
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers
@@ -24,7 +24,7 @@ from detectors.utils import distributed, reproduce
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
-loss_map = {"yolov3": Yolov3Loss, "yolov4": Yolov4Loss, "dino": SetCriterion}
+loss_map = {"yolov3": Yolov3Loss, "yolov4": Yolov4Loss, "dino": create_dino_loss}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -232,8 +232,6 @@ def main(
     )
     model.to(device)
 
-    breakpoint()
-
     # Initalize postprocessor if using DINO DETR
     if "postprocess" in detector_params:
         # converts the models output to the expected output by the coco api, during inference
@@ -269,14 +267,16 @@ def main(
         # TODO: fix yolov3
         criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
     elif detector_name == "dino":
-        num_decoder_layers = detector_params["architecture_params"]["transformer"][
+        num_decoder_layers = detector_params["detector"]["transformer"][
             "num_decoder_layers"
         ]
         criterion = loss_map[detector_name](
             num_classes=base_config["num_classes"],
             num_decoder_layers=num_decoder_layers,
-            loss_args=model_config["loss_weights"],
-            matcher_args=model_config["matcher"],
+            aux_loss=detector_params["aux_loss"],
+            two_stage_type=detector_params["detector"]["two_stage"]["type"],
+            loss_args=model_config["params"]["loss_weights"],
+            matcher_args=model_config["params"]["matcher"],
             device=device,
         )
     else:
@@ -284,7 +284,7 @@ def main(
 
     ## TODO: log the backbone, neck, head, and detector used.
     log.info("\nmodel architecture")
-    log.info("\tbackbone: %s", model_config["detector"]["backbone_name"])
+    log.info("\tbackbone: %s", detector_params["backbone"]["name"])
     log.info("\tdetector: %s", model_config["detector"])
 
     # Extract the train arguments from base config

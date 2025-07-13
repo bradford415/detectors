@@ -436,6 +436,8 @@ def interpolate(
 def create_dino_loss(
     num_classes: int,
     num_decoder_layers: int,
+    aux_loss: bool,
+    two_stage_type: str,
     loss_args: dict[str, any],
     matcher_args: dict[str, any],
     device: torch.device,
@@ -445,6 +447,8 @@ def create_dino_loss(
     Args:
         num_classes: number of classes in the dataset ontology
         num_decoder_layers: number of decoder layers in the TransformerDecoder
+        aux_loss: whether to use auxiliary losses for each decoder layer
+        two_stage_type: 
         loss_args:
         matcher_args: parameters for the hungarian matcher
         device: device used to compute the loss on
@@ -485,9 +489,9 @@ def create_dino_loss(
     # update the `weight_dict` w/ a copy of the dictionary keys for each decoder
     # layer (except the last one) with the the decoder_layer_index appended
     # (e.g., "loss_ce_0, loss_ce_1, ..., loss_ce_<num_decoder_layers-1>")
-    if loss_args["aux_loss"]:
+    if aux_loss:
 
-        num_decoder_layers = transformer_args["num_decoder_layers"]
+        num_decoder_layers = num_decoder_layers
 
         aux_weight_dict = {}
         for i in range(num_decoder_layers - 1):
@@ -500,7 +504,7 @@ def create_dino_loss(
     #   loss_ce_interm loss_bbox_interm, loss_giou_interm
     # multiplies interm_loss_coef*_coeff_weight_dict*initial_loss_coefs to get the coeffs
     # but the default case is just 1.0 for both coeffs, so these new_key_vals=initial_key_vals
-    if two_stage_args["type"] != "no":
+    if two_stage_type != "no":
         interm_weight_dict = {}
 
         no_interm_box_loss = False

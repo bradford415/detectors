@@ -99,6 +99,8 @@ class DINO(nn.Module):
                                     `sa` -> use standard self-attn among object queries
 
         """
+        super().__init__()
+
         # Dimension of the transformer model; TODO: flesh this out more
         _hidden_dim = transformer.d_model
 
@@ -175,7 +177,7 @@ class DINO(nn.Module):
         # bbox prediction module for the output of each decoder layer
         # MLP will output dims of 4 (center_x, center_y, width, height)
         _bbox_embed = MLP(
-            input_dim=_hidden_dim, hidden_dim=_hidden_dim, out_dim=4, num_layers=3
+            input_dim=_hidden_dim, hidden_dim=_hidden_dim, output_dim=4, num_layers=3
         )
 
         # Initialize the class embedding to ~ -4.595;
@@ -630,21 +632,21 @@ def build_dino(
         backbone=backbone,
         transformer=transformer,
         num_classes=num_classes,
-        num_obj_queries=dino_args["num_obj_queries"],
-        num_heads=dino_args["num_heads"],
-        num_feature_levels=dino_args["num_feature_levels"],
+        num_obj_queries=transformer_args["num_queries"],
+        num_heads=transformer_args["num_heads"],
+        num_feature_levels=standard_args["num_feature_levels"],
         aux_loss=aux_loss,
-        query_dim=dino_args["query_dim"],
-        two_stage_type=dino_args["two_stage_type"],
-        two_stage_add_query_num=dino_args["two_stage_add_query_num"],
-        decoder_pred_bbox_embed_share=dino_args["decoder_pred_bbox_embed_share"],
-        decoder_pred_class_embed_share=dino_args["decoder_pred_class_embed_share"],
-        decoder_self_attn_type=dino_args["decoder_self_attn_type"],
-        num_patterns=dino_args["num_patterns"],
-        denoise_number=dino_args["denoise_number"],
-        denoise_box_noise_scale=dino_args["deniose_box_noise_scale"],
-        denoise_label_noise_ratio=dino_args["denoise_label_noise_ratio"],
-        denoise_labelbook_size=dino_args["denoise_labelbook_size"],
+        query_dim=standard_args["query_dim"],
+        two_stage_type=two_stage_args["type"],
+        two_stage_add_query_num=two_stage_args["add_query_num"],
+        decoder_pred_bbox_embed_share=transformer_args["dec_pred_bbox_embed_share"],
+        decoder_pred_class_embed_share=transformer_args["dec_pred_class_embed_share"],
+        decoder_self_attn_type=transformer_args["decoder_self_attn_type"],
+        num_patterns=standard_args["num_patterns"],
+        denoise_number=denoising_args["denoise_number"],
+        denoise_box_noise_scale=denoising_args["denoise_box_noise_scale"],
+        denoise_label_noise_ratio=denoising_args["denoise_label_noise_ratio"],
+        denoise_labelbook_size=denoising_args["denoise_labelbook_size"],
     )
 
     return model

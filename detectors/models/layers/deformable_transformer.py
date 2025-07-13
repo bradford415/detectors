@@ -858,7 +858,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
 
         # Create the feedforward network (ffn) of the encoder
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = activation_map[activation]()
+        self.activation = activation_map[activation](d_ffn)
         self.dropout2 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout3 = nn.Dropout(dropout)
@@ -962,6 +962,8 @@ class DeformableTransformerDecoderLayer(nn.Module):
         n_levels=4,
         n_heads=8,
         n_points=4,
+        use_deformable_box_attn=False,
+        box_attn_type="roi_align",
         key_aware_type=None,
         decoder_sa_type="ca",
         module_seq=["sa", "ca", "ffn"],
@@ -976,6 +978,8 @@ class DeformableTransformerDecoderLayer(nn.Module):
             n_levels: number of multiscale feature map levels; default 4
             n_heads: number of heads in deformable cross attn and regular self attn; default 8
             n_points: TODO
+            use_deformable_box_attn: TODO
+            box_attn_type: TODO
             key_aware_type:
             decoder_sa_type: the type of self-attention to use in the decoder; default is "sa" which
                              uses a standard multiheaded self-attention module, not deformable attn
@@ -1003,7 +1007,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
 
         # Create a 2 layer ffn
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = activation_map(activation)
+        self.activation = activation_map[activation](d_ffn)
         self.dropout3 = nn.Dropout(dropout)
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout4 = nn.Dropout(dropout)
