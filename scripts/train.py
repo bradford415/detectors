@@ -11,11 +11,11 @@ import torch
 import torch.distributed as dist
 import yaml
 from fire import Fire
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 
 from detectors.data.coco_ds import build_coco
-from detectors.data.collate_functions import collate_fn
-from detectors.losses import create_dino_loss, Yolov3Loss, Yolov4Loss
+from detectors.data.collate_functions import get_collate_fn
+from detectors.losses import Yolov3Loss, Yolov4Loss, create_dino_loss
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers
@@ -160,18 +160,6 @@ def main(
         batch_size,
     )
 
-    # Set gpu parameters
-    train_kwargs = {
-        "batch_size": batch_size,
-        "shuffle": True,
-        "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
-    }
-    val_kwargs = {
-        "batch_size": val_batch_size,
-        "shuffle": False,
-        "num_workers": base_config["dataset"]["num_workers"] if not dev_mode else 0,
-    }
-
     # Set device specific characteristics
     use_cpu = False
     if torch.cuda.is_available():
@@ -191,13 +179,9 @@ def main(
         device = torch.device("cpu")
         log.info("Using CPU")
 
+    pin_memory = False
     if not use_cpu:
-        gpu_kwargs = {
-            "pin_memory": True,
-        }
-
-        train_kwargs.update(gpu_kwargs)
-        val_kwargs.update(gpu_kwargs)
+        pin_memory = True
 
     dataset_kwargs = {"root": base_config["dataset"]["root"]}
     dataset_train = dataset_map[base_config["dataset_name"]](
@@ -206,39 +190,45 @@ def main(
     dataset_val = dataset_map[base_config["dataset_name"]](
         dataset_split="val", dev_mode=dev_mode, **dataset_kwargs
     )
-    
+
     if distributed_mode:
-        #### START HERE, read about distributed samplers
+        # ensures that each process gets a different subset of the dataset in distributed mode
         sampler_train = DistributedSampler(dataset_train)
         sampler_val = DistributedSampler(dataset_val, shuffle=False)
     else:
-        # using RandomSampler and SequentialSampler w/ default parameters is the same as using 
+        # using RandomSampler and SequentialSampler w/ default parameters is the same as using
         # shuffle=True and shuffle=False in the DataLoader, respectively; if you pass a Sampler into
         # the DataLoader, you cannot set the shuffle parameter (mutually exclusive)
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-        
+
     # create a batch sampler for train but not val which means val will only use a batch_size=1
-    # TODO set batch size; similar as above, when you set shuffle in the DataLoader it automatically wraps
+    # similar as above, when you set shuffle in the DataLoader it automatically wraps
     # RandomSampler and SequentialSampler in a BatchSampler
     batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, args.batch_size, drop_last=True)
+        sampler_train, batch_size, drop_last=True
+    )
 
-    ####### start here, look at collate_fns
+    num_workers = base_config["dataset"]["num_workers"] if not dev_mode else 0
+    collate_fn = get_collate_fn(model_config["detector"])
 
     # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
     # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
     dataloader_train = DataLoader(
-        dataset_train,
+        dataloader_train,
+        batch_sampler=batch_sampler_train,
         collate_fn=collate_fn,
-        drop_last=True,
-        **train_kwargs,
+        pin_memory=pin_memory,
+        num_workers=num_workers,
     )
     dataloader_val = DataLoader(
         dataset_val,
+        batch_size=1,  # TODO: consider making this a batch_sampler as well
+        sampler=sampler_val,
         collate_fn=collate_fn,
-        drop_last=True,
-        **val_kwargs,
+        drop_last=False,
+        pin_memory=pin_memory,
+        num_workers=num_workers,
     )
 
     detector_name = model_config["detector"]
@@ -250,14 +240,18 @@ def main(
         num_classes=dataset_train.num_classes,
     )
     model.to(device)
-    
+
     # Wrap the base model in ddp and store a pointer to the model without ddp; when saving the model
-    # we want to save the model without ddp for portablility; ddpm wraps the model with additional 
+    # we want to save the model without ddp for portablility; ddpm wraps the model with additional
     # logic and parameters that are not serializable
     model_without_ddp = model
     if distributed_mode:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=False)
-        model_without_ddp = model.module # this line is technically not needed but helps for clarity
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[local_rank], find_unused_parameters=False
+        )
+        model_without_ddp = (
+            model.module
+        )  # this line is technically not needed but helps for clarity
 
     # Initalize postprocessor if using DINO DETR
     if "postprocess" in detector_params:
@@ -316,10 +310,16 @@ def main(
     # Extract the train arguments from base config
     train_args = base_config["train"]
 
-    # Extract solver configs and build the solvers
+    ###### start here, see if the solves built correctly
+
+    # Extract solver configs and build the solvers; parameter strategy craetes the parameter dicts for the
+    # optimizer (default: "all" use all parameters in the model in one group)
     solver_config = base_config["solver"]
     optimizer, lr_scheduler = build_solvers(
-        model.parameters(), solver_config["optimizer"], solver_config["lr_scheduler"]
+        model_without_ddp,
+        solver_config["optimizer"],
+        solver_config["lr_scheduler"],
+        parameter_strategy=solver_config.get("parameter_strategy", "all"),
     )
 
     trainer = Trainer(

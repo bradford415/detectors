@@ -157,3 +157,20 @@ def collate_fn_test(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -
 
     # This is what will be returned in the main train for loop (samples, targets)
     return images, annotations
+
+
+def get_collate_fn(detector_name: str) -> callable:
+    """Return the appropriate collate function based on the detector
+
+    Agrgs:
+        detector_name: the name of the detector
+    """
+
+    if detector_name == "dino":
+        return collate_fn_nested_tensor
+    elif detector_name == "yolov3":
+        return collate_fn
+    elif detector_name == "yolov4":
+        return collate_fn
+    else:
+        raise ValueError(f"No collate_fn found for: {detector_name}")

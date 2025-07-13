@@ -50,6 +50,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         self,
         image_folder: str,
         annotation_file: str,
+        num_classes: int,
         split: str,
         transforms: T = None,
         dev_mode: bool = False,
@@ -59,6 +60,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         Args:
             image_folder: path to the images
             annotation_file: path to the .json annotation file in coco format
+            num_classes:
             split: the dataset split type; train, val, or test
         """
         # Suppress coco prints while loading the image folder and annoation file
@@ -271,6 +273,7 @@ def make_coco_transforms_album(dataset_split, image_size: int = 416):
 ## TODO: This would probably make the most since as a cls method and name it from_data_split()
 def build_coco(
     root: str,
+    num_classes: int,
     dataset_split: str,
     dev_mode: bool = False,
 ):
@@ -278,6 +281,10 @@ def build_coco(
 
     Args:
         root: full path to the dataset root
+        num_classes: number of classes in the dataset; for yolo architectures this should be 80,
+                     for detr-based architectures this should be max_class_id + 1 which is 91
+                     for the coco dataset; NOTE: the max_id of the "categories" key in the coco
+                     annotation file is 90 (so 90 + 1 = 91)
         split: which dataset split to use; `train` or `val`
         dev_mode: Whether to build the dataset in dev mode; if true, this only uses a few samples
                          to quickly run the code

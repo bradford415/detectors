@@ -448,7 +448,7 @@ def create_dino_loss(
         num_classes: number of classes in the dataset ontology
         num_decoder_layers: number of decoder layers in the TransformerDecoder
         aux_loss: whether to use auxiliary losses for each decoder layer
-        two_stage_type: 
+        two_stage_type:
         loss_args:
         matcher_args: parameters for the hungarian matcher
         device: device used to compute the loss on

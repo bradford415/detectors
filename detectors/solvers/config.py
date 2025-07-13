@@ -1,3 +1,5 @@
+## DO NOT USE, this was a fun experiment I tried but it seemed less flexible than
+## putting the solver params in config files
 import ml_collections
 
 

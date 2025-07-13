@@ -14,7 +14,8 @@ exp_name: "development"
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetection"
 
-# max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info
+# max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
+# NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
 num_classes: 91
 
 # Log the train progress every n steps
@@ -52,25 +53,26 @@ train:
 
 # solver params: optimzer, lr scheduler, etc.
 sovler:
+  # the method for extracting parameters from the model; see solvers.build.get_optimizer_parameters() for more info
+  parameter_strategy: "separate_backbone" # use a different lr for the backbone parameters
 
-  # TODO: adapt this for DINO; currently copied pasted from classifiers
   optimizer:
     # The optimizer to use; must be one of the names in the optimizer_map dict
     name: "adamw"
-    
+  
     params:
-      lr: 0.0001
+      lr: 1e-4
       backbone_lr: 1e-5 # lr for only the backbone
-      weight_decay: 0.05
+      weight_decay: 0.0001
 
   lr_scheduler:
-    name: "warmup_cosine_decay"
+    name: "step_lr"
     step_lr_on: "epochs" # step the lr after n "epochs" or "steps"
     
+    # parameters for the LR scheduler
     params:
-      warmup_epochs: 5 # linear warmup for this many epochs
-      warmup_min_lr: 1e-6
-      # Note: total_steps is set by number of epochs
+      step_size: 11  # step every n
+      gamma: 0.1 # multiplicative factor to reduce the lr by
 
 # GPU parameters
 cuda:
