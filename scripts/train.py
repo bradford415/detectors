@@ -59,11 +59,11 @@ def main(
     # initalize torch distributed mode by setting the communication between all procceses
     # and assigning the GPU to use for each proccess;
     # NOTE: in general, each proccess should run most commands in the program except saving to disk
-    world_size, global_rank, local_rank, distruted_mode = (
+    world_size, global_rank, local_rank, distributed_mode = (
         distributed.init_distributed_mode(backend=base_config["cuda"]["backend"])
     )
 
-    # stagger each process by 20 ms; I don't think this is required but it helps prevent I/O
+    # stagger each process by 20 ms; not required but recommended to help prevent I/O
     # contention on shared file systems like EFS
     time.sleep(global_rank * 0.02)
 
