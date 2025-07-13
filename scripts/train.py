@@ -231,6 +231,11 @@ def main(
         num_classes=dataset_train.num_classes,
     )
     model.to(device)
+    
+    model_without_ddp = model
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=args.find_unused_params)
+        model_without_ddp = model.module
 
     # Initalize postprocessor if using DINO DETR
     if "postprocess" in detector_params:

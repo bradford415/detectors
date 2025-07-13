@@ -2010,8 +2010,6 @@ def build_deformable_transformer(
     # False = Look forward twice (which is what DINO implements)
     use_detached_boxes_dec_out = transformer_args["use_detached_boxes_dec_out"]
 
-    ####### start here and try initailize deformable transformer ########
-
     return DeformableTransformer(
         d_model=transformer_args["hidden_dim"],
         num_heads=transformer_args["num_heads"],
