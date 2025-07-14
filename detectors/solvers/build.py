@@ -2,8 +2,6 @@ from typing import Optional, Sequence
 
 import torch
 
-from detectors.solvers import optimizer_map, scheduler_map
-
 scheduler_map = {
     "step_lr": torch.optim.lr_scheduler.StepLR,
     "lambda_lr": torch.optim.lr_scheduler.LambdaLR,  # Multiply the initial lr by a factor determined by a user-defined function; it does NOT multiply the factor by the current lr, always the initial lr
@@ -64,6 +62,7 @@ def build_solvers(
     optimizer_config: dict[str, any],
     scheduler_config: dict[str, any],
     parameter_strategy: str = "all",
+    backbone_lr: Optional[float] = None,
 ):
     """Builds the optimizer and learning rate scheduler based on the provided parameters
     from solver.config
@@ -73,6 +72,8 @@ def build_solvers(
         optimizer_params: the parameters used to build the optimizer
         scheduler_params: the parameters used to build the learning rate scheduler
         parameter_strategy: the strategy to use for extracting the parameters from the model
+        backbone_lr: the learning rate to use for the backbone parameters if using the
+                     separate_backbone strategy
     """
     optimizer_name = optimizer_config["name"]
     scheduler_name = scheduler_config["name"]
@@ -80,10 +81,13 @@ def build_solvers(
     optimizer_params = optimizer_config["params"]
     scheduler_params = scheduler_config["params"]
 
-    model_params = get_optimizer_params(model, strategy=parameter_strategy)
+    model_params = get_optimizer_params(
+        model, strategy=parameter_strategy, backbone_lr=backbone_lr
+    )
 
     # Build optimizer
     if optimizer_name in optimizer_map:
+        breakpoint()
         optimizer = optimizer_map[optimizer_name](model_params, **optimizer_params)
     else:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
@@ -93,4 +97,4 @@ def build_solvers(
     else:
         raise ValueError(f"Unknown lr_scheduler: {scheduler_name}")
 
-    return optimizer, scheduler, parameters
+    return optimizer, scheduler

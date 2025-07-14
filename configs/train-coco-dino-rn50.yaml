@@ -14,10 +14,6 @@ exp_name: "development"
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetection"
 
-# max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
-# NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
-num_classes: 91
-
 # Log the train progress every n steps
 log_train_steps: 20
 
@@ -27,6 +23,10 @@ dataset:
   # Path to the root of the dataset; detects which path to use based on device
   root: "/mnt/d/datasets/coco" # windows path
   root_mac: "/Users/bsele/datasets/coco" # mac path
+
+  # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
+  # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
+  num_classes: 91
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 4
@@ -52,17 +52,20 @@ train:
 
 
 # solver params: optimzer, lr scheduler, etc.
-sovler:
+solver:
   # the method for extracting parameters from the model; see solvers.build.get_optimizer_parameters() for more info
   parameter_strategy: "separate_backbone" # use a different lr for the backbone parameters
 
   optimizer:
     # The optimizer to use; must be one of the names in the optimizer_map dict
     name: "adamw"
-  
+
+    # additional params
+    backbone_lr: 1e-5 # lr for only the backbone
+
+    # params for the optimizer
     params:
-      lr: 1e-4
-      backbone_lr: 1e-5 # lr for only the backbone
+      lr: 1.e-4
       weight_decay: 0.0001
 
   lr_scheduler:

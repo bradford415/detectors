@@ -308,6 +308,7 @@ def build_coco(
     dataset = CocoDetection(
         image_folder=images_dir,
         annotation_file=annotation_file,
+        num_classes=num_classes,
         transforms=data_transforms,
         dev_mode=dev_mode,
         split=dataset_split,

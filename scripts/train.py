@@ -183,7 +183,10 @@ def main(
     if not use_cpu:
         pin_memory = True
 
-    dataset_kwargs = {"root": base_config["dataset"]["root"]}
+    dataset_kwargs = {
+        "root": base_config["dataset"]["root"],
+        "num_classes": base_config["dataset"]["num_classes"],
+    }
     dataset_train = dataset_map[base_config["dataset_name"]](
         dataset_split="train", dev_mode=dev_mode, **dataset_kwargs
     )
@@ -215,7 +218,7 @@ def main(
     # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
     # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
     dataloader_train = DataLoader(
-        dataloader_train,
+        dataset_train,
         batch_sampler=batch_sampler_train,
         collate_fn=collate_fn,
         pin_memory=pin_memory,
@@ -292,7 +295,7 @@ def main(
             "num_decoder_layers"
         ]
         criterion = loss_map[detector_name](
-            num_classes=base_config["num_classes"],
+            num_classes=base_config["dataset"]["num_classes"],
             num_decoder_layers=num_decoder_layers,
             aux_loss=detector_params["aux_loss"],
             two_stage_type=detector_params["detector"]["two_stage"]["type"],
@@ -320,6 +323,7 @@ def main(
         solver_config["optimizer"],
         solver_config["lr_scheduler"],
         parameter_strategy=solver_config.get("parameter_strategy", "all"),
+        backbone_lr=solver_config["optimizer"].get("backbone_lr", None),
     )
 
     trainer = Trainer(
