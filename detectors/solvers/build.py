@@ -87,7 +87,6 @@ def build_solvers(
 
     # Build optimizer
     if optimizer_name in optimizer_map:
-        breakpoint()
         optimizer = optimizer_map[optimizer_name](model_params, **optimizer_params)
     else:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")

@@ -268,6 +268,49 @@ def make_coco_transforms_album(dataset_split, image_size: int = 416):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
+    
+    
+def make_coco_transforms_detr(dataset_split):
+    """Initialize transforms for the coco dataset
+
+    These transforms are based on torchvision transforms but are overrided in data/transforms.py
+    This allows for slight modifications in the the transform
+
+    Args:
+        dataset_split: which dataset split to use; `train` or `val`
+
+    """
+    
+    ########## start here, look at detr transforms ##########
+
+    normalize = T.Compose(
+        [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
+    )
+
+    if dataset_split == "train":
+        return T.Compose(
+            [
+                # T.RandomHorizontalFlip(),
+                # T.RandomResize(scales),
+                # T.CenterCrop((512, 512)),
+                normalize,
+            ]
+        )
+    elif dataset_split == "val":
+        return T.Compose(
+            [
+                # T.RandomResize([512]),
+                normalize,
+            ]
+        )
+    elif dataset_split == "test":
+        return T.Compose(
+            [
+                normalize,
+            ]
+        )
+    else:
+        raise ValueError(f"unknown dataset split {dataset_split}")
 
 
 ## TODO: This would probably make the most since as a cls method and name it from_data_split()

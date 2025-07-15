@@ -342,7 +342,7 @@ def main(
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
         "grad_accum_steps": grad_accum_steps,
-        "start_epoch": train_args["start_epoch"],
+        "start_epoch": train_args.get("start_epoch", 1),
         "epochs": train_args["epochs"],
         "ckpt_epochs": train_args["ckpt_epochs"],
         "checkpoint_path": train_args["checkpoint_path"],
