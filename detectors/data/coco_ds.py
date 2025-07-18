@@ -268,20 +268,48 @@ def make_coco_transforms_album(dataset_split, image_size: int = 416):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
-    
-    
-def make_coco_transforms_detr(dataset_split):
-    """Initialize transforms for the coco dataset
 
-    These transforms are based on torchvision transforms but are overrided in data/transforms.py
-    This allows for slight modifications in the the transform
+
+def make_coco_transforms_dino_detr(dataset_split):
+    """Initialize the DINO DETR transforms for the coco dataset
+
+    dino detr utilizes the following transforms:
+        train:
+            - RandomHorizontalFlip (p=0.5)
+            - RandomSelect (p=0.5 for both transforms)
+                - RandomResize with scales=[800, 1333]
+                - RandomSizeCrop with scales2_crop=(384, 600) and scales2_resize=[800, 1333]
+            - Normalize ([0, 1] -> subtract mean, divide by std)
+        val:
+            - Resize the shorter side to 800 and the longer side to max_size=1333
+            - Normalize ([0, 1] -> subtract mean, divide by std)
+        test:
+            - Resize the shorter side to 800 and the longer side to max_size=1333
+            - Normalize ([0, 1] -> subtract mean, divide by std)
 
     Args:
         dataset_split: which dataset split to use; `train` or `val`
 
     """
-    
-    ########## start here, look at detr transforms ##########
+
+    # scales (randomly chosen from) to resize the shorter side of the image to;
+    # this is during just RandomResize (if selected) and the 2nd RandomResize after cropping
+    # (if this transform is randomly selected)
+    short_side_scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+
+    # the maximum allowable size of the longer side when resizing; if the longer side would
+    # be greater than this, a new short side is calculated such that the longer side would be `max_size`
+    max_size = 1333
+
+    # scales (randomly chosen from) to resize the shorter side of the image to before cropping if
+    # this transform is randomly selected
+    short_side_scales_2 = [400, 500, 600]
+
+    # the height and width of the crop size randomly chosen between [min, max]
+    # (or the h/w of the image if it exceeds); the height and width of the crop start at a randomly
+    # selected point representing the top-left corner of the crop region; top-left corner is chosen
+    # randomly between [0, image_height - h] and [0, image_width - w]
+    scales_crop = [384, 600]
 
     normalize = T.Compose(
         [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
@@ -290,22 +318,31 @@ def make_coco_transforms_detr(dataset_split):
     if dataset_split == "train":
         return T.Compose(
             [
-                # T.RandomHorizontalFlip(),
-                # T.RandomResize(scales),
-                # T.CenterCrop((512, 512)),
+                T.RandomHorizontalFlip(),
+                T.RandomSelect(
+                    T.RandomResize(short_side_scales, max_size=max_size),
+                    T.Compose(
+                        [
+                            T.RandomResize(short_side_scales_2),
+                            T.RandomSizeCrop(*scales_crop),
+                            T.RandomResize(short_side_scales, max_size=max_size),
+                        ]
+                    ),
+                ),
                 normalize,
             ]
         )
     elif dataset_split == "val":
         return T.Compose(
             [
-                # T.RandomResize([512]),
+                T.RandomResize([max(short_side_scales)], max_size=max_size),
                 normalize,
             ]
         )
     elif dataset_split == "test":
         return T.Compose(
             [
+                T.RandomResize([max(short_side_scales)], max_size=max_size),
                 normalize,
             ]
         )

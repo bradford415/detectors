@@ -21,6 +21,15 @@ from detectors.utils.misc import interpolate
 
 
 def crop(image, target, region):
+    """Crop the image and adjust the target bounding boxes and masks accordingly.
+
+    Args:
+        image: a PIL image to be cropped
+        target: a dictionary of ground truth information containing keys:
+                  boxes (tl_x, tl_y, br_x, br_y) labels, image_id, area, iscrowd, orig_size, size
+        region: a tuple (i, j, h, w) where i and j are the top-left corner coordinates
+                and h and w are the height and width of the crop region
+    """
     cropped_image = F.crop(image, *region)
 
     target = target.copy()
@@ -82,22 +91,40 @@ def hflip(image, target):
     return flipped_image, target
 
 
-def resize(image: torch.Tensor, target, size: Union[int, Tuple], max_size=None):
-    """Auxillary function to resize an image given a size
+def resize(
+    image: torch.Tensor, target, size: int | Tuple, max_size: Optional[int] = None
+):
+    """Resize an image, and adjusts the targets' bboxes, such that the shortest
+    side of the image is resized to `size` preserving the aspect ratio, but if doing
+    so would cause the longest side to exceed `max_size`, then it calculats a new `size`
+    by assuming the new longer side = `max_size` (still keeping the aspect ratio)
 
     Args:
-        image:
-        target: Boxes to resize
-        size: Size to resize the image by; can be a scalar or tuple (w, h)
+        image: a PIL image to be resized
+        target: a dictionary of ground truth information containing keys:
+                  boxes (tl_x, tl_y, br_x, br_y) labels, image_id, area, iscrowd, orig_size, size
+        size: if integer (default), the randomly selected size to resize the shortest side
+                of the image to while maintaining the aspect ratio
+              if tuple, the (height, width) to resize the image to
+        max_size: the upper bound for longest side of the image when resizing
+                 (the aspect ratio is still maintained); default 1333
     """
     # size can be min_size (scalar) or (w, h) tuple
 
     # Get the aspect ratio
     def get_size_with_aspect_ratio(image_size, size, max_size=None):
+        """Calculate the new h/w of the resized image; if the long side would exceed max_size
+        then calculate the new short side size given the new long side size = max_size
+        """
         w, h = image_size
         if max_size is not None:
             min_original_size = float(min((w, h)))
             max_original_size = float(max((w, h)))
+
+            # if the longer size would be larger than the desired size, then compute the
+            # new size of the shorter side assuming the longer side is max_size;
+            # these are just proportion calculations;
+            #   Ex: long_side=640 & short_side=480 -> (640 / 480 = max_size / size)
             if max_original_size / min_original_size * size > max_size:
                 size = int(round(max_size * min_original_size / max_original_size))
 
@@ -172,7 +199,7 @@ def pad(image, target, padding):
     return padded_image, target
 
 
-class RandomCrop(object):
+class RandomCrop:
     def __init__(self, size):
         self.size = size
 
@@ -181,7 +208,16 @@ class RandomCrop(object):
         return crop(img, target, region)
 
 
-class RandomSizeCrop(object):
+class RandomSizeCrop:
+    """Randomly crops an image to a random size between `min_size` and `max_size`
+    (but not larger than the image size); the location of the crop is randomly chosen
+    specified by i, j (row, col) which represents the top-left corner of the crop region and
+    i = [0, image_height - h] and j = [0, image_width - w] (0 stays because its the top-left corner);
+    the target bboxes are cropped with the region such that if their new area is positive
+    (even very small), they are kept, this means if their new area is  <= 0 they are removed
+    from the new cropped image.
+    """
+
     def __init__(self, min_size: int, max_size: int):
         self.min_size = min_size
         self.max_size = max_size
@@ -216,14 +252,10 @@ class RandomHorizontalFlip(object):
 
 
 class RandomResize(object):
-    """Resize an image and its bounding box by randomly selecting a length from `sizes`
-
-    If the size is a scalar, the shorter image side will take the value of size and the
-    longer image side will be calculated so that the aspect ratio is maintained.
-
-    If the size is a tuple (h, w), the resized image will match these dimensions and
-    ignores the aspect ratio.
-
+    """Resize an image, and adjusts the targets' bboxes, such that the shortest
+    side of the image is resized to `size` preserving the aspect ratio, but if doing
+    so would cause the longest side to exceed `max_size`, then it calculats a new `size`
+    by assuming the new longer side = `max_size` (still keeping the aspect ratio)
     """
 
     def __init__(self, sizes: List[int], max_size=None):
