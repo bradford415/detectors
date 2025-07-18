@@ -348,6 +348,8 @@ def make_coco_transforms_dino_detr(dataset_split):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
+    
+    ######### STart here, figure out best way to call dino detr transforms #########
 
 
 ## TODO: This would probably make the most since as a cls method and name it from_data_split()
