@@ -12,7 +12,7 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors.data.coco_ds import build_coco
+from detectors.data.coco import build_coco
 from detectors.data.collate_functions import collate_fn
 from detectors.evaluate import evaluate, load_model_checkpoint
 from detectors.models import Yolov3, Yolov4

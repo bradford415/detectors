@@ -13,7 +13,7 @@ import yaml
 from fire import Fire
 from torch.utils.data import DataLoader, DistributedSampler
 
-from detectors.data.coco_ds import build_coco
+from detectors.data.coco import build_coco
 from detectors.data.collate_functions import get_collate_fn
 from detectors.losses import Yolov3Loss, Yolov4Loss, create_dino_loss
 from detectors.models.create import create_detector
@@ -136,13 +136,18 @@ def main(
     # Extract training and val params
     train_args = base_config["train"]
 
+    # batch size per gpu
     batch_size = train_args["batch_size"]
     effective_bs = train_args["effective_batch_size"]
 
     val_batch_size = train_args["batch_size"]
 
-    if effective_bs % batch_size == 0 and effective_bs >= batch_size:
-        grad_accum_steps = effective_bs // batch_size
+    # calculate the number of gradient accumulation steps to simulate a larger batch;
+    # if using DDP, grad_accum_steps = effective_batch_size // batch_size * num_gpus
+    if effective_bs % (batch_size * world_size) == 0 and effective_bs >= (
+        batch_size * world_size
+    ):
+        grad_accum_steps = effective_bs // (batch_size * world_size)
     else:
         raise ValueError(
             "grad_accum_bs must be divisible by batch_size and greater than or equal to batch_size"
@@ -312,8 +317,6 @@ def main(
 
     # Extract the train arguments from base config
     train_args = base_config["train"]
-
-    ###### start here, see if the solves built correctly
 
     # Extract solver configs and build the solvers; parameter strategy craetes the parameter dicts for the
     # optimizer (default: "all" use all parameters in the model in one group)

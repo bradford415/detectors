@@ -47,7 +47,7 @@ class Trainer:
         dataloader_val: data.DataLoader,
         optimizer: torch.optim.Optimizer,
         class_names: list[str],
-        subdivisions: int,
+        grad_accum_steps: int,
         start_epoch: int = 1,
         epochs: int = 100,
         ckpt_epochs: int = 10,
@@ -65,6 +65,9 @@ class Trainer:
             dataloader_train: Torch dataloader to loop through the train dataset
             dataloader_val: Torch dataloader to loop through the val dataset
             optimizer: Optimizer which determines how to update the weights
+            class_names: list of class names; used for logging and visualization
+            grad_accum_steps: number of steps to accumulate gradients before updating the weights;
+                              used to simulate a larger effective batch size
             scheduler: Scheduler which determines how to change the learning rate
             start_epoch: Epoch to start the training on; starting at 1 is a good default because it makes
                          checkpointing and calculations more intuitive
@@ -194,7 +197,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
-        subdivisions: int,
+        grad_accum_steps: int,
         scaler: torch.amp,
     ):
         """Train one epoch
@@ -206,6 +209,8 @@ class Trainer:
             optimizer: Optimizer to update the models weights
             scheduler: Learning rate scheduler to update the learning rate
             epoch: Current epoch; used for logging purposes
+            grad_accum_steps: number of steps to accumulate gradients before updating the weights;
+                              the loss will be divivided by this number to account for the accumulation
         """
         epoch_loss = []
         for steps, (samples, targets, annotations) in enumerate(dataloader_train, 1):
@@ -237,6 +242,10 @@ class Trainer:
 
                 total_loss, loss_components = criterion(bbox_preds, targets, model)
 
+                if grad_accum_steps > 1:
+                    # scale the loss by the number of accumulation steps
+                    loss = loss / grad_accum_steps
+
                 # multiply loss by the mini batch size to account for split gradients; I'm not entirely sure how this works
                 # but it was mentioned here: https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/818#issuecomment-1484223518
                 total_loss *= samples.shape[0]
@@ -251,13 +260,14 @@ class Trainer:
 
             # Update the gradients once all the subdivisions have finished accumulating gradients and update lr_scheduler
             # TODO: verify this is accurate
-            if steps % subdivisions == 0:
+            if steps % grad_accum_steps == 0:
                 # Calculate gradients and updates weights
                 if self.enable_amp:
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     optimizer.step()
+
                 optimizer.zero_grad()
 
                 # NOTE: occasionally scaler.step will be skipped and torch will throw a warning that scheduler.step

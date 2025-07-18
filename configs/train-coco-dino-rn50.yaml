@@ -32,10 +32,13 @@ dataset:
   num_workers: 4
 
 train:
-  # TODO: replace subdivisons (above) with effective_batch_size
-  # batches & epochs
-  batch_size: 32
-  effective_batch_size: 1024  # batch_size * gradient_accumulation_steps
+  # batch_size per gpu; the total batch_size will be batch_size * num_gpus if using DDP
+  # so the number of grad_accum_steps = batch_szie * num gpus / effective_batch_size
+  batch_size: 2
+
+  # dino uses a bs of 2 per gpu and uses 8 gpus ->  2 *8 = 16 (Table 5.)
+  effective_batch_size: 16  # batch_size * num_gpus (processes) * gradient_accumulation_steps
+
   validation_batch_size: 32
   epochs: 300
 

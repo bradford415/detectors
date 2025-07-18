@@ -91,7 +91,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         # 92 w/ the no object) this post explains a little more:
         #   https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
         # list of the 91 coco class: https://gist.github.com/tersekmatija/9d00c4683d52d94cf348acae29e8db1a
-        self.num_classes = 80
+        self.num_classes = num_classes
 
         # Extract dataset ontology
         categories_list = self.coco.loadCats(self.coco.getCatIds())
@@ -277,8 +277,12 @@ def make_coco_transforms_dino_detr(dataset_split):
         train:
             - RandomHorizontalFlip (p=0.5)
             - RandomSelect (p=0.5 for both transforms)
-                - RandomResize with scales=[800, 1333]
-                - RandomSizeCrop with scales2_crop=(384, 600) and scales2_resize=[800, 1333]
+                - Transform 1:
+                    - RandomResize(short_side=random(`short_side_scales`), max_size=1333)
+                - Transform 2:
+                    - RandomResize(short_side=random(`short_side_scales_2`))
+                    - RandomSizeCrop(min=`scales_crop[0]`, max=`scales_crop[1]`)
+                    - RandomResize(short_size=random(`short_side_scales`), max_size=1333)
             - Normalize ([0, 1] -> subtract mean, divide by std)
         val:
             - Resize the shorter side to 800 and the longer side to max_size=1333
@@ -348,8 +352,6 @@ def make_coco_transforms_dino_detr(dataset_split):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
-    
-    ######### STart here, figure out best way to call dino detr transforms #########
 
 
 ## TODO: This would probably make the most since as a cls method and name it from_data_split()
@@ -357,6 +359,7 @@ def build_coco(
     root: str,
     num_classes: int,
     dataset_split: str,
+    model_name: str = "dino",
     dev_mode: bool = False,
 ):
     """Initialize the COCO dataset class
@@ -368,6 +371,7 @@ def build_coco(
                      for the coco dataset; NOTE: the max_id of the "categories" key in the coco
                      annotation file is 90 (so 90 + 1 = 91)
         split: which dataset split to use; `train` or `val`
+        model_name: the name of the model to use; this is used to determine the transforms to use
         dev_mode: Whether to build the dataset in dev mode; if true, this only uses a few samples
                          to quickly run the code
     """
@@ -385,7 +389,10 @@ def build_coco(
         annotation_file = coco_root / "annotations" / "instances_test2017.json"
 
     # Create the data augmentation transforms
-    data_transforms = make_coco_transforms_album(dataset_split)
+    if "dino" in model_name.lower():
+        data_transforms = make_coco_transforms_dino_detr(dataset_split)
+    elif "yolo" in model_name.lower():
+        data_transforms = make_coco_transforms_album(dataset_split)
 
     dataset = CocoDetection(
         image_folder=images_dir,
