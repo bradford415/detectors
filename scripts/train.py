@@ -159,7 +159,7 @@ def main(
         grad_accum_steps = 2
 
     log.info(
-        "\neffective_batch_size: %-5d grad_accum_steps: %-5d batch_size: %d",
+        "\neffective_batch_size: %-5d grad_accum_steps: %-5d batch_size_per_gpu: %d",
         effective_bs,
         grad_accum_steps,
         batch_size,

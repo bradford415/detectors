@@ -109,7 +109,7 @@ class Trainer:
                 optimizer,
                 scheduler,
                 epoch,
-                subdivisions,
+                grad_accum_steps,
                 scaler,
             )
             train_loss.append(epoch_train_loss)
@@ -297,7 +297,8 @@ class Trainer:
                     loss_components[2],
                 )
 
-        return np.array(epoch_loss).mean() / samples.shape[0] / subdivisions
+        # TODO: see if this is correct
+        return np.array(epoch_loss).mean() / samples.shape[0] / grad_accum_steps
 
     @torch.no_grad()
     def _evaluate(

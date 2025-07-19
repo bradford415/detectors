@@ -18,18 +18,33 @@ log = logging.getLogger(__name__)
 
 
 class PreprocessCoco:
-    """Preprocess the coco dataset before any augmentations are applied"""
+    """Preprocess the coco dataset before any augmentations are applied
 
-    def __init__(self, return_masks=False):
+    This class was taken from DETR and modified for Yolo architectures
+    """
+
+    def __init__(self, return_masks=False, model_name: str = "yolo"):
+        """Initalize the preprocessor class
+
+        Args:
+            return_masks: if True, converts coco polygons to masks for segmentation tasks;
+                          if False, only bboxes and class labels are returned
+            model_name: if `yolo` converts the coco class ids to a contiguous range of 0-79;
+                                detr-based architectures do not require this conversion
+        """
+        assert model_name in ["yolo", "detr"]
+
         self.return_masks = return_masks
+        self.model_name = model_name
 
         # Used to make the dataset labels sequential
-        self.coco_class_91_to_80 = coco91_to_coco80_class()
+        if model_name == "yolo":
+            self.coco_class_91_to_80 = coco91_to_coco80_class()
 
     def __call__(
         self, image: Image.Image, target: Dict[str, Any]
     ) -> Tuple[Image.Image, Dict[str, Tensor]]:
-        """Preprocesses the coco formatted dataset in the following way:
+        """Preprocesses the coco formatted dataset in th    e following way:
 
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
@@ -56,9 +71,12 @@ class PreprocessCoco:
         boxes = [obj["bbox"] for obj in annotations]
 
         # guard against no boxes via resizing (not really sure what this means)
+        # converts boxes to a tensor of shape (num_boxes, 4), additionally this gaurds against
+        # images that have no boxes such as negatives or after image augmentations
+        # (although this is typically called before augmentations); no boxes shape (0, 4)
         boxes = torch.as_tensor(boxes, dtype=torch.float32).reshape(-1, 4)
 
-        # Convert w & h to br_x & br_y: [tl_x, tl_y, w, h] -> [tl_x, tl_y, br_x, br_y]
+        # Convert XYWH [tl_x, tl_y, w, h] -> XYXY [tl_x, tl_y, br_x, br_y]
         boxes[:, 2:] += boxes[:, :2]
 
         # Clip the the x and y coordinates to the image size; guards against boxes being larger than image
@@ -67,15 +85,30 @@ class PreprocessCoco:
 
         # Create list of object labels, shift the coco ids so they are between 0-79 (i.e., sequential),
         # and convert to tensor
-        ## TODO: This may not be the correct way to convert the classes
-        classes = [self.coco_class_91_to_80[obj["category_id"]] for obj in annotations]
+        if "yolo" in self.model_name:
+            classes = [
+                self.coco_class_91_to_80[obj["category_id"]] for obj in annotations
+            ]
+        else:
+            classes = [obj["category_id"] for obj in annotations]
         classes = torch.tensor(classes, dtype=torch.int64)
 
-        # Validate the br coordinate is greater than the tl; this should rarely be untrue
+        # Convert coco polygons to masks if return_masks is True (default False)
+        if self.return_masks:
+            segmentations = [obj["segmentation"] for obj in annotations]
+            masks = convert_coco_poly_to_mask(segmentations, h, w)
+
+        # NOTE: removed the keypoints code
+
+        # Validate the width and height is positive using XYXY coords; this should rarely be untrue;
+        # discard boxes and classes that are not valid
         keep = (boxes[:, 3] > boxes[:, 1]) & (boxes[:, 2] > boxes[:, 0])
         boxes = boxes[keep]
         classes = classes[keep]
+        if self.return_masks:
+            masks = masks[keep]
 
+        # add an image_path key to the target dictionary
         image_path = target["image_path"]
 
         # Update ground truth labels with the preprocessed boxes and classes
@@ -84,6 +117,8 @@ class PreprocessCoco:
         target["labels"] = classes
         target["image_id"] = image_id
         target["image_path"] = str(image_path)
+        if self.return_masks:
+            target["masks"] = masks
 
         # Extract area and iscrowd for conversion to coco api
         # Area is used during evaluation with the COCO metric, to separate the metric scores between small, medium and large boxes.
@@ -94,8 +129,12 @@ class PreprocessCoco:
         target["area"] = area[keep]
         target["iscrowd"] = iscrowd[keep]
 
-        # TODO comment this
+        # store the original image size which is important for postprocessing like
+        # rescaling bboxes back to original image coordinates
         target["orig_size"] = torch.as_tensor([int(h), int(w)])
+
+        # save the current image size; this is typically updated later on in the pipeline
+        # during things like data augmentation
         target["size"] = torch.as_tensor([int(h), int(w)])
 
         return image, target

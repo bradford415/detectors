@@ -43,11 +43,11 @@ train:
   epochs: 300
 
   # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
-  ckpt_epochs: 3
+  ckpt_epochs: 1
 
   # Path of weights file (.pt) to resume training; 
   # use `null` to train a new model from scratch
-  checkpoint_path: "/home/bselee/programming/detectors/output/train/development/2025_01_24-08_19_55_PM/checkpoints/checkpoint0075.pt" #"/home/bselee/programming/detectors/output/train/development/2025_01_06-07_14_05_PM/checkpoints/best_mAP_34-36.pt"
+  checkpoint_path:
 
   # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
   # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet

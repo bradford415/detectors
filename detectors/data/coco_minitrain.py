@@ -41,8 +41,6 @@ class CocoDetection(torchvision.datasets.CocoDetection):
     │  ├─ instances_train2017.json
     │  ├─ instances_val2017.json
 
-
-    coco mintrain 2k:
     Inside "coco_minitrain_25k" create another directory named "annotations" and place the
     "instances_minitrain2017.json" and "instances_val2017.json" inside.
     The "instances_val2017.json" is from the original coco2017 dataset and can be found there.
@@ -54,20 +52,16 @@ class CocoDetection(torchvision.datasets.CocoDetection):
         annotation_file: str,
         num_classes: int,
         split: str,
-        model_name: str,
         transforms: T = None,
         dev_mode: bool = False,
     ):
         """Initialize the COCO dataset class
 
         Args:
-            image_folder: path to the root of the dataset images
+            image_folder: path to the images
             annotation_file: path to the .json annotation file in coco format
-            num_classes: number of classes in the dataset; for yolo architectures this should be 80,
-                          for detr-based architectures this should be max_class_id + 1 which is 91
+            num_classes:
             split: the dataset split type; train, val, or test
-            model_name: this is used to determine if the coco classes need to be convert to
-                        contiguous IDs; for now, only "yolo" classes ids need to be contiguous
         """
         # Suppress coco prints while loading the image folder and annoation file
         with open(os.devnull, "w") as devnull:
@@ -76,7 +70,7 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
         self._transforms = transforms
 
-        self.prepare = PreprocessCoco(return_masks=False, model_name=model_name)
+        self.prepare = PreprocessCoco()
 
         # TODO: make this 91 for detr-based and 80 for yolo-based; or put num_classes in config
         # for DINO DETR, num_classes should always be set to the max_class_id + 1; if you check the COCO 2017 file
@@ -378,7 +372,6 @@ def build_coco(
                      annotation file is 90 (so 90 + 1 = 91)
         split: which dataset split to use; `train` or `val`
         model_name: the name of the model to use; this is used to determine the transforms to use
-                    and if the coco classes need to be converted to contiguous IDs;
         dev_mode: Whether to build the dataset in dev mode; if true, this only uses a few samples
                          to quickly run the code
     """
@@ -405,7 +398,46 @@ def build_coco(
         image_folder=images_dir,
         annotation_file=annotation_file,
         num_classes=num_classes,
-        model_name=model_name,
+        transforms=data_transforms,
+        dev_mode=dev_mode,
+        split=dataset_split,
+    )
+
+    return dataset
+
+
+def build_coco_mini(
+    root: str,
+    dataset_split: str,
+    dev_mode: bool = False,
+):
+    """Initialize the COCO dataset class
+
+    Args:
+        root: full path to the dataset root
+        split: which dataset split to use; `train` or `val`
+        dev_mode: Whether to build the dataset in dev mode; if true, this only uses a few samples
+                         to quickly run the code
+    """
+    coco_root = Path(root)
+
+    # Set path to images and annotations
+    if dataset_split == "train":
+        images_dir = coco_root / "images" / "train2017"
+        annotation_file = coco_root / "annotations" / "instances_minitrain2017.json"
+    elif dataset_split == "val":
+        images_dir = coco_root / "images" / "val2017"
+        annotation_file = coco_root / "annotations" / "instances_val2017.json"
+    elif dataset_split == "test":
+        images_dir = coco_root / "images" / "test2017"
+        annotation_file = coco_root / "annotations" / "instances_test2017.json"
+
+    # Create the data augmentation transforms
+    data_transforms = make_coco_transforms(dataset_split)
+
+    dataset = CocoDetection(
+        image_folder=images_dir,
+        annotation_file=annotation_file,
         transforms=data_transforms,
         dev_mode=dev_mode,
         split=dataset_split,
