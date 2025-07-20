@@ -48,7 +48,7 @@ class PreprocessCoco:
 
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
-            3. converts bboxes from XYWH (top_left, center) to XYXY (top_left, bottom_right); 
+            3. converts bboxes from XYWH (top_left, center) to XYXY (top_left, bottom_right);
                this is done to perform transforms
                - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h] and normalized by image size;
                        this happens after PreprocessCoco() is called.

@@ -155,7 +155,7 @@ def main(
 
     if dev_mode:
         log.info("NOTE: executing in dev mode")
-        batch_size = 4
+        batch_size = 2
         grad_accum_steps = 2
 
     log.info(

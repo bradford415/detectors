@@ -137,7 +137,7 @@ def collate_fn_nested_tensor(
     batch = list(zip(*batch))
 
     # Create a nested tensor from the tuple of tensors
-    batch[0] = NestedTensor.nested_tensor_from_tensor_list(batch[0])
+    batch[0] = NestedTensor.from_tensor_list(batch[0])
     return tuple(batch)
 
 

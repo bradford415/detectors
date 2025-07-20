@@ -149,7 +149,8 @@ class NestedTensor:
 
         return cls(tensor, mask)
 
-    def _max_by_axis(self, img_sizes: list[list]) -> list[int]:
+    @staticmethod
+    def _max_by_axis(img_sizes: list[list]) -> list[int]:
         """Create a list of the maximum value for each dimension in the batch [c, h, w];
         used to pad the images and create the padding mask
 

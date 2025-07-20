@@ -105,13 +105,13 @@ class CocoDetectionDetr(torchvision.datasets.CocoDetection):
         # Display coco information of the current dataset; this should be placed at the end of the __init__()
         coco_stats(self, split)
 
-    def __getitem__(self, index) -> tuple[torch.Tensor, ]:
+    def __getitem__(self, index) -> tuple[torch.Tensor,]:
         """Retrieve and preprocess samples from the dataset
-        
+
         Returns:
             1. a tensor of the augmented image
             2. a dictionary of processed labels for the image with keys:
-                   boxes: normalized box coordinates [0, 1] for each object in the image 
+                   boxes: normalized box coordinates [0, 1] for each object in the image
                           (num_objects, 4) where 4 = CXCYWH
                    labels: class ids for each object in the image (num_objects,)
                    image_id: the image_id from the coco annotation file
@@ -119,15 +119,13 @@ class CocoDetectionDetr(torchvision.datasets.CocoDetection):
                             should have removed all crowd annotations
                    orig_size: the original image size (h, w)
                    size: the current image size after data augmentations like resizing (new_h, new_w)
-            
+
         """
 
         # Retrieve the pil image and its annotations
         # Annotations is a list of dicts; each dict in the list is an object in the image
         # Each dict contains ground truth information of the object such as bbox, segementation and image_id
         image, annotations = super().__getitem__(index)
-
-        breakpoint()
 
         # Match the randomly sampled index with the image_id; self.ids contains the image_ids in the train set
         image_id = self.ids[index]
@@ -146,7 +144,6 @@ class CocoDetectionDetr(torchvision.datasets.CocoDetection):
 
         if self._transforms is not None:
 
-            breakpoint()
             image, target = self._transforms(image=image, target=target)
 
         return image, target

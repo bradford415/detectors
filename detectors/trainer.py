@@ -213,16 +213,25 @@ class Trainer:
                               the loss will be divivided by this number to account for the accumulation
         """
         epoch_loss = []
-        for steps, (samples, targets, annotations) in enumerate(dataloader_train, 1):
+        for steps, (samples, targets) in enumerate(dataloader_train, 1):
+            breakpoint()
             samples = samples.to(self.device)
-            targets = targets.to(self.device)
-            # targets = [
-            #     {
-            #         key: val.to(self.device) if isinstance(val, torch.Tensor) else val
-            #         for key, val in t.items()
-            #     }
-            #     for t in targets
-            # ]
+
+            # move label tensors to gpu
+            if isinstance(targets, list):
+                targets = [
+                    {
+                        key: (
+                            val.to(self.device)
+                            if isinstance(val, torch.Tensor)
+                            else val
+                        )
+                        for key, val in t.items()
+                    }
+                    for t in targets
+                ]
+            else:
+                targets = targets.to(self.device)
 
             with torch.autocast(
                 device_type=self.device.type,

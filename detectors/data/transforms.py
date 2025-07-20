@@ -445,7 +445,7 @@ class Unnormalize:
         return tensor
 
 
-class Compose():
+class Compose:
     """Stores a list of transforms and applies them sequentially on the image and target label"""
 
     def __init__(self, transforms: list):
