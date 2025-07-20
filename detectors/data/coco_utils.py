@@ -32,7 +32,7 @@ class PreprocessCoco:
             model_name: if `yolo` converts the coco class ids to a contiguous range of 0-79;
                                 detr-based architectures do not require this conversion
         """
-        assert model_name in ["yolo", "detr"]
+        assert model_name in ["yolo", "detr", "dino"]
 
         self.return_masks = return_masks
         self.model_name = model_name
@@ -48,13 +48,17 @@ class PreprocessCoco:
 
             1. Converts the coco annotation keys to tensors
             2. Removes objects that are labeled as "crowds"
-            3. converts bboxes from [tl_x, tl_y, w, h] to [tl_x, tl_y, br_x, br_y]; this is done to perform transforms
+            3. converts bboxes from XYWH (top_left, center) to XYXY (top_left, bottom_right); 
+               this is done to perform transforms
                - NOTE: In transforms.Normalize the labels are converted to [cx, cy, w, h] and normalized by image size;
-                       this happensafter PreprocessCoco() is called.
+                       this happens after PreprocessCoco() is called.
         Args:
             image: singular PIL image
-            target dictionary with keys image_id and annotations
-
+            target: dictionary with keys image_id and image annotations; annotations have keys:
+                        boxes: (XYXY: top_left, bottom_right) (num_objects, 4)
+                        labels: class IDs for each object (num_objects,)
+                        orig_size: the original image size before data augmentation
+                        size: the current image size; updated later in the pipeline after augmentation
         """
         w, h = image.size
 
@@ -279,6 +283,23 @@ def coco_stats(dataset: torchvision.datasets.CocoDetection, split: str):
     log.info("\tunique categories: %d", len(cat_ids))
     log.info("\timages in the entire dataset: %d", len(img_ids))
     log.info("\tnumber of images in used for the current run: %d", len(dataset.ids))
+
+
+def convert_coco_poly_to_mask(segmentations, height, width):
+    masks = []
+    for polygons in segmentations:
+        rles = coco_mask.frPyObjects(polygons, height, width)
+        mask = coco_mask.decode(rles)
+        if len(mask.shape) < 3:
+            mask = mask[..., None]
+        mask = torch.as_tensor(mask, dtype=torch.uint8)
+        mask = mask.any(dim=2)
+        masks.append(mask)
+    if masks:
+        masks = torch.stack(masks, dim=0)
+    else:
+        masks = torch.zeros((0, height, width), dtype=torch.uint8)
+    return masks
 
 
 def convert_to_coco_api(ds, bbox_fmt="voc"):

@@ -445,11 +445,29 @@ class Unnormalize:
         return tensor
 
 
-class Compose(object):
-    def __init__(self, transforms):
+class Compose():
+    """Stores a list of transforms and applies them sequentially on the image and target label"""
+
+    def __init__(self, transforms: list):
+        """Initalize the compose class
+
+        Args:
+            transforms: a list of torch transforms or custom transform classes
+        """
         self.transforms = transforms
 
-    def __call__(self, image, target):
+    def __call__(self, image: PIL.Image, target: dict):
+        """Apply the list of transforms sequentially
+
+        Args:
+            image: a PIL image to be augmented
+            target: a dictionary of image annoations containing keys:
+                        boxes: (XYXY: top_left, bottom_right) (num_objects, 4)
+                        labels: class IDs for each object (num_objects,)
+                        orig_size: the original image size before data augmentation
+                        size: the current image size; updated later in the pipeline after augmentation
+
+        """
         for t in self.transforms:
             image, target = t(image, target)
         return image, target

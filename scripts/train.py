@@ -335,6 +335,8 @@ def main(
         log_train_steps=base_config["log_train_steps"],
     )
 
+    ######## START HERE, i think i can try training the model now but def need to look at the train  loop
+
     # Build trainer args used for the training
     trainer_args = {
         "model": model,
