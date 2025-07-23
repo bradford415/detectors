@@ -214,7 +214,6 @@ class Trainer:
         """
         epoch_loss = []
         for steps, (samples, targets) in enumerate(dataloader_train, 1):
-            breakpoint()
             samples = samples.to(self.device)
 
             # move label tensors to gpu

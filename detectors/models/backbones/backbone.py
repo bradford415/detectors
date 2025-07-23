@@ -134,6 +134,7 @@ class BackboneBase(nn.Module):
                     "2": NestedTensor medium feature_map spatial resolution
                     "3": NestedTensor lowest feature_map spatial resolution
                 }
+            NOTE: the "0" feature_map is one level above "1" but it's not used in this example
         """
         # Extract features from the input images through the backbone network
         feature_maps = self.backbone(tensor_list.tensors)
@@ -141,15 +142,20 @@ class BackboneBase(nn.Module):
         assert len(feature_maps) == 4
 
         # Extract only the desired feature maps
-        feature_maps = np.array(feature_maps)[self.bb_level_inds]
+        feature_maps_dict = {}
+        for fm_index, f_map in enumerate(feature_maps):
+            if fm_index in self.bb_level_inds:
+                feature_maps_dict[str(fm_index)] = f_map
 
-        assert len(feature_maps) == len(self.bb_level_inds)
+#        feature_maps = np.array(feature_maps)[self.bb_level_inds]
+
+        assert len(feature_maps_dict.keys()) == len(self.bb_level_inds)
 
         # Resize the input mask to match the spatial size of the feature map;
         # the mask is currently the shape of the input tensor (tensor input to the back) and needs to be resized for each feature map
         nested_feature_maps: dict[str, NestedTensor] = {}
         # TODO: Ill most definitely have to modify this bc I didn't use intermediatlayergetter
-        for name, feature_map in feature_maps.items():
+        for name, feature_map in feature_maps_dict.items():
             orig_mask = tensor_list.mask
 
             assert orig_mask is not None

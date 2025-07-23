@@ -109,7 +109,7 @@ class PositionEmbeddingSineHW(nn.Module):
         dim_tx = torch.arange(
             self.num_pos_feats, dtype=torch.float32, device=image_patches.device
         )
-        dim_tx = self.temperatureW ** (
+        dim_tx = self.temperature_w ** (
             2 * (dim_tx // 2) / self.num_pos_feats
         )  # denominator
 
@@ -122,7 +122,7 @@ class PositionEmbeddingSineHW(nn.Module):
         dim_ty = torch.arange(
             self.num_pos_feats, dtype=torch.float32, device=image_patches.device
         )
-        dim_ty = self.temperatureH ** (2 * (dim_ty // 2) / self.num_pos_feats)
+        dim_ty = self.temperature_h ** (2 * (dim_ty // 2) / self.num_pos_feats)
         pos_y = y_embed[:, :, :, None] / dim_ty
 
         assert len(dim_tx) == self.num_pos_feats and len(dim_ty) == self.num_pos_feats
@@ -153,7 +153,7 @@ def build_positional_encodings():
 
     Args:
         num_pos_feats:
-
+        
     """
     raise NotImplementedError
 
