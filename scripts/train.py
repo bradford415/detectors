@@ -128,7 +128,7 @@ def main(
         base_config["train"]["checkpoint_path"] is None
         and base_config["train"]["backbone_weights"] is None
     ):
-        log.info("\nNOTE: training from scratch; no pretrained weights provided")
+        log.info("\ntraining from scratch; no pretrained weights provided")
 
     # Apply reproducibility seeds
     reproduce.set_seeds(**base_config["reproducibility"])
@@ -154,7 +154,7 @@ def main(
         )
 
     if dev_mode:
-        log.info("NOTE: executing in dev mode")
+        log.info("\nNOTE: executing in dev mode")
         batch_size = 2
         grad_accum_steps = 2
 
@@ -335,7 +335,8 @@ def main(
         log_train_steps=base_config["log_train_steps"],
     )
 
-    ######## START HERE, i think i can try training the model now but def need to look at the train  loop
+    if detector_name in ["dino"]:
+        train_with_target = True
 
     # Build trainer args used for the training
     trainer_args = {
@@ -349,6 +350,7 @@ def main(
         "grad_accum_steps": grad_accum_steps,
         "start_epoch": train_args.get("start_epoch", 1),
         "epochs": train_args["epochs"],
+        "ckpt_epochs": train_with_target,
         "ckpt_epochs": train_args["ckpt_epochs"],
         "checkpoint_path": train_args["checkpoint_path"],
     }

@@ -2,6 +2,7 @@ import copy
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from detectors.data.data import NestedTensor
 from detectors.metrics import topk_accuracy
@@ -369,7 +370,7 @@ class SetCriterion(nn.Module):
         return losses
 
     def prep_for_dn(self, dn_meta):
-        output_known_lbs_bboxxes = dn_meta["output_known_lbs_bboxes"]
+        output_known_lbs_bboxes = dn_meta["output_known_lbs_bboxes"]
         num_dn_groups, pad_size = dn_meta["num_dn_group"], dn_meta["pad_size"]
         assert pad_size % num_dn_groups == 0
         single_pad = pad_size // num_dn_groups
@@ -541,3 +542,5 @@ def create_dino_loss(
             losses=losses,
         )
         criterion.to(device)
+
+    return criterion

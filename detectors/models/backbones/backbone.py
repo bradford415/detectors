@@ -147,7 +147,7 @@ class BackboneBase(nn.Module):
             if fm_index in self.bb_level_inds:
                 feature_maps_dict[str(fm_index)] = f_map
 
-#        feature_maps = np.array(feature_maps)[self.bb_level_inds]
+        #        feature_maps = np.array(feature_maps)[self.bb_level_inds]
 
         assert len(feature_maps_dict.keys()) == len(self.bb_level_inds)
 

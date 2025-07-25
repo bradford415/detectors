@@ -17,6 +17,7 @@ from detectors.visualize import plot_loss, plot_mAP, visualize_norm_img_tensors
 log = logging.getLogger(__name__)
 
 
+# TODO: consider making this a base class and creating different trainer objects for yolo/detr
 class Trainer:
     """Trainer TODO: comment"""
 
@@ -102,6 +103,7 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
+            ######### START HERE, make flag that switches which function to use
             epoch_train_loss = self._train_one_epoch(
                 model,
                 criterion,
@@ -189,7 +191,113 @@ class Trainer:
             total_time_str,
         )
 
-    def _train_one_epoch(
+    def _train_one_epoch_yolo(
+        self,
+        model: nn.Module,
+        criterion: nn.Module,
+        dataloader_train: Iterable,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler,
+        epoch: int,
+        grad_accum_steps: int,
+        scaler: torch.amp,
+    ):
+        """Train one epoch
+
+        Args:
+            model: Model to train
+            criterion: Loss function
+            dataloader_train: Dataloader for the training set
+            optimizer: Optimizer to update the models weights
+            scheduler: Learning rate scheduler to update the learning rate
+            epoch: Current epoch; used for logging purposes
+            grad_accum_steps: number of steps to accumulate gradients before updating the weights;
+                              the loss will be divivided by this number to account for the accumulation
+        """
+        epoch_loss = []
+        for steps, (samples, targets) in enumerate(dataloader_train, 1):
+            samples = samples.to(self.device)
+            targets = targets.to(self.device)
+
+            with torch.autocast(
+                device_type=self.device.type,
+                dtype=torch.float16,
+                enabled=self.enable_amp,
+            ):
+                # list of preds at all 3 scales;
+                # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
+                bbox_preds = model(samples)
+
+                # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
+                #     bbox_preds, targets, model
+                # ) # yolov4
+                # loss_components = misc.to_cpu(
+                #     torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
+                # )
+
+                total_loss, loss_components = criterion(bbox_preds, targets, model)
+
+                if grad_accum_steps > 1:
+                    # scale the loss by the number of accumulation steps
+                    loss = loss / grad_accum_steps
+
+                # multiply loss by the mini batch size to account for split gradients; I'm not entirely sure how this works
+                # but it was mentioned here: https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/818#issuecomment-1484223518
+                # I don't think this is correct;
+                # i think this is only used if you want to sum the loss instead of average bc this cancels out the average
+                total_loss *= samples.shape[0]
+
+            # Calculate gradients
+            if self.enable_amp:
+                scaler.scale(total_loss).backward()
+            else:
+                total_loss.backward()
+
+            epoch_loss.append(total_loss.detach().cpu())
+
+            # Update the gradients once all the subdivisions have finished accumulating gradients and update lr_scheduler
+            # TODO: verify this is accurate
+            if steps % grad_accum_steps == 0:
+                # Calculate gradients and updates weights
+                if self.enable_amp:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
+
+                optimizer.zero_grad()
+
+                # NOTE: occasionally scaler.step will be skipped and torch will throw a warning that scheduler.step
+                #       is being called first; I couldn't find a great solution but I think it's safe to ignore
+                if scheduler is not None:
+                    scheduler.step()
+
+            # Calling scheduler step increments a counter which is passed to the lambda function;
+            # if .step() is called after every batch, then it will pass the current step;
+            # if .step() is called after every epoch, then it will pass the epoch number;
+            # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
+            if (steps) % 100 == 0:
+                log.info(
+                    "Current learning_rate: %s\n",
+                    optimizer.state_dict()["param_groups"][0]["lr"],
+                )
+
+            if (steps) % self.log_train_steps == 0:
+                log.info(
+                    "epoch: %-10d iter: %d/%-12d train_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f",
+                    epoch,
+                    steps,
+                    len(dataloader_train),
+                    loss_components[3],
+                    loss_components[0],
+                    loss_components[1],
+                    loss_components[2],
+                )
+
+        # TODO: see if this is correct
+        return np.array(epoch_loss).mean() / samples.shape[0] / grad_accum_steps
+
+    def _train_one_epoch_detr(
         self,
         model: nn.Module,
         criterion: nn.Module,
@@ -217,20 +325,13 @@ class Trainer:
             samples = samples.to(self.device)
 
             # move label tensors to gpu
-            if isinstance(targets, list):
-                targets = [
-                    {
-                        key: (
-                            val.to(self.device)
-                            if isinstance(val, torch.Tensor)
-                            else val
-                        )
-                        for key, val in t.items()
-                    }
-                    for t in targets
-                ]
-            else:
-                targets = targets.to(self.device)
+            targets = [
+                {
+                    key: (val.to(self.device) if isinstance(val, torch.Tensor) else val)
+                    for key, val in t.items()
+                }
+                for t in targets
+            ]
 
             with torch.autocast(
                 device_type=self.device.type,
@@ -239,16 +340,11 @@ class Trainer:
             ):
                 # list of preds at all 3 scales;
                 # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
-                bbox_preds = model(samples)
+                bbox_preds = model(samples, targets)
 
-                # final_loss, loss_xy, loss_wh, loss_obj, loss_cls, lossl2 = criterion(
-                #     bbox_preds, targets, model
-                # ) # yolov4
-                # loss_components = misc.to_cpu(
-                #     torch.stack([loss_xy, loss_wh, loss_obj, loss_cls, lossl2])
-                # )
+                loss = criterion(bbox_preds, targets, model)
 
-                total_loss, loss_components = criterion(bbox_preds, targets, model)
+                ############# START HERE, run code and test####################
 
                 if grad_accum_steps > 1:
                     # scale the loss by the number of accumulation steps
@@ -256,7 +352,8 @@ class Trainer:
 
                 # multiply loss by the mini batch size to account for split gradients; I'm not entirely sure how this works
                 # but it was mentioned here: https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/818#issuecomment-1484223518
-                total_loss *= samples.shape[0]
+                # I don't think this is correct; i think this is only used if you want
+                # total_loss *= samples.shape[0]
 
             # Calculate gradients
             if self.enable_amp:

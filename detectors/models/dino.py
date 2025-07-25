@@ -487,7 +487,8 @@ class DINO(nn.Module):
         )
 
         # TODO: understand when this if statement is not used, maybe inference?
-        if self.dn_number > 0 and dn_meta is not None:
+        ############### START HERE #############
+        if self.denoise_number > 0 and dn_meta is not None:
             # separate the dn query predictions and the learnable query preds (class logits and bboxes);
             # store the dn preds in the dn_meta dict and extract the learnable queries preds for every
             # decoder layer;

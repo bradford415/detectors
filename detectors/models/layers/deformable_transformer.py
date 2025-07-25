@@ -1052,15 +1052,13 @@ class DeformableTransformerDecoderLayer(nn.Module):
             (num_queries, b, hidden_dim)
         """
         # Linear project the tgt through a 2-layer ffn with dropout and activation
-        tgt2 = self.dropout3(
-            self.activation(self.linear1(tgt))
-        )  # (num_queries, b, d_ffn)
-        tgt2 = self.linear2(tgt)  # (num_queries, b, d_model)
+        x = self.dropout3(self.activation(self.linear1(tgt)))  # (num_queries, b, d_ffn)
+        x = self.linear2(x)  # (num_queries, b, d_model)
 
         # Add the residual and layer normalize
-        tgt = tgt + self.dropout4(tgt2)
-        tgt = self.norm3(tgt)
-        return tgt
+        x = tgt + self.dropout4(x)
+        x = self.norm3(x)
+        return x
 
     def forward_sa(
         self,

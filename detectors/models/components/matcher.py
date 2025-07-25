@@ -89,10 +89,7 @@ class HungarianMatcher(nn.Module):
             box_cxcywh_to_xyxy(out_bbox), box_cxcywh_to_xyxy(tgt_bbox)
         )
 
-        assert (
-            cost_giou.shape[0] == out_bbox.shape[0]
-            and cost_giou.shape[1] == out_bbox.shape[1]
-        )
+        assert cost_giou.shape[0] == out_bbox.shape[0]
 
         # Final cost matrix
         C = (

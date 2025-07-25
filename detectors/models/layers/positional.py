@@ -153,7 +153,7 @@ def build_positional_encodings():
 
     Args:
         num_pos_feats:
-        
+
     """
     raise NotImplementedError
 
