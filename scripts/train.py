@@ -331,6 +331,7 @@ def main(
 
     trainer = Trainer(
         output_dir=str(output_path),
+        model_name=detector_name,
         device=device,
         log_train_steps=base_config["log_train_steps"],
     )

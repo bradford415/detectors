@@ -24,6 +24,7 @@ class Trainer:
     def __init__(
         self,
         output_dir: str,
+        model_name: str,
         device: torch.device = torch.device("cpu"),
         log_train_steps: int = 20,
     ):
@@ -31,6 +32,7 @@ class Trainer:
 
         Args:
             output_path: Path to save the train outputs
+            model_name: the name of the model being trained; this determines which logic to use
             use_cuda: Whether to use the GPU
         """
         self.device = device
@@ -39,6 +41,7 @@ class Trainer:
         self.log_train_steps = log_train_steps
 
         self.enable_amp = True if not self.device.type == "mps" else False
+        self.model_name = model_name
 
     def train(
         self,
@@ -104,17 +107,29 @@ class Trainer:
 
             # Train one epoch
             ######### START HERE, make flag that switches which function to use
-            epoch_train_loss = self._train_one_epoch(
-                model,
-                criterion,
-                dataloader_train,
-                optimizer,
-                scheduler,
-                epoch,
-                grad_accum_steps,
-                scaler,
-            )
-            train_loss.append(epoch_train_loss)
+            if "yolo" in self.model_name:
+                epoch_train_loss = self._train_one_epoch_yolo(
+                    model,
+                    criterion,
+                    dataloader_train,
+                    optimizer,
+                    scheduler,
+                    epoch,
+                    grad_accum_steps,
+                    scaler,
+                )
+                train_loss.append(epoch_train_loss)
+            else:
+                epoch_train_loss = self._train_one_epoch_detr(
+                    model,
+                    criterion,
+                    dataloader_train,
+                    optimizer,
+                    scheduler,
+                    epoch,
+                    grad_accum_steps,
+                    scaler,
+                )
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
@@ -342,26 +357,27 @@ class Trainer:
                 # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
                 bbox_preds = model(samples, targets)
 
-                loss = criterion(bbox_preds, targets, model)
+                loss_dict = criterion(bbox_preds, targets, model)
+                weight_dict = criterion.weight_dict
 
-                ############# START HERE, run code and test####################
+                breakpoint()
+                # compute the total loss by scaling each component of the loss by its weight value; 
+                # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
+                # sums a total of 39 losses w/ the default values
+                # ##### START here, write down the losses in the readme and reference it here
+                losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
                 if grad_accum_steps > 1:
                     # scale the loss by the number of accumulation steps
                     loss = loss / grad_accum_steps
 
-                # multiply loss by the mini batch size to account for split gradients; I'm not entirely sure how this works
-                # but it was mentioned here: https://github.com/eriklindernoren/PyTorch-YOLOv3/issues/818#issuecomment-1484223518
-                # I don't think this is correct; i think this is only used if you want
-                # total_loss *= samples.shape[0]
-
             # Calculate gradients
             if self.enable_amp:
-                scaler.scale(total_loss).backward()
+                scaler.scale(loss).backward()
             else:
-                total_loss.backward()
+                loss.backward()
 
-            epoch_loss.append(total_loss.detach().cpu())
+            epoch_loss.append(loss.detach().cpu())
 
             # Update the gradients once all the subdivisions have finished accumulating gradients and update lr_scheduler
             # TODO: verify this is accurate
