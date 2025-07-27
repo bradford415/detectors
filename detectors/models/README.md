@@ -24,10 +24,10 @@ The following loss components are used in the total loss and contribute to the g
 | loss_ce          | 
 | loss_bbox        |
 | loss_giou        | 
-| loss_ce_dn       | focal loss of the pos & neg dn query predictions class labels (excludes 'no object' class) (last decoder layer)|
-| loss_bbox_dn     | l1 distance of the pos & neg dn query predictions bboxes from the pos & neg dn queries (last decoder layer)           |
-| loss_giou_dn     | the giou of the matched predicted and gt boxes from the pos & neg dn queries (last decoder layer)                     |
-| loss_ce_0        |
+| loss_ce_dn       | pos & neg dn_queries: focal loss of the predicted class labels (excludes 'no object' class) (last decoder layer)       |
+| loss_bbox_dn     | pos & neg dn_queries: l1 distance of the predicted bboxes (last decoder layer)                                         |
+| loss_giou_dn     | pos & neg dn_queries: the giou of the matched predicted and gt boxes (last decoder layer)                              |
+| loss_ce_0        |   
 | loss_bbox_0      |
 | loss_giou_0      |
 | loss_ce_dn_0     |
