@@ -332,9 +332,9 @@ class DINO(nn.Module):
                          pad_size: the number of denoising queries
                          num_dn_group: the number of denoising_queries per CDN group
                          output_known_lbs_bboxes: a dict with keys:
-                            pred_logits: predicted class logits for the denoising queries
+                            pred_logits: last dec layer predicted class logits for the denoising queries
                                          (b, pad_size, num_classes) pad_size=num_dn_queries
-                            pred_boxes: predicted bboxes for the denoising queries
+                            pred_boxes: last dec layer predicted bboxes for the denoising queries
                                         (b, pad_size, 4)
                             aux_outputs: a list of dicts of predictions for each decoder layer except
                                          the last with keys:
@@ -457,7 +457,8 @@ class DINO(nn.Module):
         # each reference point for each layer was already refined once in the decoder; each
         # consecutive reference point is refined from the previous one;
         # this is the same process as inside the decoder where the dec_output is passed through
-        # the detection bbox head to get offset predictions and the reference points are refined
+        # the detection bbox head to get offset predictions and the reference points are refined;
+        # additionally, this is the same layer with the same shared parameters as the decoder
         outputs_coord_list = []
         for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(
             zip(reference[:-1], self.bbox_embed, hs)
@@ -487,7 +488,6 @@ class DINO(nn.Module):
         )
 
         # TODO: understand when this if statement is not used, maybe inference?
-        ############### START HERE #############
         if self.denoise_number > 0 and dn_meta is not None:
             # separate the dn query predictions and the learnable query preds (class logits and bboxes);
             # store the dn preds in the dn_meta dict and extract the learnable queries preds for every

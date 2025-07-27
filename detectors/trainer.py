@@ -353,19 +353,21 @@ class Trainer:
                 dtype=torch.float16,
                 enabled=self.enable_amp,
             ):
-                # list of preds at all 3 scales;
-                # bbox_preds[i] (B, (5+n_class)*num_anchors, out_w, out_h)
-                bbox_preds = model(samples, targets)
+                preds = model(samples, targets)
 
-                loss_dict = criterion(bbox_preds, targets, model)
+                loss_dict = criterion(preds, targets)
                 weight_dict = criterion.weight_dict
 
-                breakpoint()
-                # compute the total loss by scaling each component of the loss by its weight value; 
+                # compute the total loss by scaling each component of the loss by its weight value;
                 # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
                 # sums a total of 39 losses w/ the default values
                 # ##### START here, write down the losses in the readme and reference it here
-                losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
+                breakpoint()
+                losses = sum(
+                    loss_dict[k] * weight_dict[k]
+                    for k in loss_dict.keys()
+                    if k in weight_dict
+                )
 
                 if grad_accum_steps > 1:
                     # scale the loss by the number of accumulation steps

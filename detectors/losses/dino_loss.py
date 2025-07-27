@@ -38,31 +38,75 @@ class SetCriterion(nn.Module):
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (Binary focal loss)
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
+
+        Args:
+            outputs:
+            targets:
+            indices: list of indices (for each img in batch) containing tuples which represent
+                     (pred_indices, target_indices); pred_indices are the location of the respective
+                     query prediction and target_indices are the index of the gt target label;
+                     e.g., target_indices = [0,1,2,3] and the image contains object_labels = [32, 4, 8, 9],
+                           then target_indices will later index object_labels
+
+        Returns:
+            a dictionary with the key:
+                "loss_ce": which is the focal loss of queries/predictions
         """
         assert "pred_logits" in outputs
+
+        # logits predictions (b, num_queries, max_class_id+1)
         src_logits = outputs["pred_logits"]
 
+        # combine the batch_indices and query_indices for the targets in each image
+        # `idx` is 2 element tuple (batch_inds, query_inds) with each element
+        # (sum(num_dn_group*num_objects_i),) where i is the img_index of the batch
         idx = self._get_src_permutation_idx(indices)
+
+        # extract the ground truth label for each query prediction across all images in the batch
+        # (sum(num_dn_group*num_objects_i),)
         target_classes_o = torch.cat(
             [t["labels"][J] for t, (_, J) in zip(targets, indices)]
         )
+
+        # create a tensor of "no_object" classes for each query (b, num_queries) where
+        # each element = num_classes (max_class_id+1)
         target_classes = torch.full(
             src_logits.shape[:2],
             self.num_classes,
             dtype=torch.int64,
             device=src_logits.device,
         )
+
+        # overwrite with the correct gt class labels in the indices of the query predictions;
+        # this gives us a full tensor gt class, where unmatched queries are background (b, num_queries);
+        # note that `indices` input to the function does not necessarily have to be all the
+        # queries, for example one call just passes the pos dn_queries;
+        # NOTE: for pos_dn_queries, I think that since the 2nd half of the dn_group represents the
+        #       negative dn_queries, the background class is good
         target_classes[idx] = target_classes_o
 
+        # create a onehot tensor of the constructed gt targets;
+        # NOTE: that we +1 to num_classes so when we form onehots, label num_clases can index
+        #       the num_classes onehot tensor (or else we would get an out of bounds error I think);
+        #       after, we slice this end off [..., :-1] because the focal loss does not care about
+        #       the 'no-object/background' class
+        # NOTE: based on this the onehot index [0] is just a dummy label since coco class IDs start at 1;
+        #       this post mentions it: https://github.com/facebookresearch/detr/issues/108#issuecomment-674854977
+        #       and a few replies down it explains that the network shouldn't suffer with a few dummy labels
+        #       with no examples in the train set
         target_classes_onehot = torch.zeros(
             [src_logits.shape[0], src_logits.shape[1], src_logits.shape[2] + 1],
             dtype=src_logits.dtype,
             layout=src_logits.layout,
             device=src_logits.device,
         )
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
+        target_classes_onehot.scatter_(
+            dim=2, index=target_classes.unsqueeze(-1), value=1
+        )
         target_classes_onehot = target_classes_onehot[:, :, :-1]
+
+        # computes the focal loss (a scalar) for the current batch, averaged by the average
+        # number of boxes across all processes and the number of dn_groups
         loss_ce = (
             sigmoid_focal_loss(
                 src_logits,
@@ -102,27 +146,64 @@ class SetCriterion(nn.Module):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
         targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]
         The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
+
+        Returns:
+            a bbox loss dictionary with the keys:
+                "loss_bbox": the l1 norm of the pred bboxes, averaged per bbox
+                "loss_giou": the giou of the matched boxes, averged per bbox
+                "loss_xy": the l1 norm of the cx, cy preds, averaged per bbox;
+                           does not contribute to gradient updates
+                "loss_xy": the l1 norm of the h, w preds, averaged per bbox;
+                           does not contribute to gradient updates
+
         """
         assert "pred_boxes" in outputs
+
+        # combine the batch_indices and query_indices for the targets in each image
+        # `idx` is 2 element tuple (batch_inds, query_inds) with each element
+        # (sum(num_dn_group*num_objects_i),) where i is the img_index of the batch
         idx = self._get_src_permutation_idx(indices)
+
+        # extract the predicted boxes for each image in the batch specified by `idx`
+        # (sum(num_dn_groups*num_objects_i),) where i represents the image idx in the batch
         src_boxes = outputs["pred_boxes"][idx]
+
+        # extract the ground truth boxes for every prediction (sum(num_dn_groups*num_objects_i), 4)
         target_boxes = torch.cat(
             [t["boxes"][i] for t, (_, i) in zip(targets, indices)], dim=0
         )
 
+        # calculate the element wise absolute error (MAE without the mean) -> |pred_n - target_n|
         loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction="none")
 
+        assert src_boxes.shape == target_boxes.shape == loss_bbox.shape
+
+        # average the bbox loss by the average number of boxes across all nodes times the
+        # num_dn_groups for a per_box_loss
         losses = {}
         losses["loss_bbox"] = loss_bbox.sum() / num_boxes
 
-        loss_giou = 1 - torch.diag(
+        # compute the giou between the predicted and the target boxes; generalized_box_iou()
+        # gives us a pairwise matrix (i.e., a single predicted box is compared to every gt box)
+        # but during this loss computation only one predicted box can match to one gt box so taking
+        # the diagonal gives us this 1-to-1 matching (i.e., pred[i] to gt[i], not pred[i] to pred[j]);
+        # moreso, since giou ranges from -1 (bad) to 1 (good) we subtract 1 to convert it to a loss
+        # i.e., lower giou means higher loss
+        loss_giou = 1 - torch.diag(  # (sum(num_dn_groups*num_objects_i),)
             generalized_box_iou(
                 box_cxcywh_to_xyxy(src_boxes), box_cxcywh_to_xyxy(target_boxes)
             )
         )
+
+        # average the giou loss by the average number of boxes across all nodes times the
+        # num_dn_groups for a per_box_loss
         losses["loss_giou"] = loss_giou.sum() / num_boxes
 
-        # calculate the x,y and h,w loss
+        # calculate the x,y and h,w loss; wrapping this no_grad() does not add these operations
+        # to computation graph which saves memory and allows for faster computation; technically
+        # even without no_grad these would still not contribute to gradient updates because
+        # when summing the total loss we do not include it, but this no_grad is nice to have for
+        # the reasons above
         with torch.no_grad():
             losses["loss_xy"] = loss_bbox[..., :2].sum() / num_boxes
             losses["loss_hw"] = loss_bbox[..., 2:].sum() / num_boxes
@@ -163,10 +244,16 @@ class SetCriterion(nn.Module):
         return losses
 
     def _get_src_permutation_idx(self, indices):
-        # permute predictions following indices
+        """Permute predictions according to `indices`"""
+
+        # store a tensor of the batch/sample index (sum(num_dn_group*num_objects_i),)
+        # where i represents the img index in the batch
         batch_idx = torch.cat(
             [torch.full_like(src, i) for i, (src, _) in enumerate(indices)]
         )
+
+        # store a tensor of the index of the query index locations for every image in the batch
+        # (sum(num_dn_group*num_objects_i),)
         src_idx = torch.cat([src for (src, _) in indices])
         return batch_idx, src_idx
 
@@ -190,27 +277,38 @@ class SetCriterion(nn.Module):
 
     def forward(self, outputs, targets, return_indices=False):
         """This performs the loss computation.
-        Parameters:
-             outputs: dict of tensors, see the output specification of the model for the format
-             targets: list of dicts, such that len(targets) == batch_size.
-                      The expected keys in each dict depends on the losses applied, see each loss' doc
+        Args:
+            outputs: dict of tensors, see the output specification of the model for the format
+            targets: list of dicts, such that len(targets) == batch_size.
+                     The expected keys in each dict depends on the losses applied, see each loss' doc
 
              return_indices: used for vis. if True, the layer0-5 indices will be returned as well.
 
         """
+        breakpoint()
+        # extract the non-auxiliary outputs; aux outputs are the intermediate decoder outputs
+        # passed through the detection and class heads (every decoder output but the last)
         outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
         device = next(iter(outputs.values())).device
+
+        # TODO: comment what this does
         indices = self.matcher(outputs_without_aux, targets)
 
         if return_indices:
             indices0_copy = indices
             indices_list = []
 
-        # Compute the average number of target boxes accross all nodes, for normalization purposes
+        # Compute the average number of target boxes accross all nodes, for normalization purposes;
+        # this is useful for cases where an image in a batch has a lot of objects and another image
+        # in the same batch has very few objects, this lets us calculate the loss per box, on average;
+        # number of gt-boxes are summed across all proccesses and this sum is broadcasted to each
+        # process (i.e., each process will have this same summed value)
         num_boxes = sum(len(t["labels"]) for t in targets)
         num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=device)
         if is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_boxes)
+
+        # divide by the number of processes to get an average number of boxes per node
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
         # Compute all the requested losses
@@ -220,27 +318,52 @@ class SetCriterion(nn.Module):
         dn_meta = outputs["dn_meta"]
 
         if self.training and dn_meta and "output_known_lbs_bboxes" in dn_meta:
+            # extract the dn_queries:
+            #   `output_known_lbs_bboxes`: predicted bboxes & labels (last dec layer) & aux_predictions,
+            #   and the `single_pad` and num_dn_groups (`scalar`) to index the pos/neg queries properly
+            # NOTE: this single_pad is calculated from the max objects in the batch at the start of the
+            #       train loop so that there's enough space for a pos & neg query for each gt object;
+            #       images in the batch with less objects won't use this full range
             output_known_lbs_bboxes, single_pad, scalar = self.prep_for_dn(dn_meta)
 
+            # store the indices of the pos/neg queries for each image in the batch
             dn_pos_idx = []
             dn_neg_idx = []
             for i in range(len(targets)):
+
+                # if the image has gt objects (not a negative image)
                 if len(targets[i]["labels"]) > 0:
+
+                    # create a tensor from [0, num_objects-1] * scalar (num_objects*scalar,)
                     t = torch.range(0, len(targets[i]["labels"]) - 1).long().cuda()
                     t = t.unsqueeze(0).repeat(scalar, 1)
                     tgt_idx = t.flatten()
+
+                    # create tensor of offset indices for each dn_group, add the object indices, and flatten
+                    # (scalar,) -> (scalar, 1) (scalar, num_objects), (scalar*num_objects,)
                     output_idx = (
                         torch.tensor(range(scalar)) * single_pad
                     ).long().cuda().unsqueeze(1) + t
                     output_idx = output_idx.flatten()
                 else:
+                    # for negative images use an empty tensor
                     output_idx = tgt_idx = torch.tensor([]).long().cuda()
 
+                # store the indices of the pos/neg queries; the first half of the group is reserved for
+                # pos queries and the 2nd half is reserved for neg queries
                 dn_pos_idx.append((output_idx, tgt_idx))
                 dn_neg_idx.append((output_idx + single_pad // 2, tgt_idx))
 
             output_known_lbs_bboxes = dn_meta["output_known_lbs_bboxes"]
             l_dict = {}
+
+            # compute each of the desired losses for the positive and negative dn_queries; positive
+            # dn_queries are lightly noised and are expected to recover the gt label while negative
+            # dn_queries are heavly noised and expected to predict 'no_object' (Section 3..3); we
+            # pass the positive dn_query_indices which use the 1st half of the dn_group and the
+            # negative dn_queries use the 2nd half; a gt_label tensor is filled with the no_object
+            # class_id and then the gt labels are filled in this tensor at dn_pos_idx
+            # (default losses: "labels", "boxes", "cardinality")
             for loss in self.losses:
                 kwargs = {}
                 if "labels" in loss:
@@ -251,6 +374,8 @@ class SetCriterion(nn.Module):
                         output_known_lbs_bboxes,
                         targets,
                         dn_pos_idx,
+                        # multiply by num_dn_groups so we can normalize per box; dn_groups is copy of
+                        # the gt_boxes so if we don't account for this the loss could be overweighted
                         num_boxes * scalar,
                         **kwargs,
                     )
@@ -259,6 +384,7 @@ class SetCriterion(nn.Module):
             l_dict = {k + f"_dn": v for k, v in l_dict.items()}
             losses.update(l_dict)
         else:
+            # if denoising is not used, set all denoising losses to 0.0
             l_dict = dict()
             l_dict["loss_bbox_dn"] = torch.as_tensor(0.0).to("cuda")
             l_dict["loss_giou_dn"] = torch.as_tensor(0.0).to("cuda")
@@ -268,6 +394,7 @@ class SetCriterion(nn.Module):
             l_dict["cardinality_error_dn"] = torch.as_tensor(0.0).to("cuda")
             losses.update(l_dict)
 
+        ####### START HERE
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
 
@@ -370,6 +497,9 @@ class SetCriterion(nn.Module):
         return losses
 
     def prep_for_dn(self, dn_meta):
+        """Extract the dn_queries components such as predicted bboxes & labels, pad_size and
+        # of denoising groups; these allow us to find the pos/neg denoising query indices
+        """
         output_known_lbs_bboxes = dn_meta["output_known_lbs_bboxes"]
         num_dn_groups, pad_size = dn_meta["num_dn_group"], dn_meta["pad_size"]
         assert pad_size % num_dn_groups == 0
@@ -381,14 +511,19 @@ class SetCriterion(nn.Module):
 def sigmoid_focal_loss(
     inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2
 ):
-    """
-    Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
+    """Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
+
+
+
     Args:
         inputs: A float tensor of arbitrary shape.
-                The predictions for each example.
+                The predictions (class logits) for each example.
         targets: A float tensor with the same shape as inputs. Stores the binary
                  classification label for each element in inputs
                 (0 for the negative class and 1 for the positive class).
+        num_boxes: total number of gt boxes for all images across all proccesses
+                   multiplied by number of dn_groups; lets us normalize the loss
+                   to get an average loss per box
         alpha: (optional) Weighting factor in range (0,1) to balance
                 positive vs negative examples. Default = -1 (no weighting).
         gamma: Exponent of the modulating factor (1 - p_t) to
@@ -397,14 +532,29 @@ def sigmoid_focal_loss(
         Loss tensor
     """
     prob = inputs.sigmoid()
-    ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
-    p_t = prob * targets + (1 - prob) * (1 - targets)
-    loss = ce_loss * ((1 - p_t) ** gamma)
 
+    # binary_cross_entropy take into account every class indepenently; even if the classes
+    # that are not the correct one contribute to the loss; we do not use reduction so we can
+    # handle each class independently (b, num_predictions, num_classes)
+    ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+
+    # this essentially says "how correct was the prediction?"
+    p_t = prob * targets + (1 - prob) * (1 - targets)
+
+    # apply the focal scaling to the standard bce -> (BCE * (1-pt) ** gamma) per class
+    # main idea:
+    #   if p_t is close to 1 -> model is confident -> the scaling factor (1-p_t)**gamma is low
+    #   if p_t is close to 0- > model is wrong -> the loss is amplified
+    loss = ce_loss * ((1 - p_t) ** gamma)  # (b, num_predictions, num_classes)
+
+    # balance the correct and incorrect classes such that incorrect classes have higher weighting;
+    # correct classes get weighted (0.25) and incorrect classes get weighted (1 - 0.25 = 0.75)
     if alpha >= 0:
         alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
         loss = alpha_t * loss
 
+    # average the loss over every prediction per class (b, num_classes), sum across every element
+    # to get a scalar and then finally normalize by
     return loss.mean(1).sum() / num_boxes
 
 
