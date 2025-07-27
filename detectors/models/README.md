@@ -18,15 +18,15 @@ Once dino computes the loss through `SetCriterion`, it returns many different lo
 * With the default parameters, `SetCriterion()` outputs a `loss_dict` with `79` components however only about `39` of them are used
 * Each component is scaled by a value in the `weight_dict`, and only the loss components that appear in this `weight_dict` are used in the total loss, which is about `39`
 
-The following loss components are used in the total loss:
+The following loss components are used in the total loss and contribute to the gradients:
 | loss components  | description
-|------------------|----------------
+|------------------|---------------------------------------------------------------------------------------------------|
 | loss_ce          | 
 | loss_bbox        |
-| loss_giou        |
-| loss_ce_dn       |
-| loss_bbox_dn     |
-| loss_giou_dn     |
+| loss_giou        | 
+| loss_ce_dn       | focal loss of the pos & neg dn query predictions class labels (excludes 'no object' class) (last decoder layer)|
+| loss_bbox_dn     | l1 distance of the pos & neg dn query predictions bboxes from the pos & neg dn queries (last decoder layer)           |
+| loss_giou_dn     | the giou of the matched predicted and gt boxes from the pos & neg dn queries (last decoder layer)                     |
 | loss_ce_0        |
 | loss_bbox_0      |
 | loss_giou_0      |
