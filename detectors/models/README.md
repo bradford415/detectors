@@ -20,13 +20,13 @@ Once dino computes the loss through `SetCriterion`, it returns many different lo
 
 The following loss components are used in the total loss and contribute to the gradients:
 | loss components  | description
-|------------------|---------------------------------------------------------------------------------------------------|
-| loss_ce          | 
-| loss_bbox        |
-| loss_giou        | 
-| loss_ce_dn       | pos & neg dn_queries: focal loss of the predicted class labels (excludes 'no object' class) (last decoder layer)       |
-| loss_bbox_dn     | pos & neg dn_queries: l1 distance of the predicted bboxes (last decoder layer)                                         |
-| loss_giou_dn     | pos & neg dn_queries: the giou of the matched predicted and gt boxes (last decoder layer)                              |
+|------------------|----------------------------------------------------------------------------------------------------------------------------|
+| loss_ce          | real, learnable_queries (topk): focal loss of the predicted class labels (excludes 'no object' class) (last decoder layer) |
+| loss_bbox        | real, learnable_queries (topk): l1 distance of the predicted bboxes (last decoder layer)                                   |
+| loss_giou        | real, learnable_queries (topk): the giou of the matched predicted and gt boxes (last decoder layer)                        |
+| loss_ce_dn       | pos & neg dn_queries: focal loss of the predicted class labels (excludes 'no object' class) (last decoder layer)           |
+| loss_bbox_dn     | pos & neg dn_queries: l1 distance of the predicted bboxes (last decoder layer)                                             |
+| loss_giou_dn     | pos & neg dn_queries: the giou of the matched predicted and gt boxes (last decoder layer)                                  |
 | loss_ce_0        |   
 | loss_bbox_0      |
 | loss_giou_0      |
