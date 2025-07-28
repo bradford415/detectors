@@ -47,11 +47,14 @@ class SetCriterion(nn.Module):
                      query prediction and target_indices are the index of the gt target label;
                      e.g., target_indices = [0,1,2,3] and the image contains object_labels = [32, 4, 8, 9],
                            then target_indices will later index object_labels
+            num_boxes: average number of gt boxes across all nodes; if using dn_queries this is multiplied
+                       by the number of dn_groups since this creates this many replicas of the gt boxes 
 
         Returns:
             a dictionary with the key:
                 "loss_ce": which is the focal loss of queries/predictions
         """
+        breakpoint()
         assert "pred_logits" in outputs
 
         # logits predictions (b, num_queries, max_class_id+1)
@@ -59,11 +62,13 @@ class SetCriterion(nn.Module):
 
         # combine the batch_indices and query_indices for the targets in each image
         # `idx` is 2 element tuple (batch_inds, query_inds) with each element
-        # (sum(num_dn_group*num_objects_i),) where i is the img_index of the batch
+        # shape: real_queries (sum(num_gt_targets_i), )
+        #        dn_queries: (sum(num_dn_group*num_objects_i),) where i is the img_index of the batch
         idx = self._get_src_permutation_idx(indices)
 
         # extract the ground truth label for each query prediction across all images in the batch
-        # (sum(num_dn_group*num_objects_i),)
+        # shape: real_queries (sum(num_gt_targets_i), )
+        #        dn_queries: (sum(num_dn_group*num_objects_i),) where i is the img_index of the batch
         target_classes_o = torch.cat(
             [t["labels"][J] for t, (_, J) in zip(targets, indices)]
         )
@@ -121,6 +126,8 @@ class SetCriterion(nn.Module):
 
         if log:
             # TODO this should probably be a separate loss, not hacked in this one here
+            # NOTE: I think this is just used for logging, not in the total loss/gradient updates
+            #       since this is not summed in the total loss
             losses["class_error"] = (
                 100 - topk_accuracy(src_logits[idx], target_classes_o)[0]
             )
@@ -285,7 +292,6 @@ class SetCriterion(nn.Module):
              return_indices: used for vis. if True, the layer0-5 indices will be returned as well.
 
         """
-        breakpoint()
         # extract the non-auxiliary outputs; aux outputs are the intermediate decoder outputs
         # passed through the detection and class heads (every decoder output but the last)
         outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
@@ -394,11 +400,16 @@ class SetCriterion(nn.Module):
             l_dict["cardinality_error_dn"] = torch.as_tensor(0.0).to("cuda")
             losses.update(l_dict)
 
-        ####### START HERE
+        # compute the losses for the real, learnable queries (topk):
+        #   1. `loss_ce`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
+        #   2. `loss_bbox`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
+        #   3. `loss_giou`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
 
-        # In case of auxiliary losses, we repeat this process with the output of each intermediate layer.
+        breakpoint()
+        ### STARt HERE 
+        # In case of auxiliary losses, we repeat this process with the output of each intermediate layer
         if "aux_outputs" in outputs:
             for idx, aux_outputs in enumerate(outputs["aux_outputs"]):
                 indices = self.matcher(aux_outputs, targets)
