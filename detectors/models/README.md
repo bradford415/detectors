@@ -19,44 +19,20 @@ Once dino computes the loss through `SetCriterion`, it returns many different lo
 * Each component is scaled by a value in the `weight_dict`, and only the loss components that appear in this `weight_dict` are used in the total loss, which is about `39`
 
 The following loss components are used in the total loss and contribute to the gradients:
-| loss components  | description
-|------------------|----------------------------------------------------------------------------------------------------------------------------|
-| loss_ce          | real, learnable_queries (topk): focal loss of the predicted class labels (excludes 'no object' class) (last decoder layer) |
-| loss_bbox        | real, learnable_queries (topk): l1 distance of the predicted bboxes (last decoder layer)                                   |
-| loss_giou        | real, learnable_queries (topk): the giou of the matched predicted and gt boxes (last decoder layer)                        |
-| loss_ce_dn       | pos & neg dn_queries: focal loss of the predicted class labels (excludes 'no object' class) (last decoder layer)           |
-| loss_bbox_dn     | pos & neg dn_queries: l1 distance of the predicted bboxes (last decoder layer)                                             |
-| loss_giou_dn     | pos & neg dn_queries: the giou of the matched predicted and gt boxes (last decoder layer)                                  |
-| loss_ce_0        |   
-| loss_bbox_0      |
-| loss_giou_0      |
-| loss_ce_dn_0     |
-| loss_bbox_dn_0   |
-| loss_giou_dn_0   |
-| loss_ce_1        |
-| loss_bbox_1      |
-| loss_giou_1      |
-| loss_ce_dn_1     |
-| loss_bbox_dn_1   |
-| loss_giou_dn_1   |
-| loss_ce_2        |
-| loss_bbox_2      |
-| loss_giou_2      |
-| loss_ce_dn_2     |
-| loss_bbox_dn_2   |
-| loss_giou_dn_2   |
-| loss_ce_3        |
-| loss_bbox_3      |
-| loss_giou_3      |
-| loss_ce_dn_3     |
-| loss_bbox_dn_3   |
-| loss_giou_dn_3   |
-| loss_ce_4        |
-| loss_bbox_4      |
-| loss_giou_4      |
-| loss_ce_dn_4     |
-| loss_bbox_dn_4   |
-| loss_giou_dn_4   |
-| loss_ce_interm   |
-| loss_bbox_interm |
-| loss_giou_interm |
+| loss components  | enc/dec layer output      | query type               | description
+|------------------|---------------------------------------------------------------------  ---------------------------------------------------------|
+| loss_ce          | last decoder              | learnable_queries (topk) | focal loss of the predicted class labels (excludes 'no object' class) |
+| loss_bbox        | last decoder              | learnable_queries (topk) | l1 distance of the predicted bboxes (last decoder layer)              |
+| loss_giou        | last decoder              | learnable_queries (topk) | the giou of the matched predicted and gt boxes                        |
+| loss_ce_dn       | last decoder              | pos & neg dn_queries     | focal loss of the predicted class labels (excludes 'no object' class) |
+| loss_bbox_dn     | last decoder              | pos & neg dn_queries     | l1 distance of the predicted bboxes                                   |
+| loss_giou_dn     | last decoder              | pos & neg dn_queries     | the giou of the matched predicted and gt boxes                        |
+| loss_ce_i        | i = [0, num_dec_layers-1] | learnable_queries (topk) | focal loss of the predicted class labels (excludes 'no object' class) |
+| loss_bbox_i      | i = [0, num_dec_layers-1] | learnable_queries (topk) | l1 distance of the predicted bboxes (last decoder layer)              |
+| loss_giou_i      | i = [0, num_dec_layers-1] | learnable_queries (topk) | the giou of the matched predicted and gt boxes                        |
+| loss_ce_dn_i     | i = [0, num_dec_layers-1] | pos & neg dn_queries     | focal loss of the predicted class labels (excludes 'no object' class) |
+| loss_bbox_dn_i   | i = [0, num_dec_layers-1] | pos & neg dn_queries     | l1 distance of the predicted bboxes (last decoder layer)              |
+| loss_giou_dn_i   | i = [0, num_dec_layers-1] | pos & neg dn_queries     | the giou of the matched predicted and gt boxes                        |
+| loss_ce_interm   | encoder output            | learnable_queries (topk) | focal loss of the predicted class labels (excludes 'no object' class) |
+| loss_bbox_interm | encoder output            | learnable_queries (topk) | l1 distance of the predicted bboxes (last decoder layer)              |
+| loss_giou_interm | encoder output            | learnable_queries (topk) | the giou of the matched predicted and gt boxes                        |
