@@ -48,13 +48,12 @@ class SetCriterion(nn.Module):
                      e.g., target_indices = [0,1,2,3] and the image contains object_labels = [32, 4, 8, 9],
                            then target_indices will later index object_labels
             num_boxes: average number of gt boxes across all nodes; if using dn_queries this is multiplied
-                       by the number of dn_groups since this creates this many replicas of the gt boxes 
+                       by the number of dn_groups since this creates this many replicas of the gt boxes
 
         Returns:
             a dictionary with the key:
                 "loss_ce": which is the focal loss of queries/predictions
         """
-        breakpoint()
         assert "pred_logits" in outputs
 
         # logits predictions (b, num_queries, max_class_id+1)
@@ -137,14 +136,22 @@ class SetCriterion(nn.Module):
     def loss_cardinality(self, outputs, targets, indices, num_boxes):
         """Compute the cardinality error, ie the absolute error in the number of predicted non-empty boxes
         This is not really a loss, it is intended for logging purposes only. It doesn't propagate gradients
+
+        A perfect loss of 0.0 would be when the number of non `no-object` predicted classes is the number
+        of ground-truth objects
         """
         pred_logits = outputs["pred_logits"]
         device = pred_logits.device
+
+        # number of objects in each image in the batch (b,)
         tgt_lengths = torch.as_tensor(
             [len(v["labels"]) for v in targets], device=device
         )
+
         # Count the number of predictions that are NOT "no-object" (which is the last class)
         card_pred = (pred_logits.argmax(-1) != pred_logits.shape[-1] - 1).sum(1)
+
+        # compute the mean absolute error
         card_err = F.l1_loss(card_pred.float(), tgt_lengths.float())
         losses = {"cardinality_error": card_err}
         return losses
@@ -291,6 +298,33 @@ class SetCriterion(nn.Module):
 
              return_indices: used for vis. if True, the layer0-5 indices will be returned as well.
 
+        Return:
+            a dictionary of loss components; not all of these are used to propagate gradients;
+            losses for the real, learnable queries (topk) from the last decoder layer output:
+                `loss_ce`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
+                `loss_bbox`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
+                `loss_giou`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `cardinality_error`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
+                                     this is not counted in the total loss & does not propagate gradients
+            losses for the real, learnable queries (topk) from every decoder layer output except the last
+            where i = range(num_decoder_layers-1):
+                `loss_ce_i`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
+                `loss_bbox_i`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
+                `loss_giou_i`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `cardinality_error_i`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
+                                     this is not counted in the total loss & does not propagate gradients
+                `loss_ce_dn`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
+                `loss_bbox_dn`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
+                `loss_giou_dn`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `cardinality_error_dn`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
+                                     this is not counted in the total loss & does not propagate gradients
+            losses for the dn queries from the last decoder layer output:
+            where i = range(num_decoder_layers-1):
+                `loss_ce_dn_i`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
+                `loss_bbox_dn_i`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
+                `loss_giou_dn_i`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `cardinality_error_dn_i`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
+                                     this is not counted in the total loss & does not propagate gradients
         """
         # extract the non-auxiliary outputs; aux outputs are the intermediate decoder outputs
         # passed through the detection and class heads (every decoder output but the last)
@@ -400,24 +434,38 @@ class SetCriterion(nn.Module):
             l_dict["cardinality_error_dn"] = torch.as_tensor(0.0).to("cuda")
             losses.update(l_dict)
 
-        # compute the losses for the real, learnable queries (topk):
+        # compute the losses for the real, learnable queries (topk) for the last decoder layer output:
         #   1. `loss_ce`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
         #   2. `loss_bbox`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
         #   3. `loss_giou`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+        #   4. `cardinality_error`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
+        #                           this is not counted in the total loss & does not propagate gradients
         for loss in self.losses:
             losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
 
-        breakpoint()
-        ### STARt HERE 
         # In case of auxiliary losses, we repeat this process with the output of each intermediate layer
         if "aux_outputs" in outputs:
+
+            # loop through each intermediate decoder predictions (num_dec_layers-1)
             for idx, aux_outputs in enumerate(outputs["aux_outputs"]):
+
+                # match the auxiliary predictions with the gt targets
                 indices = self.matcher(aux_outputs, targets)
                 if return_indices:
                     indices_list.append(indices)
+
+                # compute losses for the real, learnable queries (topk) for the intermediate dec outputs:
+                #   i = range(0, num_dec_layers-1)
+                #   1. `loss_ce_i`: predicted labels focal loss
+                #   2. `loss_bbox_i`: predicted bboxes l1 distance loss
+                #   3. `loss_giou_i`: predicted bboxes giou loss
+                #   4. `cardinality_error`: l1 distance (mae) of
+                #                           # of non `no-object` preds = # of gt objects;
+                #                           this is not counted in the total loss & does not
+                #                           propagate gradients
                 for loss in self.losses:
                     if loss == "masks":
-                        # Intermediate masks losses are too costly to compute, we ignore them.
+                        # Intermediate masks losses are too csotly to compute, we ignore them.
                         continue
                     kwargs = {}
                     if loss == "labels":
@@ -429,6 +477,15 @@ class SetCriterion(nn.Module):
                     l_dict = {k + f"_{idx}": v for k, v in l_dict.items()}
                     losses.update(l_dict)
 
+                # compute losses for the pos/neg, dn queries for the intermediate dec outputs:
+                #   i = range(0, num_dec_layers-1)
+                #   1. `loss_ce_dn_i`: predicted labels focal loss
+                #   2. `loss_bbox_dn_i`: predicted bboxes l1 distance loss
+                #   3. `loss_giou_dn_i`: predicted bboxes giou loss
+                #   4. `cardinality_error`: l1 distance (mae) of
+                #                           # of non `no-object` preds = # of gt objects;
+                #                           this is not counted in the total loss & does not
+                #                           propagate gradients
                 if self.training and dn_meta and "output_known_lbs_bboxes" in dn_meta:
                     aux_outputs_known = output_known_lbs_bboxes["aux_outputs"][idx]
                     l_dict = {}
@@ -451,6 +508,7 @@ class SetCriterion(nn.Module):
                     l_dict = {k + f"_dn_{idx}": v for k, v in l_dict.items()}
                     losses.update(l_dict)
                 else:
+                    # if denoising is not used, set all denoising losses to 0.0
                     l_dict = dict()
                     l_dict["loss_bbox_dn"] = torch.as_tensor(0.0).to("cuda")
                     l_dict["loss_giou_dn"] = torch.as_tensor(0.0).to("cuda")
@@ -461,7 +519,14 @@ class SetCriterion(nn.Module):
                     l_dict = {k + f"_{idx}": v for k, v in l_dict.items()}
                     losses.update(l_dict)
 
-        # interm_outputs loss
+        # compute losses for the learnable queries (topk) encoder_output:
+        #   1. `loss_ce_interm`: predicted labels focal loss
+        #   2. `loss_bbox_interm`: predicted initial reference point l1 distance loss
+        #   3. `loss_giou_interm`: predicted initial reference giou loss
+        #   4. `cardinality_error`: l1 distance (mae) of
+        #                           # of non `no-object` preds = # of gt objects;
+        #                           this is not counted in the total loss & does not
+        #                           propagate gradients
         if "interm_outputs" in outputs:
             interm_outputs = outputs["interm_outputs"]
             indices = self.matcher(interm_outputs, targets)
@@ -481,7 +546,7 @@ class SetCriterion(nn.Module):
                 l_dict = {k + f"_interm": v for k, v in l_dict.items()}
                 losses.update(l_dict)
 
-        # enc output loss
+        # skipped; enc output loss
         if "enc_outputs" in outputs:
             for i, enc_outputs in enumerate(outputs["enc_outputs"]):
                 indices = self.matcher(enc_outputs, targets)

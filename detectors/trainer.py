@@ -1,12 +1,14 @@
 import datetime
 import logging
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import torch
+import torch.distributed as dist
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
@@ -106,7 +108,6 @@ class Trainer:
             one_epoch_start_time = time.time()
 
             # Train one epoch
-            ######### START HERE, make flag that switches which function to use
             if "yolo" in self.model_name:
                 epoch_train_loss = self._train_one_epoch_yolo(
                     model,
@@ -336,6 +337,7 @@ class Trainer:
                               the loss will be divivided by this number to account for the accumulation
         """
         epoch_loss = []
+        running_loss_dict = {}
         for steps, (samples, targets) in enumerate(dataloader_train, 1):
             samples = samples.to(self.device)
 
@@ -348,42 +350,56 @@ class Trainer:
                 for t in targets
             ]
 
-            with torch.autocast(
-                device_type=self.device.type,
-                dtype=torch.float16,
-                enabled=self.enable_amp,
-            ):
-                preds = model(samples, targets)
+            accumulate_grads = not steps % grad_accum_steps == 0
 
-                loss_dict = criterion(preds, targets)
-                weight_dict = criterion.weight_dict
+            with self._maybe_no_sync(model, sync=not accumulate_grads):
+                with torch.autocast(
+                    device_type=self.device.type,
+                    dtype=torch.float16,
+                    enabled=self.enable_amp,
+                ):
+                    preds = model(samples, targets)
 
-                # compute the total loss by scaling each component of the loss by its weight value;
-                # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
-                # sums a total of 39 losses w/ the default values
-                # ##### START here, write down the losses in the readme and reference it here
-                breakpoint()
-                losses = sum(
-                    loss_dict[k] * weight_dict[k]
-                    for k in loss_dict.keys()
-                    if k in weight_dict
-                )
+                    loss_dict = criterion(preds, targets)
+                    weight_dict = criterion.weight_dict
 
-                if grad_accum_steps > 1:
-                    # scale the loss by the number of accumulation steps
-                    loss = loss / grad_accum_steps
+                    # compute the total loss by scaling each component of the loss by its weight value;
+                    # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
+                    # dino sums a total of 39 losses w/ the default values;
+                    # see detectors/models/README.md for information on the losses that propagate gradients
+                    loss = sum(
+                        loss_dict[k] * weight_dict[k]
+                        for k in loss_dict.keys()
+                        if k in weight_dict
+                    )
 
-            # Calculate gradients
-            if self.enable_amp:
-                scaler.scale(loss).backward()
-            else:
-                loss.backward()
+                    if grad_accum_steps > 1:
+                        # scale the loss by the number of accumulation steps
+                        loss = loss / grad_accum_steps
+                        # TODO I think i need to sum the dicts here before reducing for logging
+                    
+                    for key, val in loss_dict.items():
+                        if key in running_loss_dict:
+                            running_loss_dict[key] += val.detach()
+                        else:
+                            running_loss_dict[key] = val.detach()
+                    breakpoint()
 
+                # Calculate gradients; NOTE: DDP averages the gradients across proccesses such that every
+                # process has the same gradients and updates the weights the same
+                # (does an element-wise sum on the gradients and divides by world_size to average)
+                if self.enable_amp:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
+
+            ## Remove this maybe? ###
             epoch_loss.append(loss.detach().cpu())
+            
 
-            # Update the gradients once all the subdivisions have finished accumulating gradients and update lr_scheduler
-            # TODO: verify this is accurate
-            if steps % grad_accum_steps == 0:
+            # Update the gradients once finished accumulating gradients and update lr_scheduler
+            if not accumulate_grads:
+                #### start here, verify loss summed correctly and probably divide by grad accum? ####
                 # Calculate gradients and updates weights
                 if self.enable_amp:
                     scaler.step(optimizer)
@@ -456,6 +472,30 @@ class Trainer:
         )
 
         return metrics_output, detections, val_loss
+
+    def _maybe_no_sync(self, model: nn.Module, sync: bool = True):
+        """Decides whether to enable no_sync() which avoids synchronizing the gradients accross processes.
+
+        When performing gradient accumulation while using DDP, if we do not disable gradient synching
+        then every step we accumulate gradients there will be a lot of communication overhead. A better
+        approach would be to only sync gradients on the step when we update our model's weights,
+        when we finish accumulating gradients. Additionally, if we do not want to use DDP, e.g., if we
+        only have 1 gpu, then no_sync will not be recognized so we can pass nullcontext() instead to
+        skip it.
+
+        Addtional reading on no_synch and gradient accumulation:
+            https://huggingface.co/docs/accelerate/concept_guides/gradient_synchronization
+
+        Args:
+            model: the model being trained
+            sync: whether to synchronize gradients
+        """
+        if dist.is_initialized() and not sync:
+            # if using DDP and accumulating gradients
+            return model.no_sync()
+        else:
+            # if not using DDP or using DDP and synching gradients as normal
+            return nullcontext()
 
     def _save_model(
         self,
