@@ -202,8 +202,9 @@ class Backbone(BackboneBase):
 
         if backbone_name in supported_backbones:
             backbone = backbone_map[backbone_name](
-                # Only download the pretrained weights with the main process; the other
-                # processes will load the weights in a later step
+                # Only download the pretrained weights with the main process; the DDP constructor will
+                # broadcast the state_dict from rank 0 to the other processes, according to the docs:
+                #   https://docs.pytorch.org/docs/main/notes/ddp.html#internal-design
                 pretrain=is_main_process(),
                 remove_top=True,  # remove the classification head
                 norm_layer=batch_norm,

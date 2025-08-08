@@ -306,6 +306,8 @@ class SetCriterion(nn.Module):
                 `loss_giou`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
                 `cardinality_error`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
                                      this is not counted in the total loss & does not propagate gradients
+                `class_error`: the top 1 error for the predicted classes; not counted in total loss
+                               and does not propagate gradients
             losses for the real, learnable queries (topk) from every decoder layer output except the last
             where i = range(num_decoder_layers-1):
                 `loss_ce_i`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses

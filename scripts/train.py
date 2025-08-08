@@ -96,7 +96,7 @@ def main(
     )
     log_path = output_path / "training.log"
 
-    # create output directory and save configuration files on main process
+    # create output/ckpt directories and save configuration files on main process
     if global_rank == 0:
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -155,7 +155,7 @@ def main(
 
     if dev_mode:
         log.info("\nNOTE: executing in dev mode")
-        batch_size = 2
+        batch_size = 1
         grad_accum_steps = 2
 
     log.info(
@@ -332,6 +332,7 @@ def main(
     trainer = Trainer(
         output_dir=str(output_path),
         model_name=detector_name,
+        step_lr_on=solver_config["lr_scheduler"]["step_lr_on"],
         device=device,
         log_train_steps=base_config["log_train_steps"],
     )
@@ -349,6 +350,7 @@ def main(
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
         "grad_accum_steps": grad_accum_steps,
+        "max_norm": train_args["max_norm"],
         "start_epoch": train_args.get("start_epoch", 1),
         "epochs": train_args["epochs"],
         "ckpt_epochs": train_with_target,

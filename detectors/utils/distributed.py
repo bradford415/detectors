@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Optional
 
 import torch
 import torch.distributed as dist
@@ -103,3 +104,49 @@ def init_distributed_mode(backend: str = "nccl", dist_url: str = "env://"):
     torch.distributed.barrier()
 
     return world_size, global_rank, local_rank, distruted_mode
+
+
+def reduce_dict(
+    input_dict: dict[str, torch.tensor],
+    average: bool = True,
+):
+    """Average the dictionaries values across all processes
+
+    Args:
+        input_dict: a dictionary of tensor values, typically representing the loss components
+        average: whether to average the values across processes; if False, only sum values
+
+    Returns:
+        a dictionary with values averages across all processes
+    """
+    world_size = get_world_size()
+
+    if world_size < 2:
+        return input_dict
+
+    with torch.no_grad():
+        names = []
+        values = []
+
+        # sort the keys so that they are consistent across processes
+        for key in sorted(input_dict.keys()):
+            names.append(key)
+            values.append(input_dict[key])
+
+        # stack the tensor values so we can perform all_reduce() in one call
+        values = torch.stack(values, dim=0)
+        dist.all_reduce(values)
+
+        # sum across all GPUs but only have the main process recieve the final result
+        # dist.reduce(
+        #     values, dst=0
+        # )  # TODO: need to verify this is the same value as all_reduce
+
+        # average by the number of processes to get an average loss for every gpu
+        if average:
+            values /= world_size
+
+        # create the new averaged dict
+        reduced_dict = {k: v for k, v in zip(names, values)}
+
+    return reduced_dict

@@ -34,13 +34,16 @@ dataset:
 train:
   # batch_size per gpu; the total batch_size will be batch_size * num_gpus if using DDP
   # so the number of grad_accum_steps = batch_szie * num gpus / effective_batch_size
-  batch_size: 2
+  batch_size: 1
 
   # dino uses a bs of 2 per gpu and uses 8 gpus ->  2 *8 = 16 (Table 5.)
   effective_batch_size: 16  # batch_size * num_gpus (processes) * gradient_accumulation_steps
 
   validation_batch_size: 32
-  epochs: 300
+  epochs: 1
+
+  # max_norm for gradient clipping; ensures the magnitude of all parameters <= max_norm
+  max_norm: 0.1
 
   # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
   ckpt_epochs: 1
@@ -64,7 +67,7 @@ solver:
     name: "adamw"
 
     # additional params
-    backbone_lr: 1e-5 # lr for only the backbone
+    backbone_lr: 1.e-5 # lr for only the backbone
 
     # params for the optimizer
     params:

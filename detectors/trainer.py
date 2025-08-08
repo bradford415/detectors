@@ -14,6 +14,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
 
 from detectors.evaluate import evaluate, load_model_checkpoint
+from detectors.utils import distributed
 from detectors.visualize import plot_loss, plot_mAP, visualize_norm_img_tensors
 
 log = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class Trainer:
         self,
         output_dir: str,
         model_name: str,
+        step_lr_on: Optional[str] = None,
         device: torch.device = torch.device("cpu"),
         log_train_steps: int = 20,
     ):
@@ -35,6 +37,7 @@ class Trainer:
         Args:
             output_path: Path to save the train outputs
             model_name: the name of the model being trained; this determines which logic to use
+            step_lr_on: whether to call scheduler.step every 'step' or 'epoch'
             use_cuda: Whether to use the GPU
         """
         self.device = device
@@ -42,6 +45,7 @@ class Trainer:
         self.output_dir = Path(output_dir)
         self.log_train_steps = log_train_steps
 
+        self.step_lr_on = step_lr_on
         self.enable_amp = True if not self.device.type == "mps" else False
         self.model_name = model_name
 
@@ -54,6 +58,8 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         class_names: list[str],
         grad_accum_steps: int,
+        postprocessors: nn.Module,
+        max_norm: Optional[float] = None,
         start_epoch: int = 1,
         epochs: int = 100,
         ckpt_epochs: int = 10,
@@ -74,6 +80,10 @@ class Trainer:
             class_names: list of class names; used for logging and visualization
             grad_accum_steps: number of steps to accumulate gradients before updating the weights;
                               used to simulate a larger effective batch size
+            postprocessors: postprocessing that needs to be applied after validation/inference;
+                            e.g., convert a models normalized outputs to the original image size
+            max_norm: the value to clip the norm of gradients if magnitude of the gradients
+                      is above max_norm; ((grad) / ||grad||) * max_norm
             scheduler: Scheduler which determines how to change the learning rate
             start_epoch: Epoch to start the training on; starting at 1 is a good default because it makes
                          checkpointing and calculations more intuitive
@@ -121,6 +131,7 @@ class Trainer:
                 )
                 train_loss.append(epoch_train_loss)
             else:
+                # train one epoch of a detr-based model; returns a dict of loss components
                 epoch_train_loss = self._train_one_epoch_detr(
                     model,
                     criterion,
@@ -129,8 +140,38 @@ class Trainer:
                     scheduler,
                     epoch,
                     grad_accum_steps,
+                    max_norm,
                     scaler,
                 )
+
+            curr_lr = optimizer.param_groups[0]["lr"]
+
+            # Increment lr scheduler every epoch if set for "epochs"
+            if scheduler is not None and self.step_lr_on == "epochs":
+                scheduler.step()
+
+            # Save a checkpoint before the LR drop; this is beneficial for several reasons:
+            #   1. Fallback point: if training after the LR drop doesn't improve performance or
+            #      overfits, you can go back to this checkpoint and try different strategies
+            if epoch % scheduler.step_size == 0:
+                ckpt_path = (
+                    self.output_dir
+                    / "checkpoints"
+                    / f"checkpoint{epoch:04}_lr_{str(curr_lr).replace('.', '-')}.pt"
+                )
+                self._save_model_master(
+                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
+                )
+
+            # Save the model every ckpt_epochs
+            if epoch % ckpt_epochs == 0:
+                ckpt_path = self.output_dir / "checkpoints" / f"checkpoint{epoch:04}.pt"
+                self._save_model_master(
+                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
+                )
+            ### start here, work on evaluation?
+
+            breakpoint()
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
@@ -159,28 +200,19 @@ class Trainer:
                 self.output_dir / "train_stats.csv", index=False
             )
 
-            # Save the model every ckpt_epochs
-            if (epoch) % ckpt_epochs == 0:
-                ckpt_path = self.output_dir / "checkpoints" / f"checkpoint{epoch:04}.pt"
-                ckpt_path.parents[0].mkdir(parents=True, exist_ok=True)
-                self._save_model(
-                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
-                )
-
-            # Save and overwrite the checkpoint with the highest mAP
+            # Save and overwrite the checkpoint with the highest val mAP
             if round(mAP, 4) > round(best_ap, 4):
                 best_ap = mAP
 
                 mAP_str = f"{mAP*100:.2f}".replace(".", "-")
                 best_path = self.output_dir / "checkpoints" / f"best_mAP_{mAP_str}.pt"
-                best_path.parents[0].mkdir(parents=True, exist_ok=True)
 
                 log.info(
                     "new best mAP of %.2f found at epoch %d; saving checkpoint",
                     mAP * 100,
                     epoch,
                 )
-                self._save_model(
+                self._save_model_master(
                     model, optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
                 )
 
@@ -322,6 +354,7 @@ class Trainer:
         scheduler: torch.optim.lr_scheduler,
         epoch: int,
         grad_accum_steps: int,
+        max_norm: float,
         scaler: torch.amp,
     ):
         """Train one epoch
@@ -335,9 +368,18 @@ class Trainer:
             epoch: Current epoch; used for logging purposes
             grad_accum_steps: number of steps to accumulate gradients before updating the weights;
                               the loss will be divivided by this number to account for the accumulation
+            max_norm: the value to clip the norm of gradients if magnitude of the gradients
+                      is above max_norm; ((grad) / ||grad||) * max_norm
+
+        Returns:
+            a dictionary of the averaged, scaled, loss components which is the loss average for the
+            entire batch; not every loss component is used in the gradient computation; the
+            "loss" key is the total loss used for backpropagation, averaged across the epoch
         """
         epoch_loss = []
-        running_loss_dict = {}
+        running_loss_dict = {}  # TODO should make these default dicts
+        epoch_loss_dict = {}
+        num_update_steps = 0
         for steps, (samples, targets) in enumerate(dataloader_train, 1):
             samples = samples.to(self.device)
 
@@ -377,13 +419,12 @@ class Trainer:
                         # scale the loss by the number of accumulation steps
                         loss = loss / grad_accum_steps
                         # TODO I think i need to sum the dicts here before reducing for logging
-                    
+
                     for key, val in loss_dict.items():
                         if key in running_loss_dict:
-                            running_loss_dict[key] += val.detach()
+                            running_loss_dict[key] += val.detach() / grad_accum_steps
                         else:
-                            running_loss_dict[key] = val.detach()
-                    breakpoint()
+                            running_loss_dict[key] = val.detach() / grad_accum_steps
 
                 # Calculate gradients; NOTE: DDP averages the gradients across proccesses such that every
                 # process has the same gradients and updates the weights the same
@@ -395,30 +436,54 @@ class Trainer:
 
             ## Remove this maybe? ###
             epoch_loss.append(loss.detach().cpu())
-            
 
             # Update the gradients once finished accumulating gradients and update lr_scheduler
             if not accumulate_grads:
-                #### start here, verify loss summed correctly and probably divide by grad accum? ####
-                # Calculate gradients and updates weights
+                num_update_steps += 1
+
+                # average the losses across all processes; represnets the current step loss
+                # (sums the accumulated gradients)
+                reduced_loss_dict = distributed.reduce_dict(
+                    running_loss_dict, average=True
+                )
+
+                # scale the loss components just like the total loss computation; this is
+                # the average loss across all processes
+                reduced_loss_dict_scaled = {
+                    k: v * weight_dict[k]
+                    for k, v in reduced_loss_dict.items()
+                    if k in weight_dict
+                }
+
+                for key, val in reduced_loss_dict_scaled.items():
+                    if key in epoch_loss_dict:
+                        epoch_loss_dict[key] += val.detach()
+                    else:
+                        epoch_loss_dict[key] = val.detach()
+
+                # NOTE: we use this total loss instead of the one use for backpropagation
+                #       because this one is an average across processes
+                average_loss_scaled = sum(reduced_loss_dict_scaled.values()).item()
+
+                # clip gradients if needed and update weights
                 if self.enable_amp:
+                    if max_norm is not None:
+                        scaler.unscale_(optimizer)
+                        nn.utils.clip_grad_norm_(model.parameters(), max_norm)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
+                    if max_norm is not None:
+                        nn.utils.clip_grad_norm_(model.parameters(), max_norm)
                     optimizer.step()
 
                 optimizer.zero_grad()
 
-                # NOTE: occasionally scaler.step will be skipped and torch will throw a warning that scheduler.step
-                #       is being called first; I couldn't find a great solution but I think it's safe to ignore
-                if scheduler is not None:
-                    scheduler.step()
+                # reset dict for next step
+                running_loss_dict = {}
 
-            # Calling scheduler step increments a counter which is passed to the lambda function;
-            # if .step() is called after every batch, then it will pass the current step;
-            # if .step() is called after every epoch, then it will pass the epoch number;
-            # this counter is persistent so every epoch it will continue where it left off i.e., it will not reset to 0
             if (steps) % 100 == 0:
+                # TODO: might need to update this since we use two param groups
                 log.info(
                     "Current learning_rate: %s\n",
                     optimizer.state_dict()["param_groups"][0]["lr"],
@@ -426,18 +491,18 @@ class Trainer:
 
             if (steps) % self.log_train_steps == 0:
                 log.info(
-                    "epoch: %-10d iter: %d/%-12d train_loss: %-10.4f bbox_loss: %-10.4f obj_loss: %-10.4f class_loss: %-10.4f",
+                    "epoch: %-10d iter: %d/%-12d train_loss: %-10.4f",
                     epoch,
                     steps,
                     len(dataloader_train),
-                    loss_components[3],
-                    loss_components[0],
-                    loss_components[1],
-                    loss_components[2],
+                    average_loss_scaled,
                 )
 
+        avg_epoch_loss = {k: v / num_update_steps for k, v in epoch_loss_dict.items()}
+        avg_epoch_loss["loss"] = average_loss_scaled
         # TODO: see if this is correct
-        return np.array(epoch_loss).mean() / samples.shape[0] / grad_accum_steps
+
+        return avg_epoch_loss
 
     @torch.no_grad()
     def _evaluate(
@@ -497,7 +562,7 @@ class Trainer:
             # if not using DDP or using DDP and synching gradients as normal
             return nullcontext()
 
-    def _save_model(
+    def _save_model_master(
         self,
         model,
         optimizer,
@@ -505,16 +570,29 @@ class Trainer:
         save_path,
         lr_scheduler: Optional[nn.Module] = None,
     ):
-        save_dict = {
-            "model": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "epoch": current_epoch
-            + 1,  # + 1 bc when we resume training we want to start at the next step
-        }
-        if lr_scheduler is not None:
-            save_dict["lr_scheduler"] = lr_scheduler.state_dict()
+        """Save the model on the master process
+        TODO flesh this out more
 
-        torch.save(
-            save_dict,
-            save_path,
-        )
+        Args:
+            model: the model to save with or without the DDP wrapper
+            TODO
+        """
+        # extract the model without DDP wrapper if it exists; we do not want to save the DDP wrapper
+        model_to_save = model.module if hasattr(model, "module") else model
+
+        if distributed.is_main_process():
+            save_path.parents[0].mkdir(parents=True, exist_ok=True)
+
+            save_dict = {
+                "model": model_to_save.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": current_epoch
+                + 1,  # + 1 bc when we resume training we want to start at the next step
+            }
+            if lr_scheduler is not None:
+                save_dict["lr_scheduler"] = lr_scheduler.state_dict()
+
+            torch.save(
+                save_dict,
+                save_path,
+            )

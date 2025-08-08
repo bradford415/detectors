@@ -8,7 +8,7 @@ from detectors.utils.box_ops import box_cxcywh_to_xyxy
 class PostProcess(nn.Module):
     """This module converts the model's output into the format expected by the coco api;
 
-    Post processing class for DINO
+    Post processing class for DINO; only used during inference and evaluation
     """
 
     def __init__(self, num_select=100, nms_iou_threshold=-1) -> None:
@@ -41,6 +41,7 @@ class PostProcess(nn.Module):
                             converted to a NestedTensor and padded)
                            NOTE: not used during training
         """
+        breakpoint()
         num_select = self.num_select
         out_logits, out_bbox = outputs["pred_logits"], outputs["pred_boxes"]
 
