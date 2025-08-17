@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.distributed as dist
+from pycocotools.coco import COCO
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
 
-from detectors.evaluate import evaluate, load_model_checkpoint
+from detectors.evaluate import evaluate, evaluate_detr, load_model_checkpoint
 from detectors.utils import distributed
 from detectors.visualize import plot_loss, plot_mAP, visualize_norm_img_tensors
 
@@ -58,7 +59,8 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         class_names: list[str],
         grad_accum_steps: int,
-        postprocessors: nn.Module,
+        coco_api: Optional[COCO] = None,
+        postprocessors: Optional[dict] = None,
         max_norm: Optional[float] = None,
         start_epoch: int = 1,
         epochs: int = 100,
@@ -80,6 +82,7 @@ class Trainer:
             class_names: list of class names; used for logging and visualization
             grad_accum_steps: number of steps to accumulate gradients before updating the weights;
                               used to simulate a larger effective batch size
+            coco_api: TODO
             postprocessors: postprocessing that needs to be applied after validation/inference;
                             e.g., convert a models normalized outputs to the original image size
             max_norm: the value to clip the norm of gradients if magnitude of the gradients
@@ -169,17 +172,37 @@ class Trainer:
                 self._save_model_master(
                     model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
                 )
-            ### start here, work on evaluation?
-
-            breakpoint()
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
-            # TODO: probably save metrics output into csv
-            metrics_output, image_detections, epoch_val_loss = self._evaluate(
-                model, criterion, dataloader_val, class_names=class_names
+        # TODO: probably save metrics output into csv
+        breakpoint()
+        if self.model_name == "dino":
+            stats = evaluate_detr(
+                model,
+                dataloader_val,
+                coco_api,
+                class_names,
+                postprocessors,
+                criterion=criterion,
+                enable_amp=self.enable_amp,
+                output_path=self.output_dir,
+                device=self.device,
             )
+        else:
+            # evaluate() is used by both val and test set; this can be customized in the future if needed
+            # but for now validation and test behave the same
+            metrics_output, detections, val_loss = evaluate(
+                model,
+                dataloader_val,
+                class_names,
+                criterion=criterion,
+                output_path=self.output_dir,
+                device=self.device,
+            )
+
+            ## START HERE
             val_loss.append(epoch_val_loss.item())
 
             precision, recall, AP, f1, ap_class = metrics_output
@@ -420,6 +443,8 @@ class Trainer:
                         loss = loss / grad_accum_steps
                         # TODO I think i need to sum the dicts here before reducing for logging
 
+                    # summing the averaged loss components for gradient accumulation so we don't need to
+                    # account for this at the end; resets every update step
                     for key, val in loss_dict.items():
                         if key in running_loss_dict:
                             running_loss_dict[key] += val.detach() / grad_accum_steps
@@ -503,40 +528,6 @@ class Trainer:
         # TODO: see if this is correct
 
         return avg_epoch_loss
-
-    @torch.no_grad()
-    def _evaluate(
-        self,
-        model: nn.Module,
-        criterion: nn.Module,
-        dataloader_val: Iterable,
-        class_names: List,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """A single forward pass to evaluate the val set after training an epoch
-
-        Args:
-            model: Model to train
-            criterion: Loss function; only used to inspect the loss on the val set,
-                       not used for backpropagation
-            dataloader_val: Dataloader for the validation set
-            device: Device to run the model on
-
-        Returns:
-            A Tuple of the (prec, rec, ap, f1, and class) per class
-        """
-
-        # evaluate() is used by both val and test set; this can be customized in the future if needed
-        # but for now validation and test behave the same
-        metrics_output, detections, val_loss = evaluate(
-            model,
-            dataloader_val,
-            class_names,
-            criterion=criterion,
-            output_path=self.output_dir,
-            device=self.device,
-        )
-
-        return metrics_output, detections, val_loss
 
     def _maybe_no_sync(self, model: nn.Module, sync: bool = True):
         """Decides whether to enable no_sync() which avoids synchronizing the gradients accross processes.

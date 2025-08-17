@@ -66,7 +66,7 @@ class SetCriterion(nn.Module):
         idx = self._get_src_permutation_idx(indices)
 
         # extract the ground truth label for each query prediction across all images in the batch
-        # shape: real_queries (sum(num_gt_targets_i), )
+        # shape: real_queries: (sum(num_gt_targets_i), )
         #        dn_queries: (sum(num_dn_group*num_objects_i),) where i is the img_index of the batch
         target_classes_o = torch.cat(
             [t["labels"][J] for t, (_, J) in zip(targets, indices)]
@@ -90,7 +90,7 @@ class SetCriterion(nn.Module):
         target_classes[idx] = target_classes_o
 
         # create a onehot tensor of the constructed gt targets;
-        # NOTE: that we +1 to num_classes so when we form onehots, label num_clases can index
+        # NOTE: that we +1 to num_classes so when we form onehots, label num_classes can index
         #       the num_classes onehot tensor (or else we would get an out of bounds error I think);
         #       after, we slice this end off [..., :-1] because the focal loss does not care about
         #       the 'no-object/background' class
@@ -107,6 +107,8 @@ class SetCriterion(nn.Module):
         target_classes_onehot.scatter_(
             dim=2, index=target_classes.unsqueeze(-1), value=1
         )
+
+        # the only labels that have a background class are the negative dn_queries
         target_classes_onehot = target_classes_onehot[:, :, :-1]
 
         # computes the focal loss (a scalar) for the current batch, averaged by the average
@@ -301,30 +303,30 @@ class SetCriterion(nn.Module):
         Return:
             a dictionary of loss components; not all of these are used to propagate gradients;
             losses for the real, learnable queries (topk) from the last decoder layer output:
-                `loss_ce`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
-                `loss_bbox`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
-                `loss_giou`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `loss_ce`: predicted labels focal loss, normalized by the average num_gt_boxes per process
+                `loss_bbox`: predicted bboxes l1 distance loss, normalized by the average num_gt_boxes per process
+                `loss_giou`: predicted bboxes giou loss, normalized by the average num_gt_boxes per process
                 `cardinality_error`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
                                      this is not counted in the total loss & does not propagate gradients
                 `class_error`: the top 1 error for the predicted classes; not counted in total loss
                                and does not propagate gradients
             losses for the real, learnable queries (topk) from every decoder layer output except the last
             where i = range(num_decoder_layers-1):
-                `loss_ce_i`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
-                `loss_bbox_i`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
-                `loss_giou_i`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `loss_ce_i`: predicted labels focal loss, normalized by the average num_gt_boxes per process
+                `loss_bbox_i`: predicted bboxes l1 distance loss, normalized by the average num_gt_boxes per process
+                `loss_giou_i`: predicted bboxes giou loss, normalized by the average num_gt_boxes per process
                 `cardinality_error_i`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
                                      this is not counted in the total loss & does not propagate gradients
-                `loss_ce_dn`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
-                `loss_bbox_dn`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
-                `loss_giou_dn`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `loss_ce_dn`: predicted labels focal loss, normalized by the average num_gt_boxes per process
+                `loss_bbox_dn`: predicted bboxes l1 distance loss, normalized by the average num_gt_boxes per process
+                `loss_giou_dn`: predicted bboxes giou loss, normalized by the average num_gt_boxes per process
                 `cardinality_error_dn`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
                                      this is not counted in the total loss & does not propagate gradients
             losses for the dn queries from the last decoder layer output:
             where i = range(num_decoder_layers-1):
-                `loss_ce_dn_i`: predicted labels focal loss, averaged by num_gt_boxes across all proccesses
-                `loss_bbox_dn_i`: predicted bboxes l1 distance loss, averaged by num_gt_boxes across all proccesses
-                `loss_giou_dn_i`: predicted bboxes giou loss, averaged by num_gt_boxes across all proccesses
+                `loss_ce_dn_i`: predicted labels focal loss, normalized by the average num_gt_boxes per process
+                `loss_bbox_dn_i`: predicted bboxes l1 distance loss, normalized by the average num_gt_boxes per process
+                `loss_giou_dn_i`: predicted bboxes giou loss, normalized by the average num_gt_boxes per process
                 `cardinality_error_dn_i`: l1 distance (mae) of # of non `no-object` preds = # of gt objects;
                                      this is not counted in the total loss & does not propagate gradients
         """
@@ -345,6 +347,8 @@ class SetCriterion(nn.Module):
         # in the same batch has very few objects, this lets us calculate the loss per box, on average;
         # number of gt-boxes are summed across all proccesses and this sum is broadcasted to each
         # process (i.e., each process will have this same summed value)
+        # NOTE: The number of predicted boxes can vary, so using ground truth count as normalization
+        #       is more stable and meaningful
         num_boxes = sum(len(t["labels"]) for t in targets)
         num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=device)
         if is_dist_avail_and_initialized():
@@ -377,7 +381,7 @@ class SetCriterion(nn.Module):
                 if len(targets[i]["labels"]) > 0:
 
                     # create a tensor from [0, num_objects-1] * scalar (num_objects*scalar,)
-                    t = torch.range(0, len(targets[i]["labels"]) - 1).long().cuda()
+                    t = torch.arange(0, len(targets[i]["labels"])).long().cuda()
                     t = t.unsqueeze(0).repeat(scalar, 1)
                     tgt_idx = t.flatten()
 

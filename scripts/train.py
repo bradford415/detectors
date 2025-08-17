@@ -156,6 +156,7 @@ def main(
     if dev_mode:
         log.info("\nNOTE: executing in dev mode")
         batch_size = 1
+        val_batch_size = 2
         grad_accum_steps = 2
 
     log.info(
@@ -231,7 +232,7 @@ def main(
     )
     dataloader_val = DataLoader(
         dataset_val,
-        batch_size=1,  # TODO: consider making this a batch_sampler as well
+        batch_size=val_batch_size,
         sampler=sampler_val,
         collate_fn=collate_fn,
         drop_last=False,
@@ -338,7 +339,9 @@ def main(
     )
 
     if detector_name in ["dino"]:
-        train_with_target = True
+        coco_api = dataset_val.coco
+    else:
+        coco_api = None
 
     # Build trainer args used for the training
     trainer_args = {
@@ -350,10 +353,11 @@ def main(
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
         "grad_accum_steps": grad_accum_steps,
+        "coco_api": coco_api,
+        "postprocessors": postprocessors,
         "max_norm": train_args["max_norm"],
         "start_epoch": train_args.get("start_epoch", 1),
         "epochs": train_args["epochs"],
-        "ckpt_epochs": train_with_target,
         "ckpt_epochs": train_args["ckpt_epochs"],
         "checkpoint_path": train_args["checkpoint_path"],
     }

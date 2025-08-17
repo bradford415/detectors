@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 from typing import Optional
 
 import torch
@@ -137,11 +138,6 @@ def reduce_dict(
         values = torch.stack(values, dim=0)
         dist.all_reduce(values)
 
-        # sum across all GPUs but only have the main process recieve the final result
-        # dist.reduce(
-        #     values, dst=0
-        # )  # TODO: need to verify this is the same value as all_reduce
-
         # average by the number of processes to get an average loss for every gpu
         if average:
             values /= world_size
@@ -150,3 +146,100 @@ def reduce_dict(
         reduced_dict = {k: v for k, v in zip(names, values)}
 
     return reduced_dict
+
+
+def synchronize_loss_between_processes(count: int, loss_dict: dict):
+    """Average the loss componenets in a dict across all_processes
+
+    Can be used for computing the average loss for an epoch
+
+    Args:
+        count: the number of times the loss componenets were summed
+        loss_dict: a dictionary of loss components; typically a running sum so we can average
+
+    Returns:
+        a dictionary of averaged loss components
+    """
+    if not is_dist_avail_and_initialized():
+        return loss_dict
+
+    # TODO: verify this makes sense; I honestly don't know but I tried (:
+    reduced_dict = {}
+    for loss_type, loss_val in loss_dict.items():
+        # sum the running loss & num_steps across GPUs
+        t = torch.tensor([count, loss_val], dtype=torch.float64, device="cuda")
+        dist.barrier()
+        dist.all_reduce(t)
+
+        # average the loss across all the steps and processes
+        t = t.tolist()
+        reduced_dict[loss_type] = int(t[0]) / t[1]
+
+    return reduced_dict
+
+
+def all_gather(data):
+    """Run all_gather on arbitrary picklable data (not necessarily tensors)
+
+    Useful for arbitrary python objects of different types and sizes that cannot
+    necessarily be converted to tensors; this function serializes the data
+    to a byte string, converts it to a ByteTensor, and then gathers the tensors
+    from all ranks; the data is then deserialized back to the original python object
+
+    Args:
+        data: any picklable object
+    Returns:
+        list[data]: list of data gathered from each rank
+    """
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
+
+    # serialized to a Tensor; data can be of arbitrary shape and types which
+    # likely cannot be converted to a tensor, so we can first serialize it to a byte string
+    # (which nearly anything type or shape can be converted to this), then we convert the
+    # byte string to a ByteTensor which can be used in torch distributed operations
+    buffer = pickle.dumps(data)
+    storage = torch.ByteStorage.from_buffer(buffer)
+    tensor = torch.ByteTensor(storage).to("cuda")
+
+    # find out each ranks tensor size since it could be of different sizes; we'll create an empty
+    # tensor list padded to the maximum size since torch.all_gather does not support different sizes
+    # the tensor to transmit to other ranks
+    local_size = torch.tensor([tensor.numel()], device="cuda")
+
+    # tensor to receive the size of each rank's tensor
+    size_list = [torch.tensor([0], device="cuda") for _ in range(world_size)]
+
+    # gather the size of each rank's tensor
+    dist.all_gather(size_list, local_size)
+
+    # find the maximum size of the tensors across all ranks
+    size_list = [int(size.item()) for size in size_list]
+    max_size = max(size_list)
+
+    # receiving Tensor from all ranks
+    # we pad the tensor because torch all_gather does not support
+    # gathering tensors of different shapes
+    tensor_list = []
+    for _ in size_list:
+        tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
+    if local_size != max_size:
+        padding = torch.empty(
+            size=(max_size - local_size,), dtype=torch.uint8, device="cuda"
+        )
+        tensor = torch.cat((tensor, padding), dim=0)
+
+    # a list of tensor values from all ranks
+    dist.all_gather(tensor_list, tensor)
+
+    # deserialize the tensors by
+    #   1. removing the padding using the original sizes
+    #   2. converting the byte tensors back to the original python object
+    #   3. data_list is now a list of each proccess' original data
+    data_list = []
+    for size, tensor in zip(size_list, tensor_list):
+        buffer = tensor.cpu().numpy().tobytes()[:size]
+        data_list.append(pickle.loads(buffer))
+
+    return data_list
