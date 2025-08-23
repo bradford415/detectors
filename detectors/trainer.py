@@ -3,7 +3,7 @@ import logging
 import time
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,6 @@ from torch.utils import data
 
 from detectors.evaluate import evaluate, evaluate_detr, load_model_checkpoint
 from detectors.utils import distributed
-from detectors.visualize import plot_loss, plot_mAP, visualize_norm_img_tensors
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +28,7 @@ class Trainer:
         self,
         output_dir: str,
         model_name: str,
+        use_amp: bool = True,
         step_lr_on: Optional[str] = None,
         device: torch.device = torch.device("cpu"),
         log_train_steps: int = 20,
@@ -47,7 +47,7 @@ class Trainer:
         self.log_train_steps = log_train_steps
 
         self.step_lr_on = step_lr_on
-        self.enable_amp = True if not self.device.type == "mps" else False
+        self.enable_amp = use_amp  # True if not self.device.type == "mps" else False
         self.model_name = model_name
 
     def train(
@@ -108,12 +108,18 @@ class Trainer:
 
         last_best_path = None
 
+        csv_path = self.output_dir / "train_stats.csv"
+        if csv_path.exists():
+            stats_df = pd.read_csv(csv_path)
+            train_loss = stats_df["train_loss"].tolist()
+            val_loss = stats_df["val_loss"].tolist()
+            epoch_mAP = stats_df["mAP"].tolist()
+        else:
+            stats_df = pd.DataFrame(columns=[""])
+
         scaler = torch.amp.GradScaler(self.device.type)
 
         best_ap = 0.0
-        train_loss = []
-        val_loss = []
-        epoch_mAP = []
         for epoch in range(start_epoch, epochs + 1):
             model.train()
 
@@ -122,7 +128,7 @@ class Trainer:
 
             # Train one epoch
             if "yolo" in self.model_name:
-                epoch_train_loss = self._train_one_epoch_yolo(
+                epoch_train_loss_dict = self._train_one_epoch_yolo(
                     model,
                     criterion,
                     dataloader_train,
@@ -132,10 +138,9 @@ class Trainer:
                     grad_accum_steps,
                     scaler,
                 )
-                train_loss.append(epoch_train_loss)
             else:
                 # train one epoch of a detr-based model; returns a dict of loss components
-                epoch_train_loss = self._train_one_epoch_detr(
+                epoch_train_loss_dict = self._train_one_epoch_detr(
                     model,
                     criterion,
                     dataloader_train,
@@ -146,6 +151,8 @@ class Trainer:
                     max_norm,
                     scaler,
                 )
+
+            train_loss.append(epoch_train_loss_dict["loss"])
 
             curr_lr = optimizer.param_groups[0]["lr"]
 
@@ -176,51 +183,55 @@ class Trainer:
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
-        # TODO: probably save metrics output into csv
-        breakpoint()
-        if self.model_name == "dino":
-            stats = evaluate_detr(
-                model,
-                dataloader_val,
-                coco_api,
-                class_names,
-                postprocessors,
-                criterion=criterion,
-                enable_amp=self.enable_amp,
-                output_path=self.output_dir,
-                device=self.device,
-            )
-        else:
-            # evaluate() is used by both val and test set; this can be customized in the future if needed
-            # but for now validation and test behave the same
-            metrics_output, detections, val_loss = evaluate(
-                model,
-                dataloader_val,
-                class_names,
-                criterion=criterion,
-                output_path=self.output_dir,
-                device=self.device,
-            )
+            # TODO: probably save metrics output into csv
+            if self.model_name == "dino":
+                stats = evaluate_detr(
+                    model,
+                    dataloader_val,
+                    coco_api,
+                    class_names,
+                    postprocessors,
+                    criterion=criterion,
+                    enable_amp=self.enable_amp,
+                    output_path=self.output_dir,
+                    device=self.device,
+                )
+            else:
+                # evaluate() is used by both val and test set; this can be customized in the future if needed
+                # but for now validation and test behave the same
+                metrics_output, detections, val_loss = evaluate(
+                    model,
+                    dataloader_val,
+                    class_names,
+                    criterion=criterion,
+                    output_path=self.output_dir,
+                    device=self.device,
+                )
 
             ## START HERE
-            val_loss.append(epoch_val_loss.item())
+            val_loss.append(stats["loss"])
 
-            precision, recall, AP, f1, ap_class = metrics_output
-            mAP = AP.mean()
-            epoch_mAP.append(mAP * 100)
+            mAP = stats["coco_eval_bbox"][0]
 
-            plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
-            plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
+            epoch_mAP.append(mAP)
+
+            # precision, recall, AP, f1, ap_class = metrics_output
+            # mAP = AP.mean()
+            # epoch_mAP.append(mAP * 100)
+
+            # plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
+            # plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
 
             # Create csv file of training stats per epoch
             train_dict = {
-                "epoch": list(np.arange(start_epoch, epoch + 1)),
+                "epoch": list(np.arange(1, epoch)),
                 "train_loss": train_loss,
                 "val_loss": val_loss,
                 "mAP": epoch_mAP,
             }
+
             pd.DataFrame(train_dict).to_csv(
-                self.output_dir / "train_stats.csv", index=False
+                self.output_dir / "train_stats.csv", mode="a", index=False
             )
 
             # Save and overwrite the checkpoint with the highest val mAP
@@ -507,20 +518,15 @@ class Trainer:
                 # reset dict for next step
                 running_loss_dict = {}
 
-            if (steps) % 100 == 0:
-                # TODO: might need to update this since we use two param groups
-                log.info(
-                    "Current learning_rate: %s\n",
-                    optimizer.state_dict()["param_groups"][0]["lr"],
-                )
-
             if (steps) % self.log_train_steps == 0:
+                curr_lr = optimizer.param_groups[0]["lr"]
                 log.info(
-                    "epoch: %-10d iter: %d/%-12d train_loss: %-10.4f",
+                    "epoch: %-10d iter: %d/%-12d train_loss: %-10.4f curr_lr: %-12.6f",  # -n = right padding
                     epoch,
                     steps,
                     len(dataloader_train),
                     average_loss_scaled,
+                    curr_lr,
                 )
 
         avg_epoch_loss = {k: v / num_update_steps for k, v in epoch_loss_dict.items()}

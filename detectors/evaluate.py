@@ -294,8 +294,6 @@ def evaluate_detr(
         # average over all ious, all recalls, all classes, "all" area, and maxDet=100
         coco_evaluator.summarize()
 
-        breakpoint()
-
         # extract the NumPy array of summary metrics computed by summarize() and convert to python list;
         # by default this contains the 12 values AP/AR values that are printed
         stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()

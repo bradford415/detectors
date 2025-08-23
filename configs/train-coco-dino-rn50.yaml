@@ -3,7 +3,7 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: True
+dev_mode: False
 
 # Base directory for output files; do not change this 
 output_dir: "output/train"
@@ -15,7 +15,7 @@ exp_name: "development"
 dataset_name: "CocoDetection"
 
 # Log the train progress every n steps
-log_train_steps: 20
+log_train_steps: 100
 
 # Parameters for the dataset class
 dataset:
@@ -29,18 +29,20 @@ dataset:
   num_classes: 91
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
-  num_workers: 4
+  num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
 
 train:
   # batch_size per gpu; the total batch_size will be batch_size * num_gpus if using DDP
-  # so the number of grad_accum_steps = batch_szie * num gpus / effective_batch_size
+  # so the number of grad_accum_steps = batch_size * num gpus / effective_batch_size
   batch_size: 1
 
-  # dino uses a bs of 2 per gpu and uses 8 gpus ->  2 *8 = 16 (Table 5.)
+  # dino uses a bs of 2 per gpu and uses 8 gpus ->  2 * 8 = 16 (Table 5.)
   effective_batch_size: 16  # batch_size * num_gpus (processes) * gradient_accumulation_steps
 
   validation_batch_size: 32
-  epochs: 1
+  epochs: 50
+
+  use_amp: True
 
   # max_norm for gradient clipping; ensures the magnitude of all parameters <= max_norm
   max_norm: 0.1
@@ -50,7 +52,7 @@ train:
 
   # Path of weights file (.pt) to resume training; 
   # use `null` to train a new model from scratch
-  checkpoint_path:
+  checkpoint_path: /home/bselee/programming/detectors/output/train/development/2025_08_16-11_44_38_PM/checkpoints/best_mAP_30-96.pt
 
   # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
   # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet

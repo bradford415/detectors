@@ -5,17 +5,20 @@ from typing import Any, Callable, List, Optional, Type, Union
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint
 
 __all__ = [
     "ResNet",
     "resnet18",
 ]
 
-# From https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/master/network/backbone/resnet.py#L14
+# Original destination of the model URLs: From https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/master/network/backbone/resnet.py#L14
+# Updated model URLs are defined in this file:
 model_urls = {
     "resnet18": "https://download.pytorch.org/models/resnet18-5c106cde.pth",
     "resnet34": "https://download.pytorch.org/models/resnet34-333f7ec4.pth",
-    "resnet50": "https://download.pytorch.org/models/resnet50-19c8e357.pth",
+    "resnet50": "https://download.pytorch.org/models/resnet50-11ad3fa6.pth",  # IMAGENET1K_V2 weights
+    "resnet50-old": "https://download.pytorch.org/models/resnet50-19c8e357.pth",
     "resnet101": "https://download.pytorch.org/models/resnet101-5d3b4d8f.pth",
     "resnet152": "https://download.pytorch.org/models/resnet152-b121ed2d.pth",
 }
@@ -309,6 +312,15 @@ class ResNet(nn.Module):
         block2 = self.layer2(block1)
         block3 = self.layer3(block2)
         out = self.layer4(block3)
+
+        # Experimenting with activation checkpointing; here's some findings
+        #   1. it seems pretty dependent on batch size; for example training dino with rn50 backbone and a batch size of
+        #      1 seems to save only ~200 MiB of memory; pytorch saves activations for sample in the batch
+        #
+        # block1 = checkpoint(self.layer1, x, use_reentrant=False)
+        # block2 = checkpoint(self.layer2, block1, use_reentrant=False)
+        # block3 = checkpoint(self.layer3, block2, use_reentrant=False)
+        # out = checkpoint(self.layer4, block3, use_reentrant=False)
 
         if not self.remove_top:
             out = self.avgpool(out)

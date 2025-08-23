@@ -36,7 +36,7 @@ class PostProcess(nn.Module):
 
             target_sizes: tensor (b, 2) where 2 is the (h, w) of each images of the batch
                           for evaluation/inference:
-                            this must be the original image size before any data augmentation
+                            this must be the orig y data augmentation
                             (including resizing and padding); this is because we want to map the
                             predicted bboxes back to the original image resolution of the input images;
                             this is important for metrics like mAP which are evaluated in terms of

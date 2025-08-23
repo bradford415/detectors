@@ -1,7 +1,11 @@
 import contextlib
 import copy
+import io
+import logging
 import os
+import sys
 from collections import defaultdict
+from contextlib import contextmanager
 
 import numpy as np
 import pycocotools.mask as mask_util
@@ -11,6 +15,8 @@ from pycocotools.cocoeval import COCOeval
 
 from detectors.utils import misc
 from detectors.utils.distributed import all_gather
+
+log = logging.getLogger(__name__)
 
 
 class CocoEvaluator:
@@ -100,8 +106,10 @@ class CocoEvaluator:
 
     def summarize(self):
         for iou_type, coco_eval in self.coco_eval.items():
-            print("IoU metric: {}".format(iou_type))
-            coco_eval.summarize()
+            log.info("IoU metric: %s", iou_type)
+
+            with print_to_logger():
+                coco_eval.summarize()
 
     def prepare(self, predictions, iou_type):
         if iou_type == "bbox":
@@ -224,6 +232,20 @@ class CocoEvaluator:
                 ]
             )
         return coco_results
+
+
+@contextmanager
+def print_to_logger(level=logging.INFO):
+    buffer = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = buffer  # <-- redirect prints
+
+    try:
+        yield  # <-- run the "inside of the with-block" here
+    finally:
+        sys.stdout = old_stdout  # <-- restore stdout
+        for line in buffer.getvalue().splitlines():
+            log.log(level, line)  # <-- flush captured prints to logger
 
 
 def convert_to_xywh(boxes):

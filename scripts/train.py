@@ -72,13 +72,12 @@ def main(
     if dataset_root is not None:
         base_config["dataset"]["root"] = dataset_root
 
+    # overwrite config values with CLI values if specified
     if checkpoint_path is not None:
         base_config["train"]["checkpoint_path"] = checkpoint_path
         base_config["train"]["backbone_weights"] = None
     elif backbone_weights is not None:
         base_config["train"]["backbone_weights"] = backbone_weights
-
-    dev_mode = base_config["dev_mode"]
 
     if (
         base_config["train"]["checkpoint_path"] is not None
@@ -88,12 +87,22 @@ def main(
             "checkpoint_path and backbone_weights cannot both have a value. Set one of the values to 'null'."
         )
 
+    dev_mode = base_config["dev_mode"]
+
     # Initialize paths
-    output_path = (
-        Path(base_config["output_dir"])
-        / base_config["exp_name"]
-        / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
-    )
+    checkpoint_path = base_config["train"].get("checkpoint_path", None)
+    if checkpoint_path:
+        # if resuming checkpoint use the same directory
+        output_path = Path(checkpoint_path).parent.parent
+        log.info(
+            "\nresuming training from the specificed checkpoint %s", checkpoint_path
+        )
+    else:
+        output_path = (
+            Path(base_config["output_dir"])
+            / base_config["exp_name"]
+            / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
+        )
     log_path = output_path / "training.log"
 
     # create output/ckpt directories and save configuration files on main process
@@ -117,7 +126,7 @@ def main(
         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
     )
 
-    # TODO: verify this works; Suppress logs from non-zero ranks
+    # suppress logs from non-zero ranks
     if dist.is_initialized() and dist.get_rank() != 0:
         log.setLevel(logging.WARNING)  # or ERROR to suppress even more
 
@@ -333,6 +342,7 @@ def main(
     trainer = Trainer(
         output_dir=str(output_path),
         model_name=detector_name,
+        use_amp=train_args["use_amp"],
         step_lr_on=solver_config["lr_scheduler"]["step_lr_on"],
         device=device,
         log_train_steps=base_config["log_train_steps"],
