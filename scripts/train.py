@@ -115,7 +115,6 @@ def main(
                 (base_config, "base_config.yaml"),
                 (model_config, "model_config.yaml"),
             ],
-            # solver_dict=(solver_config.to_dict(), "solver_config.json"),
             output_path=output_path / "reproduce",
         )
 

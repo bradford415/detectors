@@ -189,7 +189,6 @@ class Trainer:
                     model,
                     dataloader_val,
                     coco_api,
-                    class_names,
                     postprocessors,
                     criterion=criterion,
                     enable_amp=self.enable_amp,

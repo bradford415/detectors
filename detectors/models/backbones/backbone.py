@@ -178,6 +178,7 @@ class Backbone(BackboneBase):
     def __init__(
         self,
         backbone_name: str,
+        pretrained: bool,
         train_backbone: bool,
         bb_level_inds: list[int],
         batch_norm=FrozenBatchNorm2d,
@@ -187,8 +188,9 @@ class Backbone(BackboneBase):
         Args:
             backbone_name: the name of the backbone network to use; in practice this should only be
                   a resnet variant
+            pretrained: whether to use pretrained imagenet weights
             train_backbone: whether to train the backbone network while training the detector;
-                            if false, freeze the backbone and only train the detector
+                            if false, completely freeze the backbone and only train the detector
             bb_level_inds: the indices of backbone levels to fuse into the the detector;
                             i.e., heiarchicial features to extract from the backbone;
                             this is used to grab the number of output channels for each level;
@@ -205,7 +207,7 @@ class Backbone(BackboneBase):
                 # Only download the pretrained weights with the main process; the DDP constructor will
                 # broadcast the state_dict from rank 0 to the other processes, according to the docs:
                 #   https://docs.pytorch.org/docs/main/notes/ddp.html#internal-design
-                pretrain=is_main_process(),
+                pretrain=is_main_process() and pretrained,
                 remove_top=True,  # remove the classification head
                 norm_layer=batch_norm,
             )
@@ -303,6 +305,7 @@ class Joiner(nn.Sequential):
 
 def build_dino_backbone(
     name: str = "resnet50",
+    pretrained: bool = True,
     hidden_dim: int = 256,
     temperature_h: int = 40,
     temperature_w: int = 40,
@@ -321,6 +324,8 @@ def build_dino_backbone(
 
     Args:
         name: name of the backbone network to use
+        pretrain_backbone: whether to use pretrained ImageNet weights for the backbone; for iference
+                           this does not matter because the detector weights will override this
         hidden_dim: dimension of the embeddings in the transformer
         temperature_h: The height temperature of the positional embedding equation (attention is all you need)
         temperature_w The width temperature of the positional embedding equation (attention is all you need)
@@ -340,6 +345,7 @@ def build_dino_backbone(
     if "resnet" in name:
         backbone = Backbone(
             backbone_name=name,
+            pretrained=pretrained,
             train_backbone=True,
             bb_level_inds=bb_level_inds,
             batch_norm=FrozenBatchNorm2d,  # do not update the bn statistics while training; only use the pretrained bn statistics

@@ -152,9 +152,7 @@ def evaluate_detr(
     model: nn.Module,
     dataloader_test: Iterable,
     coco_api: Optional[COCO],
-    class_names: List,
     postprocessors: nn.Module,
-    # img_size: int = 416,
     criterion: Optional[nn.Module] = None,
     enable_amp: bool = False,
     output_path: Optional[str] = None,
@@ -296,6 +294,115 @@ def evaluate_detr(
 
         # extract the NumPy array of summary metrics computed by summarize() and convert to python list;
         # by default this contains the 12 values AP/AR values that are printed
+        stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
+
+    return stats
+
+
+@torch.no_grad()
+def test_detr(
+    model: nn.Module,
+    dataloader_test: Iterable,
+    coco_api: Optional[COCO],
+    postprocessors: nn.Module,
+    criterion: Optional[nn.Module] = None,
+    enable_amp: bool = False,
+    device: torch.device = torch.device("cpu"),
+) -> Tuple[Tuple, List]:
+    """A stripped down version of evaluate_detr() only for computing metrics on the test set
+
+    Args:
+        model: Model to train
+        postprocessors: postprocessing that needs to be applied after validation/inference;
+                        e.g., convert a models normalized outputs to the original image size
+        dataloader_val: Dataloader for the validation set
+        device: Device to run the model on
+
+    Returns:
+        A Tuple containing
+            1. A Tuple of the (prec, rec, ap, f1, and class) per class
+            2. A list of tuples containing the image_path and detections after postprocessing with nms
+
+    """
+    model.eval()
+
+    # typically just "bbox" iou
+    iou_types = tuple(postprocessors.keys())
+
+    coco_evaluator = CocoEvaluator(coco_api, iou_types)
+
+    for steps, (samples, targets) in tqdm(
+        enumerate(dataloader_test, 1), total=len(dataloader_test), ncols=70
+    ):
+        samples = samples.to(device)
+
+        # move label tensors to gpu
+        targets = [
+            {
+                key: (val.to(device) if isinstance(val, torch.Tensor) else val)
+                for key, val in t.items()
+            }
+            for t in targets
+        ]
+
+        with torch.autocast(
+            device_type=device.type,
+            dtype=torch.float16,
+            enabled=enable_amp,
+        ):
+            preds = model(samples, targets)
+
+        # extract the original image sizes (b, 2) where 2 = (h, w)
+        orig_target_sizes = torch.stack([img["orig_size"] for img in targets], dim=0)
+
+        # obtain `num_select` confidence `scores`, `labels`, and `bboxes` for each image;
+        # bboxes are converted from relative [0, 1] cxcywh format to absolute
+        # [0, orig_img_w/h] xyxy format
+        results: list[dict] = postprocessors["bbox"](preds, orig_target_sizes)
+
+        assert len(results) == samples.tensors.shape[0]
+
+        # map the ground-truth image id to the predicted results
+        res = {
+            target["image_id"].item(): output
+            for target, output in zip(targets, results)
+        }
+
+        # NOTE: when calling CocoEvaluator.update() the predicted boxes will be converted to XYWH to match
+        #       the ground-truth boxes; specifically , this is done here:
+        #           https://github.com/IDEA-Research/DINO/blob/d84a491d41898b3befd8294d1cf2614661fc0953/datasets/coco_eval.py#L89
+
+        # compute the per image, per-category, per-area-range IoU metrics and store in coco_evaluator;
+        # example: per-category will give us an IoU for each class (dog, cat, mouse)
+        coco_evaluator.update(res)
+
+    if coco_evaluator is not None:
+        # Update the coco_eval object with the image ids and evaluations from all processes
+        coco_evaluator.synchronize_between_processes()
+
+        # accumulate() takes the per-image evaluation results (evalImgs) computed by evaluate().
+        # for each category, area, IoU threshold, and max detections, it:
+        #   1. collects all true positive / false positive matches (dtMatches, dtIgnore, gtIgnore).
+        #   2. Computes cumulative TP and FP sums.
+        #   3. Computes precision at fixed recall thresholds (p.recThrs) by sampling the cumulative data.
+        #   4. Stores everything in the self.eval dictionary:
+        #      - precision → the sampled precision values (used for plotting or computing AP)
+        #      - recall → the maximum recall achieved per IoU/class/area/maxDet
+        #      - scores → detection scores corresponding to the sampled precision
+        coco_evaluator.accumulate()
+
+        # computes the overall mAP (and other AP variants) through the precision array (T, R, K, A, M)
+        # where T = iou thresholds (0.50:0.95), R = recall thresholds (101 points 0:0.01:1.0),
+        #       K = categories (all classes), A = area ranges (all, small, medium, large),
+        #       M = max detections per image (1, 10, 100)
+        # overall mAP[0.5:0.95] (mean of all per-category precision values across all IoUs, recall thresholds,
+        # and area ranges) slices the precision array like precision[:, :, :, 0, 2] which means to
+        # average over all ious, all recalls, all classes, "all" area, and maxDet=100
+        coco_evaluator.summarize()
+
+        # extract the NumPy array of summary metrics computed by summarize() and convert to python list;
+        # by default this contains the 12 values AP/AR values that are printed
+        stats = {}
         stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
 
     return stats

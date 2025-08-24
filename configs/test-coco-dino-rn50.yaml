@@ -9,30 +9,32 @@ dev_mode: False
 output_dir: "output/test"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
-exp_name: "development"
+exp_name: "dino-rn50"
 
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetection"
 
 # Whether to plot the predicted bounding boxes on the test set; if False only the AP scores are shown
-plot_detections: True
+plot_detections: False
 
 # Parameters for the dataset class
 dataset:
-
   # Path to the root of the dataset; detects which path to use based on device
   root: "/mnt/d/Datasets/coco" # windows path
   root_mac: "/Users/bsele/datasets/coco" # mac path
 
+  # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
+  # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
+  num_classes: 91
+
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
-  num_workers: 4
+  num_workers: 0
 
 test:
-
-  batch_size: 4
+  batch_size: 2
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
-  checkpoint_path: /Users/bsele/programming/detectors/output/train/development/2024_12_28-08_14_46_PM/checkpoints/best_mAP_1-02.pt
+  checkpoint_path: /home/bselee/programming/detectors/output/train/resnet50-dino/2025_08_16-11_44_38_PM/checkpoints/best_mAP_46-59.pt
 
 cuda:
   # List of GPU devices to use

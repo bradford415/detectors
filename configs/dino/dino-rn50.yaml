@@ -43,6 +43,9 @@ params:
   backbone:
     name: "resnet50"
 
+    # whether to use pretrained ImageNet weights for the backbone
+    pretrained: True
+
     # the indices of interemediate feature map scales to return from the backbone;
     # most backbones have 4 different `levels` which each correpond to a different 
     # feature map scale where index 0 is the highest spatial resolution and index 3 is

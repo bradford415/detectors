@@ -34,21 +34,22 @@ class PostProcess(nn.Module):
                         pred_logits: pred class logits for each class (b, num_queries, num_classes)
                         pred_boxes: pred bboxes normalized [0, 1] (b, num_queries, 4) where 4 = cxcywh
 
-            target_sizes: tensor (b, 2) where 2 is the (h, w) of each images of the batch
+            target_sizes: tensor (b, 2) where 2 is the (h, w) of each images of the batch; used to scale
+                          normalized coordinates to absolute coordinates i.e., [0, 1] -> [0, h/w]
                           for evaluation/inference:
-                            this must be the orig y data augmentation
-                            (including resizing and padding); this is because we want to map the
-                            predicted bboxes back to the original image resolution of the input images;
-                            this is important for metrics like mAP which are evaluated in terms of
-                            original image_size; TODO: verify this
+                              this must be the original image dimensions before data augmentation
+                              (including resizing and padding); this is because we want to map the
+                              predicted bboxes back to the original image resolution of the input images;
+                              this is important for metrics like mAP which are evaluated in terms of
+                              original image_size; TODO: verify this
                           for visualization:
-                            this should be the image size after data augmention/resizing but
-                            before padding; this is because padding adds artificial borders and
-                            we don't want to scale our predictions into padded areas that weren't
-                            actually scene by the model(REMINDER: DETR first resizes the image such
-                            that the shorter side to a fixed size (usually 800) and and the longer
-                            side does not exceed 1333 (keeps aspect ratio), then the images are
-                            converted to a NestedTensor and padded)
+                              this should be the image size after data augmention/resizing but
+                              before padding; this is because padding adds artificial borders and
+                              we don't want to scale our predictions into padded areas that weren't
+                              actually scene by the model(REMINDER: DETR first resizes the image such
+                              that the shorter side to a fixed size (usually 800) and and the longer
+                              side does not exceed 1333 (keeps aspect ratio), then the images are
+                              converted to a NestedTensor and padded)
                            NOTE: not used during training
 
         Returns:

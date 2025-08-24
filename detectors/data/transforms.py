@@ -92,7 +92,7 @@ def hflip(image, target):
 
 
 def resize(
-    image: torch.Tensor, target, size: int | Tuple, max_size: Optional[int] = None
+    image: PIL.Image, target, size: int | Tuple, max_size: Optional[int] = None
 ):
     """Resize an image, and adjusts the targets' bboxes, such that the shortest
     side of the image is resized to `size` preserving the aspect ratio, but if doing
@@ -100,7 +100,8 @@ def resize(
     by assuming the new longer side = `max_size` (still keeping the aspect ratio)
 
     Args:
-        image: a PIL image to be resized
+        image: a PIL image to be resized; NOTE: image.size returns (w, h) but when you
+               access the pixels with np.array the dims are returned (h, w, c)
         target: a dictionary of ground truth information containing keys:
                   boxes (tl_x, tl_y, br_x, br_y) labels, image_id, area, iscrowd, orig_size, size
         size: if integer (default), the randomly selected size to resize the shortest side
@@ -251,7 +252,7 @@ class RandomHorizontalFlip(object):
         return img, target
 
 
-class RandomResize(object):
+class RandomResize():
     """Resize an image, and adjusts the targets' bboxes, such that the shortest
     side of the image is resized to `size` preserving the aspect ratio, but if doing
     so would cause the longest side to exceed `max_size`, then it calculats a new `size`
@@ -267,7 +268,7 @@ class RandomResize(object):
         self.sizes = sizes
         self.max_size = max_size
 
-    def __call__(self, img, target=None):
+    def __call__(self, img: PIL.Image, target=None):
         size = random.choice(self.sizes)
         return resize(img, target, size, self.max_size)
 

@@ -465,14 +465,7 @@ def make_coco_transforms_dino_detr(dataset_split):
                 normalize,
             ]
         )
-    elif dataset_split == "val":
-        return T.Compose(
-            [
-                T.RandomResize([max(short_side_scales)], max_size=max_size),
-                normalize,
-            ]
-        )
-    elif dataset_split == "test":
+    elif dataset_split == "val" or dataset_split == "test":
         return T.Compose(
             [
                 T.RandomResize([max(short_side_scales)], max_size=max_size),

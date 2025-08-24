@@ -405,6 +405,8 @@ class DINO(nn.Module):
         # Initialize the denoising_queries for contrastive denoising (CDN) and attention mask;
         # see models.components.denoising.setup_contrastive_denoising() return docs for variable explanations
         if self.denoise_number > 0 or targets is not None:
+            # during inference, all these return variables are set to None
+            # because we only use denoising queries during training
             input_query_label, input_query_bbox, attn_mask, dn_meta = (
                 setup_contrastive_denoising(
                     training=self.training,
