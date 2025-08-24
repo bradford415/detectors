@@ -6,7 +6,7 @@
 dev_mode: False
 
 # Base directory for output files; do not change this 
-output_dir: "output/train"
+output_dir: "output"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
 exp_name: "development"

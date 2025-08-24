@@ -3,19 +3,25 @@
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: False
+dev_mode: True
 
-# Base directory for output files; do not change this 
-output_dir: "output/test"
-
-# Experiment name; this will be used for the output directory; use "development" when developing
-exp_name: "dino-rn50"
+# NOTE: output dir is derived from the checkpoint path so we can keep full experiment runs in the
+#       the same dir
 
 # Name of dataset; must be one of the names in the dataset_map dict
 dataset_name: "CocoDetection"
 
-# Whether to plot the predicted bounding boxes on the test set; if False only the AP scores are shown
-plot_detections: False
+visualize:
+  # Whether to plot the predicted bounding boxes on the test set; if False only the AP scores are shown
+  plot_detections: True
+
+  # confidence threshold to filter predictions by; without this, we would have `num_select` detections
+  # per image and end up plotting many low confidence boxes
+  conf_threshold: 0.5
+
+  # number of images to plot detections on
+  plot_n_images: 50
+
 
 # Parameters for the dataset class
 dataset:
@@ -31,7 +37,9 @@ dataset:
   num_workers: 0
 
 test:
-  batch_size: 2
+  # Right now this can't be controlled because there's no batch sampler implemented;
+  # mAP slightly decreased when batched due to padding
+  batch_size: 1
 
   # Abs path of checkpoint file (.pt) to evaluate on; 
   checkpoint_path: /home/bselee/programming/detectors/output/train/resnet50-dino/2025_08_16-11_44_38_PM/checkpoints/best_mAP_46-59.pt

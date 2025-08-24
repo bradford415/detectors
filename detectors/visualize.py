@@ -213,9 +213,61 @@ def visualize_dataloader(
         plt.close()
 
 
+def plot_test_detections(
+    img_detections: dict,
+    conf_threshold: float,
+    classes: list[str],
+    plot_n_images: int,
+    output_dir: Path,
+):
+    """visualize the predictions from the test script
+
+    Args:
+        img_detections: dictionary of image detections from the test set, sorted by decreasing
+                        confidence threshold; contains the image_id as the key and the following
+                        values:
+                          image_path: the path to the original images used to load and plot the
+                                      predictions on (num_select,)
+                          scores: the confidence scores for each detection
+                          boxes: the ABSOLUTE bbox predictions in XYXY format; these have already
+                                 been scaled back to the original image size through the postprocessor
+                                 (num_select, 4)
+                          labels: the predicted class that each box belongs to (num_select,)
+        conf_threshold: the user-defined confidence threshold to filter
+        classes: list of unique class labels representing the name of each class; used to get the label
+                 name from the predicted class_id
+        plot_n_images: number of images to plot detections on
+        output_dir: path to the directory to save the detections
+    """
+    # TODO: might need to move tensors to cpu before this function
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx, (img_id, detects) in enumerate(img_detections.items()):
+        # extract the conf_scores, bbox preds, class_preds, filtered by the confidence threshold
+        keep = detects["scores"] >= conf_threshold
+        conf_scores = detects["scores"][keep]
+        box_preds = detects["boxes"][keep]
+        class_preds = detects["labels"][keep]
+        img_path = detects["image_path"]
+
+        assert conf_scores.shape[0] == box_preds.shape[0] == class_preds.shape[0]
+
+        filtered_detects = torch.cat(
+            [box_preds, conf_scores[:, None], class_preds[:, None]], dim=1
+        )
+
+        save_name = output_dir / f"image_detections_{idx}.jpg"
+        plot_detections(img_path, filtered_detects, classes, save_name)
+
+        if (idx + 1) == plot_n_images:
+            break
+
+
 def plot_all_detections(
     img_detections, classes: list[str], output_dir: Path, img_size: Optional[int] = None
 ):
+
     output_dir.mkdir(parents=True, exist_ok=True)
     for index, (image_path, detections) in enumerate(img_detections):
         plot_detections(
@@ -227,9 +279,13 @@ def plot_all_detections(
         )
 
 
+def plot_abs_detections(image):
+    """plot detections on an image given an image path and absolute bbox predictions"""
+
+
 def plot_detections(
     image_path: str,
-    detections,
+    detections: torch.Tensor,
     classes: List[str],
     save_name: str,
     img_size: Optional[int] = None,
@@ -256,7 +312,6 @@ def plot_detections(
 
     img = np.array(img_pil)
 
-    plt.figure()
     fig, ax = plt.subplots(1)
 
     ax.imshow(img)
@@ -273,8 +328,6 @@ def plot_detections(
     colors = [cmap(i) for i in np.linspace(0, 1, num_unique_classes)]
     bbox_colors = random.sample(colors, num_unique_classes)
     for tl_x, tl_y, br_x, br_y, conf, cls_pred in detections:
-        # print(f"tl_x: {tl_x} tl_y: {tl_y} br_x: {br_x} br_y: {br_y} ")
-        # fig, ax = plt.subplots(1, 1)
 
         if tl_x < -1000.0 or tl_y < -1000.0 or br_x > 10000.0 or br_y > 10000.0:
             continue
@@ -295,7 +348,7 @@ def plot_detections(
         )
         # Add the bbox to the plot
         ax.add_patch(bbox)
-        plt.text(
+        ax.text(
             tl_x,
             tl_y,
             s=f"{classes[int(cls_pred)]}: {conf:.2f}",
@@ -304,9 +357,9 @@ def plot_detections(
             bbox={"color": color, "pad": 0},
         )
 
-    plt.axis("off")
+    ax.axis("off")
     fig.savefig(save_name, bbox_inches="tight", pad_inches=0.0)
-    plt.close()
+    plt.close(fig)
 
 
 # def plot_loss(train_loss: list[float], val_loss: list[float]=None, save_dir: str):

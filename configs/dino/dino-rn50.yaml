@@ -37,7 +37,9 @@ params:
 
   # TODO: comment
   postprocess:
+    # topk predictions to choose in the postprocessor; filters by confidence `scores`
     num_select: 300
+  
     nms_iou_threshold: -1
 
   backbone:

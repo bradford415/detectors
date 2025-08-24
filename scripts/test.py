@@ -19,7 +19,7 @@ from detectors.models.backbones import backbone_map
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.utils import reproduce
-from detectors.visualize import plot_all_detections
+from detectors.visualize import plot_all_detections, plot_test_detections
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
@@ -51,12 +51,9 @@ def main(base_config_path: str, model_config_path: str):
 
     dev_mode = base_config["dev_mode"]
 
-    # Initialize paths
-    output_path = (
-        Path(base_config["output_dir"])
-        / base_config["exp_name"]
-        / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
-    )
+    # Initialize output path from the checkpoint path
+    output_path = Path(checkpoint_path).parent.parent.parent / "test"
+    log.info("\noutputs  %s", checkpoint_path)
     output_path.mkdir(parents=True, exist_ok=True)
     log_path = output_path / "testing.log"
 
@@ -78,7 +75,7 @@ def main(base_config_path: str, model_config_path: str):
 
     if dev_mode:
         log.info("NOTE: executing in dev mode")
-        base_config["test"]["batch_size"] = 2
+        base_config["test"]["batch_size"] = 1
 
     log.info("initializing...")
     log.info("outputs beings saved to %s\n", str(output_path))
@@ -179,7 +176,9 @@ def main(base_config_path: str, model_config_path: str):
         coco_api = None
 
     if model_config["detector"] == "dino":
-        stats = test_detr(model, dataloader_test, coco_api, postprocessors, **test_args)
+        stats, detections = test_detr(
+            model, dataloader_test, coco_api, postprocessors, **test_args
+        )
     else:
         metrics_output, detections, val_loss = evaluate(
             model,
@@ -190,17 +189,23 @@ def main(base_config_path: str, model_config_path: str):
             device=self.device,
         )
 
-    mAP = stats["coco_eval_bbox"][0]
-
-    save_dir = output_path / "test"
-
-    if base_config["plot_detections"]:
-        plot_all_detections(
-            image_detections,
-            classes=dataset_test.class_names,
-            output_dir=save_dir,
-            # img_size=416,
+    viz_params = base_config["visualize"]
+    if viz_params["plot_detections"]:
+        output_dir = output_path / "visuals"
+        log.info(
+            "\nplotting detections on %d images at the path: %s",
+            viz_params["plot_n_images"],
+            str(output_dir),
         )
+        plot_test_detections(
+            detections,
+            viz_params["conf_threshold"],
+            classes=dataset_test.class_names,
+            plot_n_images=viz_params["plot_n_images"],
+            output_dir=output_dir,
+        )
+
+    log.info("\nfinished")
 
 
 if __name__ == "__main__":

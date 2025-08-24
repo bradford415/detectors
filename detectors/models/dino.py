@@ -587,7 +587,7 @@ def build_dino(
     dino_args: dict[str, any],
     aux_loss: bool = True,
 ):
-    """Build the DINO detector, loss function, and the postprocessor
+    """Build the DINO detector and loss function
 
     Args:
         backbone_args: parameters specifically for the build_backbone() function;

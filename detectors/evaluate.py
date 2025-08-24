@@ -331,6 +331,8 @@ def test_detr(
 
     coco_evaluator = CocoEvaluator(coco_api, iou_types)
 
+    all_preds = {}
+
     for steps, (samples, targets) in tqdm(
         enumerate(dataloader_test, 1), total=len(dataloader_test), ncols=70
     ):
@@ -363,10 +365,17 @@ def test_detr(
         assert len(results) == samples.tensors.shape[0]
 
         # map the ground-truth image id to the predicted results
-        res = {
-            target["image_id"].item(): output
-            for target, output in zip(targets, results)
-        }
+        res = {}
+        for target, output in zip(targets, results):
+            # TODO: verify this gets the same results as commented res
+            # TODO: create list dict of all_preds with necessary info needed to plot
+            res[target["image_id"].item()] = output
+            all_preds[target["image_id"].item()] = {
+                "image_path": target["image_path"],
+                "scores": output["scores"].cpu(),
+                "boxes": output["boxes"].cpu(),
+                "labels": output["labels"].cpu(),
+            }
 
         # NOTE: when calling CocoEvaluator.update() the predicted boxes will be converted to XYWH to match
         #       the ground-truth boxes; specifically , this is done here:
@@ -405,7 +414,7 @@ def test_detr(
         stats = {}
         stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
 
-    return stats
+    return stats, all_preds
 
 
 def load_model_checkpoint(

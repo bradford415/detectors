@@ -96,7 +96,7 @@ class CocoDetectionDetr(torchvision.datasets.CocoDetection):
 
         # Extract dataset ontology
         categories_list = self.coco.loadCats(self.coco.getCatIds())
-        self.class_names = [category["name"] for category in categories_list]
+        self.class_names = {cat["id"]: cat["name"] for cat in categories_list}
 
         # Substantially reduces the dataset size to quickly test code
         if dev_mode:

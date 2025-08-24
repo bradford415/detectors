@@ -41,7 +41,7 @@ def model_info(model):
 
 def count_parameters(model):
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    log.info("Model params: %.2f M", (num_params / 1024 / 1024))
+    log.info("Model params: %.2f M\n", (num_params / 1024 / 1024))
 
 
 def save_configs(

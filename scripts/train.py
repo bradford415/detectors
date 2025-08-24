@@ -102,7 +102,9 @@ def main(
             Path(base_config["output_dir"])
             / base_config["exp_name"]
             / f"{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}"
+            / "train"
         )
+
     log_path = output_path / "training.log"
 
     # create output/ckpt directories and save configuration files on main process
