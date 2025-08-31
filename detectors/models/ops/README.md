@@ -1,4 +1,7 @@
 ### Troubleshooting Multiscale Deformable Attention Installation (MSDA)
+
+__When reinstalling MSDA you must delete `ops/build` and probably the `ops/dist` and `ops/MultiScaleDeformableAttention.egg-info` dirs__
+
 Code updates I had to make (should already be implemented):
 * in `ms_deform_attn_cuda.cu` on line `64` & `134` change `value.type()` to `value.scaler_type()`
 
