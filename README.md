@@ -62,11 +62,14 @@ TODO
 | YoloV3 / DarkNet53  | ImageNet            | COCO     | 40.3% / 46       |
 
 
+## Troubleshooting
+* [Debugging MultiScaleDeformableAttention installation](detectors/models/ops)
+
 ## Notes
 Section which simplifies and clarifies object detection concepts and architecture flows.
 
-### COCO Format
-* COCO bbox annotations have the form `[top_left_x, top_left_y, w, h]`
+### bbox formats
+* COCO bbox  - `XYWH` -  `[top_left_x, top_left_y, w, h]`
 
 ## Resources
 ### COCO Format
