@@ -27,7 +27,7 @@ make install_reqs
 This project is designed to use the configuration specified in `scripts/configs/`, but for ease of use the CLI arguments specified below will overwrite the main default config parameters for quick setup.
 
 ## Single-GPU training
-### Training from scratch
+### Training from scratch (or backbone pretrained from ImageNet weights)
 ```bash
 # yolov3 with a darknet53 backbone
 python scripts/train.py --dataset_root "/path/to/coco"
