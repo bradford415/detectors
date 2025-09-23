@@ -120,7 +120,7 @@ class NestedTensor:
         if isinstance(img_tensors, torch.Tensor):
             n_dims = img_tensors.ndim
             img_tensors = [img_tensors]
-        if isinstance(img_tensors, list):
+        if isinstance(img_tensors, list) or isinstance(img_tensors, tuple):
             n_dims = img_tensors[0].ndim
         if n_dims == 3:
             # TODO make it support different-sized images; this was from original detr code

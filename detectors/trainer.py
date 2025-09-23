@@ -28,6 +28,7 @@ class Trainer:
         self,
         output_dir: str,
         model_name: str,
+        is_distributed: bool,
         use_amp: bool = True,
         step_lr_on: Optional[str] = None,
         device: torch.device = torch.device("cpu"),
@@ -38,10 +39,12 @@ class Trainer:
         Args:
             output_path: Path to save the train outputs
             model_name: the name of the model being trained; this determines which logic to use
+            is_distributed: whether distributed data parallel training is being used
             step_lr_on: whether to call scheduler.step every 'step' or 'epoch'
             use_cuda: Whether to use the GPU
         """
         self.device = device
+        self.is_distributed = is_distributed
 
         self.output_dir = Path(output_dir)
         self.log_train_steps = log_train_steps
@@ -49,12 +52,14 @@ class Trainer:
         self.step_lr_on = step_lr_on
         self.enable_amp = use_amp  # True if not self.device.type == "mps" else False
         self.model_name = model_name
+        
 
     def train(
         self,
         model: nn.Module,
         criterion: nn.Module,
         dataloader_train: data.DataLoader,
+        sampler_train: data.DistributedSampler,
         dataloader_val: data.DataLoader,
         optimizer: torch.optim.Optimizer,
         class_names: list[str],
@@ -77,6 +82,9 @@ class Trainer:
             model: A pytorch model to be trained
             criterion: The loss function to use for training
             dataloader_train: Torch dataloader to loop through the train dataset
+            sampler_train: the distributed sampler for the dataloader_train; used to call set_epoch()
+                           so each process shuffles the dataset in the same way; even for one process this
+                           must be set
             dataloader_val: Torch dataloader to loop through the val dataset
             optimizer: Optimizer which determines how to update the weights
             class_names: list of class names; used for logging and visualization
@@ -128,11 +136,12 @@ class Trainer:
         for epoch in range(start_epoch, epochs + 1):
             model.train()
             
-            # IMPORTANT: DistributedSampler needs to shuffle the dataset in a coordinated way across all ranks.
-            #   - Every process has its own sampler, but they must all agree on the same global shuffle order before splitting into chunks
-            #   - If they didn’t, one process might sample data in a completely different order than another, leading to overlaps or missing samples
-            #   - this is required even for one process or else the sampler will shuffle the data the same way every epoch
-            dataloader_train.set_epoch(epoch)
+            if self.is_distributed:
+                # IMPORTANT: DistributedSampler needs to shuffle the dataset in a coordinated way across all ranks.
+                #   - Every process has its own sampler, but they must all agree on the same global shuffle order before splitting into chunks
+                #   - If they didn’t, one process might sample data in a completely different order than another, leading to overlaps or missing samples
+                #   - this is required even for one process or else the sampler will shuffle the data the same way every epoch
+                sampler_train.set_epoch(epoch)
 
             # Track the time it takes for one epoch (train and val)
             one_epoch_start_time = time.time()
