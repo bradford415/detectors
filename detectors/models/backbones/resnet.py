@@ -308,19 +308,21 @@ class ResNet(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
 
-        block1 = self.layer1(x)
-        block2 = self.layer2(block1)
-        block3 = self.layer3(block2)
-        out = self.layer4(block3)
+        # block1 = self.layer1(x)
+        # block2 = self.layer2(block1)
+        # block3 = self.layer3(block2)
+        # out = self.layer4(block3)
 
         # Experimenting with activation checkpointing; here's some findings
         #   1. it seems pretty dependent on batch size; for example training dino with rn50 backbone and a batch size of
         #      1 seems to save only ~200 MiB of memory; pytorch saves activations for sample in the batch
+        #   2. batch_size=2 saves ~1000MiB of memory 11323 -> 10227MiB which is actually quite a lot
+        #      I should also evaluate the overhead time for using checkpointing
         #
-        # block1 = checkpoint(self.layer1, x, use_reentrant=False)
-        # block2 = checkpoint(self.layer2, block1, use_reentrant=False)
-        # block3 = checkpoint(self.layer3, block2, use_reentrant=False)
-        # out = checkpoint(self.layer4, block3, use_reentrant=False)
+        block1 = checkpoint(self.layer1, x, use_reentrant=False)
+        block2 = checkpoint(self.layer2, block1, use_reentrant=False)
+        block3 = checkpoint(self.layer3, block2, use_reentrant=False)
+        out = checkpoint(self.layer4, block3, use_reentrant=False)
 
         if not self.remove_top:
             out = self.avgpool(out)

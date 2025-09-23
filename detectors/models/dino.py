@@ -344,6 +344,10 @@ class DINO(nn.Module):
                                                         (b, pad_size, 4)
 
         """
+        # create a NestedTensor if the input is a tensor; useful for inference
+        if isinstance(samples, (list, torch.Tensor)):
+            samples = NestedTensor.from_tensor_list(samples)
+
         # Extract features through the backbone and build positional embeddings;
         # features -> list of NestedTensors for each feature_map level
         # pos_encodings -> positional encodings for each feature_map lavel

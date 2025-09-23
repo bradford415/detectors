@@ -117,7 +117,12 @@ class NestedTensor:
         Returns:
             a NestedTensor
         """
-        if img_tensors[0].ndim == 3:
+        if isinstance(img_tensors, torch.Tensor):
+            n_dims = img_tensors.ndim
+            img_tensors = [img_tensors]
+        if isinstance(img_tensors, list):
+            n_dims = img_tensors[0].ndim
+        if n_dims == 3:
             # TODO make it support different-sized images; this was from original detr code
 
             # find the max value for each dimension in the batch [c, h, w]

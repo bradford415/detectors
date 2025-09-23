@@ -150,7 +150,7 @@ def main(
     batch_size = train_args["batch_size"]
     effective_bs = train_args["effective_batch_size"]
 
-    val_batch_size = train_args["batch_size"]
+    val_batch_size = train_args["validation_batch_size"]
 
     # calculate the number of gradient accumulation steps to simulate a larger batch;
     # if using DDP, grad_accum_steps = effective_batch_size // batch_size * num_gpus
@@ -166,7 +166,7 @@ def main(
     if dev_mode:
         log.info("\nNOTE: executing in dev mode")
         batch_size = 1
-        val_batch_size = 2
+        val_batch_size = 1
         grad_accum_steps = 2
 
     log.info(
@@ -178,22 +178,25 @@ def main(
 
     # Set device specific characteristics
     use_cpu = False
-    if torch.cuda.is_available():
-        # setup cuda
-        device = torch.device("cuda")
-        log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
-        for gpu in range(len(base_config["cuda"]["gpus"])):
-            log.info("    -%s", torch.cuda.get_device_name(gpu))
-    elif torch.mps.is_available():
-        # setup mps (apple silicon)
-        base_config["dataset"]["root"] = base_config["dataset"]["root_mac"]
-        device = torch.device("mps")
-        log.info("Using: %s", device)
-    else:
-        # setup cpu
-        use_cpu = True
-        device = torch.device("cpu")
-        log.info("Using CPU")
+    if not distributed_mode:
+        gpu_id = base_config["cuda"]["gpus"][0]
+        if torch.cuda.is_available():
+            # setup cuda
+            device = torch.device(f"cuda:{gpu_id}")
+            torch.cuda.set_device(device)
+            log.info("Using %d GPU(s): ", len(base_config["cuda"]["gpus"]))
+            for gpu in base_config["cuda"]["gpus"]:
+                log.info("    -%s", torch.cuda.get_device_name(gpu))
+        elif torch.mps.is_available():
+            # setup mps (apple silicon)
+            base_config["dataset"]["root"] = base_config["dataset"]["root_mac"]
+            device = torch.device("mps")
+            log.info("Using: %s", device)
+        else:
+            # setup cpu
+            use_cpu = True
+            device = torch.device("cpu")
+            log.info("Using CPU")
 
     pin_memory = False
     if not use_cpu:
@@ -224,6 +227,8 @@ def main(
     # create a batch sampler for train but not val which means val will only use a batch_size=1
     # similar as above, when you set shuffle in the DataLoader it automatically wraps
     # RandomSampler and SequentialSampler in a BatchSampler
+    # NOTE: DistributedSampler pads the last batch with random samples if drop_last=False and the
+    #       batch is incomplete
     batch_sampler_train = torch.utils.data.BatchSampler(
         sampler_train, batch_size, drop_last=True
     )
@@ -231,7 +236,8 @@ def main(
     num_workers = base_config["dataset"]["num_workers"] if not dev_mode else 0
     collate_fn = get_collate_fn(model_config["detector"])
 
-    # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size;
+    # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size
+    # NOTE this might only be for YOLO;
     # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
     dataloader_train = DataLoader(
         dataset_train,

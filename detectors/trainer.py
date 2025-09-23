@@ -109,19 +109,30 @@ class Trainer:
         last_best_path = None
 
         csv_path = self.output_dir / "train_stats.csv"
-        if csv_path.exists():
-            stats_df = pd.read_csv(csv_path)
-            train_loss = stats_df["train_loss"].tolist()
-            val_loss = stats_df["val_loss"].tolist()
-            epoch_mAP = stats_df["mAP"].tolist()
-        else:
-            stats_df = pd.DataFrame(columns=[""])
+        # if csv_path.exists():
+        #     breakpoint()
+        #     stats_df = pd.read_csv(csv_path)
+        #     train_loss = stats_df["train_loss"].tolist()
+        #     val_loss = stats_df["val_loss"].tolist()
+        #     epoch_mAP = stats_df["mAP"].tolist()
+        # else:
+        # stats_df = pd.DataFrame(columns=[""])
+        # epoch_num = []
+        # train_loss = []
+        # val_loss = []
+        # epoch_mAP = []
 
         scaler = torch.amp.GradScaler(self.device.type)
 
         best_ap = 0.0
         for epoch in range(start_epoch, epochs + 1):
             model.train()
+            
+            # IMPORTANT: DistributedSampler needs to shuffle the dataset in a coordinated way across all ranks.
+            #   - Every process has its own sampler, but they must all agree on the same global shuffle order before splitting into chunks
+            #   - If they didn’t, one process might sample data in a completely different order than another, leading to overlaps or missing samples
+            #   - this is required even for one process or else the sampler will shuffle the data the same way every epoch
+            dataloader_train.set_epoch(epoch)
 
             # Track the time it takes for one epoch (train and val)
             one_epoch_start_time = time.time()
@@ -151,8 +162,6 @@ class Trainer:
                     max_norm,
                     scaler,
                 )
-
-            train_loss.append(epoch_train_loss_dict["loss"])
 
             curr_lr = optimizer.param_groups[0]["lr"]
 
@@ -207,12 +216,10 @@ class Trainer:
                     device=self.device,
                 )
 
-            ## START HERE
-            val_loss.append(stats["loss"])
+            train_loss = epoch_train_loss_dict["loss"]
+            val_loss = stats["loss"]
 
             mAP = stats["coco_eval_bbox"][0]
-
-            epoch_mAP.append(mAP)
 
             # precision, recall, AP, f1, ap_class = metrics_output
             # mAP = AP.mean()
@@ -223,15 +230,24 @@ class Trainer:
 
             # Create csv file of training stats per epoch
             train_dict = {
-                "epoch": list(np.arange(1, epoch)),
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-                "mAP": epoch_mAP,
+                "epoch": [epoch],
+                "train_loss": [train_loss],
+                "val_loss": [val_loss],
+                "mAP": [mAP],
             }
 
-            pd.DataFrame(train_dict).to_csv(
-                self.output_dir / "train_stats.csv", mode="a", index=False
-            )
+            if not csv_path.exists():
+                pd.DataFrame(train_dict).to_csv(
+                    self.output_dir / "train_stats.csv", mode="w", index=False
+                )
+            else:
+                # if csv exists append to the csv file and do not write the header again
+                pd.DataFrame(train_dict).to_csv(
+                    self.output_dir / "train_stats.csv",
+                    mode="a",
+                    header=False,
+                    index=False,
+                )
 
             # Save and overwrite the checkpoint with the highest val mAP
             if round(mAP, 4) > round(best_ap, 4):
@@ -267,8 +283,8 @@ class Trainer:
         total_time = time.time() - total_train_start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         log.info(
-            "Training time for %d epochs (h:mm:ss): %s ",
-            start_epoch - epochs,
+            "Total training time for %d epochs (h:mm:ss): %s ",
+            epochs - start_epoch,
             total_time_str,
         )
 

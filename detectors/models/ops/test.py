@@ -8,6 +8,10 @@
 
 from __future__ import absolute_import, division, print_function
 
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import time
 
 import torch
