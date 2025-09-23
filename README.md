@@ -27,7 +27,7 @@ make install_reqs
 This project is designed to use the configuration specified in `scripts/configs/`, but for ease of use the CLI arguments specified below will overwrite the main default config parameters for quick setup.
 
 ## Single-GPU training
-### Training from scratch
+### Training from scratch (or backbone pretrained from ImageNet weights)
 ```bash
 # yolov3 with a darknet53 backbone
 python scripts/train.py --dataset_root "/path/to/coco"
@@ -62,11 +62,14 @@ TODO
 | YoloV3 / DarkNet53  | ImageNet            | COCO     | 40.3% / 46       |
 
 
+## Troubleshooting
+* [Debugging MultiScaleDeformableAttention installation](detectors/models/ops)
+
 ## Notes
 Section which simplifies and clarifies object detection concepts and architecture flows.
 
-### COCO Format
-* COCO bbox annotations have the form `[top_left_x, top_left_y, w, h]`
+### bbox formats
+* COCO bbox  - `XYWH` -  `[top_left_x, top_left_y, w, h]`
 
 ## Resources
 ### COCO Format
