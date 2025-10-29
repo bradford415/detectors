@@ -563,7 +563,7 @@ class Trainer:
         """Decides whether to enable no_sync() which avoids synchronizing the gradients accross processes.
 
         When performing gradient accumulation while using DDP, if we do not disable gradient synching
-        then every step we accumulate gradients there will be a lot of communication overhead. A better
+        then every step then when we accumulate gradients there will be a lot of communication overhead. A better
         approach would be to only sync gradients on the step when we update our model's weights,
         when we finish accumulating gradients. Additionally, if we do not want to use DDP, e.g., if we
         only have 1 gpu, then no_sync will not be recognized so we can pass nullcontext() instead to
