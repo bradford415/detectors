@@ -14,13 +14,24 @@ bash scripts/bash/download_coco.sh
 ## Environment setup
 
 __linux__
-TODO
+```bash
+make create
+```
 
 __mac__
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 make install_reqs_mac
+```
+
+__installing MSDA__
+```bash
+cd detectors/models/dino/ops
+python setup.py build install
+# unit test (should see all checking is True)
+python test.py
+cd ../../..
 ```
 
 ## Training a model
