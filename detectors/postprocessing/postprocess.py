@@ -13,8 +13,8 @@ class PostProcess(nn.Module):
     This postprocessing steps are as follows:
         1. choose topk `num_select` confidence `scores` across all queries and classes
         2. from the topk scores, extract the corresponding `labels` and `boxes`
-        3. convert the `boxes` from relative [0, 1] int cxcywh format to
-          absolutie [0, orig_img_w/h] xyxy
+        3. convert the `boxes` from relative [0, 1] cxcywh format to
+          absolute [0, orig_img_w/h] xyxy (i.e., normalized coorindates to original image size)
 
     """
 

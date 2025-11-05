@@ -38,6 +38,9 @@ def get_extensions():
             "-D__CUDA_NO_HALF_OPERATORS__",
             "-D__CUDA_NO_HALF_CONVERSIONS__",
             "-D__CUDA_NO_HALF2_OPERATORS__",
+            "-gencode=arch=compute_70,code=sm_70", # added these gencode lines to support higher compute capabilities
+            "-gencode=arch=compute_75,code=sm_75", # if these aren't specified then nvcc falls basck to PyTorch's default list
+            "-gencode=arch=compute_86,code=sm_86",
         ]
     else:
         raise NotImplementedError("Cuda is not availabel")
