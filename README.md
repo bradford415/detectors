@@ -71,6 +71,7 @@ TODO
 |---------------------|---------------------|----------|------------------|
 | YoloV3 / DarkNet53  | Scratch             | COCO     | 39.2% / 59       |
 | YoloV3 / DarkNet53  | ImageNet            | COCO     | 40.3% / 46       |
+| YoloV3 / ResNet50   | Scratch             | COCO     | 46.6% / 20       |
 
 
 ## Troubleshooting
