@@ -67,11 +67,11 @@ torchrun --nproc_per_node=<num_gpus> scripts/train.py configs/train-coco-dino-rn
 TODO
 
 ## Results
-| Detector / Backbone | Pretrained Backbone | Dataset  | Best mAP / Epoch |
-|---------------------|---------------------|----------|------------------|
-| YoloV3 / DarkNet53  | Scratch             | COCO     | 39.2% / 59       |
-| YoloV3 / DarkNet53  | ImageNet            | COCO     | 40.3% / 46       |
-| YoloV3 / ResNet50   | Scratch             | COCO     | 46.6% / 20       |
+| Detector / Backbone  | Pretrained Backbone | Dataset  | Best mAP / Epoch |
+|----------------------|---------------------|----------|------------------|
+| YoloV3 / DarkNet53   | Scratch             | COCO     | 39.2% / 59       |
+| YoloV3 / DarkNet53   | ImageNet            | COCO     | 40.3% / 46       |
+| DINO DETR / ResNet50 | Scratch             | COCO     | 46.6% / 20       |
 
 
 ## Troubleshooting
