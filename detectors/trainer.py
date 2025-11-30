@@ -52,7 +52,6 @@ class Trainer:
         self.step_lr_on = step_lr_on
         self.enable_amp = use_amp  # True if not self.device.type == "mps" else False
         self.model_name = model_name
-        
 
     def train(
         self,
@@ -135,7 +134,7 @@ class Trainer:
         best_ap = 0.0
         for epoch in range(start_epoch, epochs + 1):
             model.train()
-            
+
             if self.is_distributed:
                 # IMPORTANT: DistributedSampler needs to shuffle the dataset in a coordinated way across all ranks.
                 #   - Every process has its own sampler, but they must all agree on the same global shuffle order before splitting into chunks

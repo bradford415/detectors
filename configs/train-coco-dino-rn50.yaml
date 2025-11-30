@@ -98,4 +98,3 @@ solver:
 # Reproducibility information
 reproducibility:
   seed: 42
-
