@@ -1,0 +1,16 @@
+# Parameters for the dataset class
+
+# Name of dataset; must be one of the names in the dataset_map dict
+dataset_name: "CocoDetection"
+
+dataset:
+  # Path to the root of the dataset; detects which path to use based on device
+  root: "/mnt/d/datasets/coco" # windows path
+  root_mac: "/Users/bsele/datasets/coco" # mac path
+
+  # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
+  # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
+  num_classes: 91
+
+  # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
+  num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4

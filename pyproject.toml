@@ -13,6 +13,7 @@ profile = "black" # prevents isort from reformatting black
 # Any package you put here will be installed by pip when your project is
 # installed, so they must be valid existing projects.
 [tool.poetry.dependencies]
+albumentations = "*"
 python = ">=3.9"
 matplotlib = "*"
 pytest = "*"

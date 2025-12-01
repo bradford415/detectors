@@ -20,7 +20,7 @@ from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
-from detectors.utils import distributed, reproduce
+from detectors.utils import distributed, reproduce, config
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 def main(
     base_config_path: str = "scripts/configs/train-coco-default.yaml",
-    model_config_path: str = "scripts/configs/yolov3/model-dn53.yaml",
+    model_config_path: Optional[str] = None,
     dataset_root: Optional[str] = None,
     backbone_weights: Optional[str] = None,
     checkpoint_path: Optional[str] = None,
@@ -42,19 +42,26 @@ def main(
     Args:
         base_config_path: path to the desired training configuration file; by default the train-coco-default.yaml file is used which
                           trains from scratch (i.e., no pretrained backbone weights or detector weights)
-        model_config_path: path to the detection model configuration file; by default the yolov3 base model with a DarkNet53 backbone is used
+        model_config_path: path to the detection model configuration file; by default the yolov3 base model with a DarkNet53 backbone is used;
+                           right now thi is a legacy mode, going forward all additional configs should be specified in the base_config_path only
         dataset_root: path to the the root directory of the dataset; for coco, this is the path to the dir containing the `images` and `annotations` dirs
         backbone_weights: path to the backbone weights; this can be useful when training from scratch
         checkpoint_path: path to the weights of the entire detector model; this can be used to resume training or inference;
                          if this parameter is not None, the backbone_weights will be ignored
     """
 
-    # Load configuration files
-    with open(base_config_path, "r") as f:
-        base_config = yaml.safe_load(f)
+    # load and merge the base config and other configs included in the base config
+    if model_config_path is None:
+        base_config = config.load_config(base_config_path)
+    else:
+        # TODO: this is legacy mode so I need to update the configs that still run this way
+        base_config = config.merge_dict(
+            config.load_config(base_config_path),
+            config.load_config(model_config_path),
+        )
 
-    with open(model_config_path, "r") as f:
-        model_config = yaml.safe_load(f)
+    #### start here, continue w/ rt detr code
+    breakpoint()
 
     # initalize torch distributed mode by setting the communication between all procceses
     # and assigning the GPU to use for each proccess;

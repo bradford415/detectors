@@ -1,0 +1,64 @@
+# Base config file which stores the default parameters which apply to all model configurations
+---
+# path to additional configuration files to load and merge into a single configuration dictionary; 
+# these are required
+# TODO: make a config file for the rt detr model architecture  
+__include__:
+  # use the relative path from the project root
+  dataset_config: configs/datasets/coco-2017.yaml
+  solver_config: configs/rt-detr/solver.yaml
+
+# Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
+# to quickly run the code as well as sets num_workers=0
+dev_mode: False
+
+# Base directory for output files
+output_dir: "output"
+
+# Experiment name; this will be used for the output directory; use "development" when developing
+exp_name: "development"
+
+# Log the train progress every n steps
+log_train_steps: 100
+
+# GPU parameters
+cuda:
+  # List of GPU devices to use
+  gpus: [1]
+
+  # the communications library to use for distributed training; default for cuda should be 
+  # "nccl" prounounced "nickel"
+  backend: "nccl"
+
+# general training parameters
+train:
+  # batch_size per gpu; the total batch_size will be batch_size * num_gpus if using DDP
+  # so the number of grad_accum_steps = batch_size * num gpus / effective_batch_size
+  batch_size: 2
+
+  # dino uses a bs of 2 per gpu and uses 8 gpus ->  2 * 8 = 16 (Table 5.)
+  effective_batch_size: 16  # batch_size * num_gpus (processes) * gradient_accumulation_steps
+
+  # NOTE: val batch size is 1 because DETR padding of batches affects metrics slightly
+  validation_batch_size: 1
+  epochs: 30
+
+  use_amp: True
+
+  # max_norm for gradient clipping; ensures the magnitude of all parameters <= max_norm
+  max_norm: 0.1
+
+  # Number of epochs to checkpoint after; use 'null' to turn off checkpointing
+  ckpt_epochs: 1
+
+  # Path of weights file (.pt) to resume training; 
+  # use `null` to train a new model from scratch
+  checkpoint_path: #/home/bselee/programming/detectors/output/5070-stress-test/2025_09_01-12_09_13_AM/train/checkpoints/best_mAP_27-19.pt
+
+  # Path to pretrained backbone weights to use; typically `checkpoint_path` should be `null` if this parameter is not `null`;
+  # this parameter is really only used to train a full detector from scratch but with a pretrained backbone; typically pretrained on ImageNet
+  backbone_weights:
+
+# Reproducibility information
+reproducibility:
+  seed: 42
