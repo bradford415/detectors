@@ -125,14 +125,19 @@ class SetCriterion(nn.Module):
         )
         losses = {"loss_ce": loss_ce}
 
-        if log:
-            # TODO this should probably be a separate loss, not hacked in this one here
-            # NOTE: I think this is just used for logging, not in the total loss/gradient updates
-            #       since this is not summed in the total loss
-            losses["class_error"] = (
-                100 - topk_accuracy(src_logits[idx], target_classes_o)[0]
-            )
         return losses
+
+    @torch.no_grad()
+    def loss_class_error(self, outputs, targets, indices, num_boxes):
+        """Log-only top-1 classification error."""
+        _ = num_boxes  # kept for call signature consistency
+        pred_logits = outputs["pred_logits"]
+        idx = self._get_src_permutation_idx(indices)
+        target_classes_o = torch.cat(
+            [t["labels"][J] for t, (_, J) in zip(targets, indices)]
+        )
+        class_error = 100 - topk_accuracy(pred_logits[idx], target_classes_o)[0]
+        return {"class_error": class_error}
 
     @torch.no_grad()
     def loss_cardinality(self, outputs, targets, indices, num_boxes):
@@ -284,6 +289,7 @@ class SetCriterion(nn.Module):
     def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
         loss_map = {
             "labels": self.loss_labels,
+            "class_error": self.loss_class_error,
             "cardinality": self.loss_cardinality,
             "boxes": self.loss_boxes,
             "masks": self.loss_masks,
@@ -344,7 +350,8 @@ class SetCriterion(nn.Module):
 
         # Compute the average number of target boxes accross all nodes, for normalization purposes;
         # this is useful for cases where an image in a batch has a lot of objects and another image
-        # in the same batch has very few objects, this lets us calculate the loss per box, on average;
+        # in the same batch has very few objects, or the number of objects in a batch on different
+        # processes varies alot, this lets us calculate the loss per box, on average;
         # number of gt-boxes are summed across all proccesses and this sum is broadcasted to each
         # process (i.e., each process will have this same summed value)
         # NOTE: The number of predicted boxes can vary, so using ground truth count as normalization
@@ -411,6 +418,8 @@ class SetCriterion(nn.Module):
             # class_id and then the gt labels are filled in this tensor at dn_pos_idx
             # (default losses: "labels", "boxes", "cardinality")
             for loss in self.losses:
+                if loss == "class_error":
+                    continue
                 kwargs = {}
                 if "labels" in loss:
                     kwargs = {"log": False}
@@ -473,6 +482,9 @@ class SetCriterion(nn.Module):
                     if loss == "masks":
                         # Intermediate masks losses are too csotly to compute, we ignore them.
                         continue
+                    if loss == "class_error":
+                        # Logging only for the last layer.
+                        continue
                     kwargs = {}
                     if loss == "labels":
                         # Logging is enabled only for the last layer
@@ -496,6 +508,8 @@ class SetCriterion(nn.Module):
                     aux_outputs_known = output_known_lbs_bboxes["aux_outputs"][idx]
                     l_dict = {}
                     for loss in self.losses:
+                        if loss == "class_error":
+                            continue
                         kwargs = {}
                         if "labels" in loss:
                             kwargs = {"log": False}
@@ -542,6 +556,8 @@ class SetCriterion(nn.Module):
                 if loss == "masks":
                     # Intermediate masks losses are too costly to compute, we ignore them.
                     continue
+                if loss == "class_error":
+                    continue
                 kwargs = {}
                 if loss == "labels":
                     # Logging is enabled only for the last layer
@@ -561,6 +577,8 @@ class SetCriterion(nn.Module):
                 for loss in self.losses:
                     if loss == "masks":
                         # Intermediate masks losses are too costly to compute, we ignore them.
+                        continue
+                    if loss == "class_error":
                         continue
                     kwargs = {}
                     if loss == "labels":
@@ -761,6 +779,7 @@ def create_dino_loss(
 
         losses = [
             "labels",
+            "class_error",
             "boxes",
             "cardinality",
         ]  # NOTE: removing mask loss since unused

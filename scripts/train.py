@@ -15,16 +15,13 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 from detectors.data.coco import build_coco
 from detectors.data.collate_functions import get_collate_fn
-from detectors.losses import Yolov3Loss, Yolov4Loss, create_dino_loss
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers
 from detectors.trainer import Trainer
-from detectors.utils import distributed, reproduce, config
+from detectors.utils import config, distributed, reproduce
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
-
-loss_map = {"yolov3": Yolov3Loss, "yolov4": Yolov4Loss, "dino": create_dino_loss}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -49,23 +46,27 @@ def main(
         checkpoint_path: path to the weights of the entire detector model; this can be used to resume training or inference;
                          if this parameter is not None, the backbone_weights will be ignored
     """
-    
-    cli_args = {"base_config_path": base_config_path,
-                "model_config_path": model_config_path,
-                "dataset_root": dataset_root,
-                "backbone_weights": backbone_weights,
-                "checkpoint_path": checkpoint_path}
+
+    # Wrap the cli args in a dict to merge into the base config; CLI args override config file values if they exist
+    cli_args = {
+        "base_config_path": base_config_path,
+        "model_config_path": model_config_path,
+        "dataset_root": dataset_root,
+        "backbone_weights": backbone_weights,
+        "checkpoint_path": checkpoint_path,
+    }
 
     # load and merge the base config and other configs included in the base config
     if model_config_path is None:
         base_config = config.load_config(base_config_path)
+        model_config = base_config
     else:
-        # TODO: this is legacy mode so I need to update the configs that still run this way
+        model_config = config.load_config(model_config_path)
         base_config = config.merge_dict(
             config.load_config(base_config_path),
-            config.load_config(model_config_path),
+            model_config,
         )
-    
+
     # add CLI args to the base config and override any existing values
     base_config = config.merge_dict(base_config, cli_args)
 
@@ -83,26 +84,26 @@ def main(
     # contention on shared file systems like EFS
     time.sleep(global_rank * 0.02)
 
-    # TODO: look into overriding the config parameters with CLI args like in rtdetr
+    # TODO: Verify if this new method works instead of hardcoding the overrides
     # Override configuration parameters if CLI arguments are provided; this allows external users
     # to easily run the project without messing with the configuration files
-    if dataset_root is not None:
-        base_config["dataset"]["root"] = dataset_root
+    # if dataset_root is not None:
+    #     base_config["dataset"]["root"] = dataset_root
 
-    # overwrite config values with CLI values if specified
-    if checkpoint_path is not None:
-        base_config["train"]["checkpoint_path"] = checkpoint_path
-        base_config["train"]["backbone_weights"] = None
-    elif backbone_weights is not None:
-        base_config["train"]["backbone_weights"] = backbone_weights
+    # # overwrite config values with CLI values if specified
+    # if checkpoint_path is not None:
+    #     base_config["train"]["checkpoint_path"] = checkpoint_path
+    #     base_config["train"]["backbone_weights"] = None
+    # elif backbone_weights is not None:
+    #     base_config["train"]["backbone_weights"] = backbone_weights
 
-    if (
-        base_config["train"]["checkpoint_path"] is not None
-        and base_config["train"]["backbone_weights"] is not None
-    ):
-        raise ValueError(
-            "checkpoint_path and backbone_weights cannot both have a value. Set one of the values to 'null'."
-        )
+    # if (
+    #     base_config["train"]["checkpoint_path"] is not None
+    #     and base_config["train"]["backbone_weights"] is not None
+    # ):
+    #     raise ValueError(
+    #         "checkpoint_path and backbone_weights cannot both have a value. Set one of the values to 'null'."
+    #     )
 
     dev_mode = base_config["dev_mode"]
 
@@ -322,28 +323,6 @@ def main(
 
     # Compute and log the number of params in the model
     reproduce.count_parameters(model)
-
-    ## TODO: Apply weights init maybe
-
-    # initalize loss with specific args
-    if detector_name == "yolov3":
-        # TODO: fix yolov3
-        criterion = loss_map[detector_name](num_anchors=num_anchors, device=device)
-    elif detector_name == "dino":
-        num_decoder_layers = detector_params["detector"]["transformer"][
-            "num_decoder_layers"
-        ]
-        criterion = loss_map[detector_name](
-            num_classes=base_config["dataset"]["num_classes"],
-            num_decoder_layers=num_decoder_layers,
-            aux_loss=detector_params["aux_loss"],
-            two_stage_type=detector_params["detector"]["two_stage"]["type"],
-            loss_args=model_config["params"]["loss_weights"],
-            matcher_args=model_config["params"]["matcher"],
-            device=device,
-        )
-    else:
-        ValueError(f"loss function for {detector_name} not implemented")
 
     log.info("\nmodel architecture")
     log.info("\tbackbone: %s", detector_params["backbone"]["name"])

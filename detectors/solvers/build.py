@@ -1,6 +1,9 @@
 from typing import Optional, Sequence
 
 import torch
+from torch import nn
+
+from detectors.losses import Yolov3Loss, Yolov4Loss, create_dino_loss
 
 scheduler_map = {
     "step_lr": torch.optim.lr_scheduler.StepLR,
@@ -12,6 +15,8 @@ optimizer_map = {
     "adamw": torch.optim.AdamW,
     "sgd": torch.optim.SGD,
 }
+
+loss_map = {"yolov3": Yolov3Loss, "yolov4": Yolov4Loss, "dino": create_dino_loss}
 
 
 def get_optimizer_params(
@@ -55,6 +60,45 @@ def get_optimizer_params(
         ]
 
     return param_dicts
+
+
+def create_loss(
+    model_name: str,
+    model: nn.Module,
+    num_classes: int,
+    device: torch.device,
+    base_config: dict,
+):
+    """Creates the loss function based on the model name
+
+    Args:
+        model_name: the name of the model
+        model: the pytorch model being trained; if using ddp pass the pointer to the underlying model
+        num_classes: the number of classes in the dataset
+        base_config: the base configuration dictionary containing all parameters
+    """
+
+    # initalize loss with specific args
+    if model_name == "yolov3":
+        num_anchors = model.yolo_layers[0].num_anchors
+        criterion = loss_map[model_name](num_anchors=num_anchors, device=device)
+    elif model_name == "dino":
+        num_decoder_layers = base_config["detector"]["transformer"][
+            "num_decoder_layers"
+        ]
+        criterion = loss_map[model_name](
+            num_classes=num_classes,
+            num_decoder_layers=num_decoder_layers,
+            aux_loss=base_config["aux_loss"],
+            two_stage_type=base_config["detector"]["two_stage"]["type"],
+            loss_args=base_config["params"]["loss_weights"],
+            matcher_args=base_config["params"]["matcher"],
+            device=device,
+        )
+    else:
+        ValueError(f"loss function for {model_name} not implemented")
+
+    return criterion
 
 
 def build_solvers(
