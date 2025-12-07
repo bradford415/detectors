@@ -70,7 +70,7 @@ def main(
     # add CLI args to the base config and override any existing values
     base_config = config.merge_dict(base_config, cli_args)
 
-    #### start here, continue w/ rt detr code
+    #### start here, continue w/ rt detr code; i did loss so now need to continue from here
     breakpoint()
 
     # initalize torch distributed mode by setting the communication between all procceses

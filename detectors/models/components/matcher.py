@@ -10,6 +10,8 @@ class HungarianMatcher(nn.Module):
     For efficiency reasons, the targets don't include the no_object. Because of this, in general,
     there are more predictions than targets. In this case, we do a 1-to-1 matching of the best predictions,
     while the others are un-matched (and thus treated as non-objects).
+
+    This HungarianMatcher is used in Dino DETR, RT-DETRV2
     """
 
     def __init__(
@@ -17,13 +19,16 @@ class HungarianMatcher(nn.Module):
         cost_class: float = 1,
         cost_bbox: float = 1,
         cost_giou: float = 1,
-        focal_alpha=0.25,
+        alpha=0.25,
+        gamma=2.0,
     ):
         """Creates the matcher
         Params:
             cost_class: This is the relative weight of the classification error in the matching cost
             cost_bbox: This is the relative weight of the L1 error of the bounding box coordinates in the matching cost
             cost_giou: This is the relative weight of the giou loss of the bounding box in the matching cost
+            alpha: balancing factor for focal loss
+            gamma: focusing parameter for focal loss
         """
         super().__init__()
         self.cost_class = cost_class
@@ -33,7 +38,8 @@ class HungarianMatcher(nn.Module):
             cost_class != 0 or cost_bbox != 0 or cost_giou != 0
         ), "all costs cant be 0"
 
-        self.focal_alpha = focal_alpha
+        self.focal_alpha = alpha
+        self.focal_gamma = gamma
 
     @torch.no_grad()
     def forward(self, outputs, targets):
@@ -73,7 +79,7 @@ class HungarianMatcher(nn.Module):
         # `alpha` is a balancing factor and `gamma` is the focusing parameter
         #
         alpha = self.focal_alpha
-        gamma = 2.0
+        gamma = self.focal_gamma
         neg_cost_class = (
             (1 - alpha) * (out_prob**gamma) * (-(1 - out_prob + 1e-8).log())
         )

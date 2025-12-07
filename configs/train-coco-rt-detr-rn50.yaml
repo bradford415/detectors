@@ -6,7 +6,8 @@
 __include__:
   # use the relative path from the project root
   dataset_config: configs/datasets/coco-2017.yaml
-  solver_config: configs/rt-detr/solver.yaml
+  solver_config: configs/rt-detrv2/solver.yaml
+  model_config: configs/rt-detrv2/rtdetrv2-rn50-model.yaml
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0

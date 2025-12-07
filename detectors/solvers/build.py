@@ -3,7 +3,12 @@ from typing import Optional, Sequence
 import torch
 from torch import nn
 
-from detectors.losses import Yolov3Loss, Yolov4Loss, create_dino_loss
+from detectors.losses import (
+    Yolov3Loss,
+    Yolov4Loss,
+    create_dino_loss,
+    create_rtdetrv2_loss,
+)
 
 scheduler_map = {
     "step_lr": torch.optim.lr_scheduler.StepLR,
@@ -15,8 +20,6 @@ optimizer_map = {
     "adamw": torch.optim.AdamW,
     "sgd": torch.optim.SGD,
 }
-
-loss_map = {"yolov3": Yolov3Loss, "yolov4": Yolov4Loss, "dino": create_dino_loss}
 
 
 def get_optimizer_params(
@@ -81,12 +84,12 @@ def create_loss(
     # initalize loss with specific args
     if model_name == "yolov3":
         num_anchors = model.yolo_layers[0].num_anchors
-        criterion = loss_map[model_name](num_anchors=num_anchors, device=device)
+        criterion = Yolov3Loss(num_anchors=num_anchors, device=device)
     elif model_name == "dino":
         num_decoder_layers = base_config["detector"]["transformer"][
             "num_decoder_layers"
         ]
-        criterion = loss_map[model_name](
+        criterion = create_dino_loss(
             num_classes=num_classes,
             num_decoder_layers=num_decoder_layers,
             aux_loss=base_config["aux_loss"],
@@ -94,6 +97,17 @@ def create_loss(
             loss_args=base_config["params"]["loss_weights"],
             matcher_args=base_config["params"]["matcher"],
             device=device,
+        )
+    elif model_name == "rtdetrv2":
+
+        criterion_params = base_config["criterion"]
+
+        criterion = create_rtdetrv2_loss(
+            matcher_params=criterion_params["matcher_params"],
+            weight_dict=criterion_params["weight_dict"],
+            losses=criterion_params["losses"],
+            alpha=criterion_params["alpha"],
+            gamma=criterion_params["gamma"],
         )
     else:
         ValueError(f"loss function for {model_name} not implemented")

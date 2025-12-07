@@ -5,10 +5,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
+from detectors.models.components.matcher import HungarianMatcher
 from detectors.utils.box_ops import box_cxcywh_to_xyxy, box_iou, generalized_box_iou
 from detectors.utils.distributed import (
     get_world_size,
-    is_dist_available_and_initialized,
+    is_dist_avail_and_initialized,
 )
 
 
@@ -81,7 +82,7 @@ class RTDETRCriterionv2(nn.Module):
     def loss_labels_vfl(self, outputs, targets, indices, num_boxes, values=None):
         """The varifocal loss used in RT-DETR which includes the IoU in the weighting
         scheme for the classification loss.
-        
+
         Section 4.3 equation (3) of the RT-DETR paper.
         """
         assert "pred_boxes" in outputs
@@ -116,10 +117,10 @@ class RTDETRCriterionv2(nn.Module):
         target_score = target_score_o.unsqueeze(-1) * target
 
         pred_score = F.sigmoid(src_logits).detach()
-        
+
         # NOTE: we don't substract (1-pred_score) like the original focal loss because the goal
         # here is to weight the loss by their IoU values; original focal loss is designed to
-        # weight based on the hardness of classification (how wrong the prediction is) 
+        # weight based on the hardness of classification (how wrong the prediction is)
         weight = self.alpha * pred_score.pow(self.gamma) * (1 - target) + target_score
 
         loss = F.binary_cross_entropy_with_logits(
@@ -345,3 +346,38 @@ class RTDETRCriterionv2(nn.Module):
                 )
 
         return dn_match_indices
+
+
+def create_rtdetrv2_loss(
+    matcher_params: dict,
+    weight_dict: dict,
+    losses: list,
+    alpha: float = 0.2,
+    gamma: float = 2.0,
+    num_classes: int = 80,
+    boxes_weight_format=None,
+    share_matched_indices=False,
+):
+    """Create the loss functions for RT-DETR v2
+
+    Args:
+        matcher: the matcher module to be used for matching predictions to targets
+        weight_dict: the dictionary containing the weights for each loss
+        losses: the list of losses to be computed
+        alpha: the alpha parameter for focal loss
+        gamma: the gamma parameter for focal loss
+        num_classes: the number of classes to predict
+    """
+    matcher = HungarianMatcher(**matcher_params)
+
+    criterion = RTDETRCriterionv2(
+        matcher=matcher,
+        weight_dict=weight_dict,
+        losses=losses,
+        alpha=alpha,
+        gamma=gamma,
+        num_classes=num_classes,
+        boxes_weight_format=boxes_weight_format,
+        share_matched_indices=share_matched_indices,
+    )
+    return criterion
