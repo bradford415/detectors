@@ -1,6 +1,7 @@
 import os
 import copy
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -66,3 +67,33 @@ def merge_dict(dict_one: dict, dict_two: dict, inplace=True) -> dict:
         dict_one = copy.deepcopy(dict_one)
     
     return _merge(dict_one, dict_two)
+
+
+def cli_to_dict(nargs: list[str]) -> dict:
+    """Parses the command line arguments and converts them to a dictionary
+    
+    Example:
+        convert `a.c=3 b=10` to `{'a': {'c': 3}, 
+                                 'b': 10}`
+    Args:
+        nargs: list of command line arguments
+    """
+    cfg = {}
+    if nargs is None or len(nargs) == 0:
+        return cfg
+
+    for s in nargs:
+        s = s.strip()
+        k, v = s.split('=', 1)
+        d = dictify(k, yaml.load(v, Loader=yaml.Loader))
+        cfg = merge_dict(cfg, d)
+
+    return cfg
+
+
+def dictify(s: str, v: Any) -> dict:
+    """Recursively convert a dot notation string to a nested dictionary"""
+    if '.' not in s:
+        return {s: v}
+    key, rest = s.split('.', 1)
+    return {key: dictify(rest, v)}

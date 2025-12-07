@@ -49,6 +49,12 @@ def main(
         checkpoint_path: path to the weights of the entire detector model; this can be used to resume training or inference;
                          if this parameter is not None, the backbone_weights will be ignored
     """
+    
+    cli_args = {"base_config_path": base_config_path,
+                "model_config_path": model_config_path,
+                "dataset_root": dataset_root,
+                "backbone_weights": backbone_weights,
+                "checkpoint_path": checkpoint_path}
 
     # load and merge the base config and other configs included in the base config
     if model_config_path is None:
@@ -59,6 +65,9 @@ def main(
             config.load_config(base_config_path),
             config.load_config(model_config_path),
         )
+    
+    # add CLI args to the base config and override any existing values
+    base_config = config.merge_dict(base_config, cli_args)
 
     #### start here, continue w/ rt detr code
     breakpoint()
@@ -74,6 +83,7 @@ def main(
     # contention on shared file systems like EFS
     time.sleep(global_rank * 0.02)
 
+    # TODO: look into overriding the config parameters with CLI args like in rtdetr
     # Override configuration parameters if CLI arguments are provided; this allows external users
     # to easily run the project without messing with the configuration files
     if dataset_root is not None:
