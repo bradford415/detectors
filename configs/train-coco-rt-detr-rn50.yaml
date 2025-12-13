@@ -17,7 +17,7 @@ dev_mode: False
 output_dir: "output"
 
 # Experiment name; this will be used for the output directory; use "development" when developing
-exp_name: "development"
+exp_name: "rt-detr-development"
 
 # Log the train progress every n steps
 log_train_steps: 100

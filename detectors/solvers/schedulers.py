@@ -1,4 +1,111 @@
+from bisect import bisect_right
+
 import torch
+from timm.scheduler.scheduler import Scheduler
+
+
+class MultiStepLRScheduler(Scheduler):
+    """Reduces learning rate a specfici milestones by a given factor gammm
+    e.g., milestones = [20, 40] epochs; this is different then StepLR because this reduces
+    the learning rate at regularly intervals e.g., every 20 epochs
+    """
+
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        milestones,
+        gamma=0.1,
+        warmup_t=0,
+        warmup_lr_init=0,
+        t_in_epochs=True,
+    ) -> None:
+        """Initalize the learning rate scheduler
+
+        Args:
+            optimizer: torch optimizer to update w/ the learning rate to be updated
+            milestones: list of epochs/steps to reduce the learning rate at
+            gamma: multiplicative factor to reduce the learning rate by at each milestone
+            warmup_t: number of epochs/steps to linearly increase the learning rate over before decaying it
+            warmup_lr_init: initial learning rate to start the linear warmup from; if 0 then starts from 0
+            t_in_epochs: if True, milestones and warmup_t are in epochs; if False, they are in steps
+        """
+        super().__init__(optimizer, param_group_field="lr")
+
+        self.milestones = milestones
+        self.gamma = gamma
+        self.warmup_t = warmup_t
+        self.warmup_lr_init = warmup_lr_init
+        self.t_in_epochs = t_in_epochs
+
+        # self.base_values is defined as the base learning rate for each param group;
+        # e.g., in the default case self.basE_values = [0.0001, 0.0001] for two param groups
+        # (one with weight decay and one without)
+
+        # calcluate the number of warmup steps
+        if self.warmup_t:
+            self.warmup_steps = [
+                (v - warmup_lr_init) / self.warmup_t for v in self.base_values
+            ]
+            super().update_groups(self.warmup_lr_init)
+        else:
+            self.warmup_steps = [1 for _ in self.base_values]
+
+        assert self.warmup_t <= min(self.milestones)
+
+    def _get_lr(self, t):
+        if t < self.warmup_t:
+            lrs = [self.warmup_lr_init + t * s for s in self.warmup_steps]
+        else:
+            lrs = [
+                v * (self.gamma ** bisect_right(self.milestones, t))
+                for v in self.base_values
+            ]
+        return lrs
+
+    def get_epoch_values(self, epoch: int):
+        if self.t_in_epochs:
+            return self._get_lr(epoch)
+        else:
+            return None
+
+    def get_update_values(self, num_updates: int):
+        if not self.t_in_epochs:
+            return self._get_lr(num_updates)
+        else:
+            return None
+
+        
+def create_multistep_lr_scheduler_w_warmup(
+    optimizer: torch.optim.Optimizer,
+    milestones: list[int],
+    gamma: float = 0.1,
+    warmup_t: int = 0,
+    warmup_lr_init: float = 0,
+    t_in_epochs: bool = True,
+):
+    """Builds the multistep lr scheduler which reduces the learning rate by a factor of gamma at
+    each milestone
+
+    Args:
+        optimizer: torch optimizer to update w/ the learning rate to be updated
+        milestones: list of steps or epochs to reduce the learning rate at; if t_in_epochs is False then
+                    these will be converted to steps
+        gamma: multiplicative factor to reduce the learning rate by at each milestone
+        warmup_epochs: number of steps or epochs to linearly increase the learning rate over before decaying it
+        warmup_lr_init: initial learning rate to start the linear warmup from
+        t_in_epochs: if True, milestones and warmup_t are in epochs; if False, they are in steps
+    """
+    # warmup_steps = int(warmup_t * num_steps_per_epoch)
+    # multi_steps = [i * num_steps_per_epoch for i in milestones]
+
+    return MultiStepLRScheduler(
+        optimizer=optimizer,
+        milestones=milestones,
+        gamma=gamma,
+        warmup_t=warmup_t,
+        warmup_lr_init=warmup_lr_init,
+        t_in_epochs=t_in_epochs,
+    )
 
 
 def burnin_schedule_original(i):

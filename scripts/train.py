@@ -70,9 +70,6 @@ def main(
     # add CLI args to the base config and override any existing values
     base_config = config.merge_dict(base_config, cli_args)
 
-    #### start here, continue w/ rt detr code; i did loss so now need to continue from here
-    breakpoint()
-
     # initalize torch distributed mode by setting the communication between all procceses
     # and assigning the GPU to use for each proccess;
     # NOTE: in general, each proccess should run most commands in the program except saving to disk
@@ -316,9 +313,16 @@ def main(
             map_location=torch.device(device),
         )
 
-        # TODO fix this
+        backbone = getattr(model_without_ddp, "backbone", None)
+        if backbone is None:
+            raise AttributeError(
+                "The model does not expose a backbone for loading weights."
+            )
+        state_dict = (
+            bb_weights["state_dict"] if "state_dict" in bb_weights else bb_weights
+        )
         backbone.load_state_dict(
-            bb_weights["state_dict"], strict=False
+            state_dict, strict=False
         )  # "state_dict" is the key to model state_dict for the pretrained weights I found
 
     # Compute and log the number of params in the model
@@ -339,7 +343,6 @@ def main(
         solver_config["optimizer"],
         solver_config["lr_scheduler"],
         parameter_strategy=solver_config.get("parameter_strategy", "all"),
-        backbone_lr=solver_config["optimizer"].get("backbone_lr", None),
     )
 
     trainer = Trainer(
