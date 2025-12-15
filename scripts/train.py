@@ -274,6 +274,10 @@ def main(
     detector_name = model_config["detector"]
     detector_params = model_config["params"]
 
+    ##### start here, build rtdetr now that i know what the config system does,
+    #### basically, the GLOBAL_CONFIG is built initially by setting the default parameters
+    # from every module decorated with @register, then the config files are loaded and overrided
+    # TODO; should put this explanation somewhere maybe?
     model = create_detector(
         detector_name=detector_name,
         detector_args=detector_params,

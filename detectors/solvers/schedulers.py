@@ -74,7 +74,7 @@ class MultiStepLRScheduler(Scheduler):
         else:
             return None
 
-        
+
 def create_multistep_lr_scheduler_w_warmup(
     optimizer: torch.optim.Optimizer,
     milestones: list[int],

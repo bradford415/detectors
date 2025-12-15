@@ -27,11 +27,11 @@ solver:
 
   lr_scheduler:
     name: multistep_lr
+    step_lr_on: "steps"
+
     params:
       # after 1000 steps decay the learning rate by lr*gamma
-      milestones: [1000] # TODO might need to change this
+      milestones: [3000] # (1000 steps after the warmup?) TODO might need to change this
       gamma: 0.1
       warmup_t: 2000
-      t_in_epcohs: False
-    
-      
+      t_in_epochs: False

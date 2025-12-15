@@ -22,6 +22,10 @@ class FrozenBatchNorm2d(torch.nn.Module):
     produce nans.
 
     Copied exactly from DETR/DINO
+
+    This is essentially like freezing a layer however you can not disable batchnorm like you would
+    a normal layer (i.e., p.requires_grad = False) since the running mean and var are stil
+    updated; this class esnures these running statistics are fixed during training.
     """
 
     def __init__(self, n):

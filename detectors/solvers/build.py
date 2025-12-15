@@ -229,8 +229,6 @@ def build_solvers(
     else:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
 
-    breakpoint()
-    ##### start here see if this worked !!!! ####
     if scheduler_name in scheduler_map:
         scheduler = scheduler_map[scheduler_name](optimizer, **scheduler_params)
     else:

@@ -5,7 +5,10 @@ from torch.nn import functional as F
 
 activation_map = {
     "relu": nn.ReLU,
+    "leaky_relu": nn.LeakyReLU,
     "gelu": nn.GELU,
+    "silu": nn.SiLU,  # silu is swish with beta=1 (essentially the same)
+    "swish": nn.SiLU,
 }
 
 

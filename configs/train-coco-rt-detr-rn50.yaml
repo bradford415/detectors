@@ -2,7 +2,6 @@
 ---
 # path to additional configuration files to load and merge into a single configuration dictionary; 
 # these are required
-# TODO: make a config file for the rt detr model architecture  
 __include__:
   # use the relative path from the project root
   dataset_config: configs/datasets/coco-2017.yaml
