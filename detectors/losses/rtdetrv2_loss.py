@@ -7,10 +7,7 @@ import torchvision
 
 from detectors.models.components.matcher import HungarianMatcher
 from detectors.utils.box_ops import box_cxcywh_to_xyxy, box_iou, generalized_box_iou
-from detectors.utils.distributed import (
-    get_world_size,
-    is_dist_avail_and_initialized,
-)
+from detectors.utils.distributed import get_world_size, is_dist_avail_and_initialized
 
 
 class RTDETRCriterionv2(nn.Module):

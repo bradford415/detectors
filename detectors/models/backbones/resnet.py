@@ -7,10 +7,9 @@ import torch.nn as nn
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
-__all__ = [
-    "ResNet",
-    "resnet18",
-]
+from detectors.models.backbones import BACKBONE_REGISTRY
+
+__all__ = ["ResNet", "resnet18", "resnet50"]
 
 # Original destination of the model URLs: From https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/master/network/backbone/resnet.py#L14
 # Updated model URLs are defined in this file:
@@ -379,6 +378,7 @@ def _resnet(
     return model
 
 
+@BACKBONE.register()
 def resnet18(
     pretrain=True, remove_top=True, progress: bool = True, **kwargs: Any
 ) -> ResNet:
@@ -406,6 +406,7 @@ def resnet18(
     )
 
 
+@BACKBONE.register()
 def resnet50(
     pretrain=True,
     remove_top=True,

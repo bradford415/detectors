@@ -6,11 +6,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from detectors.models.backbones import BACKBONE_REGISTRY
 from detectors.models.backbones.backbone import FrozenBatchNorm2d
 from detectors.models.layers.common import activation_map
-
-from ...core import register
-from .common import FrozenBatchNorm2d, get_activation
 
 __all__ = ["PResNet"]
 
@@ -170,6 +168,7 @@ class Blocks(nn.Module):
         return out
 
 
+BACKBONE_REGISTRY.register()
 class PResNet(nn.Module):
     """A ResNet variant which combines ResNet-C and ResNet-D improvements from the paper
     "Bag of Tricks for Image Classification with Convolutional Neural Networks"

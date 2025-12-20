@@ -1,12 +1,13 @@
+from typing import Any
+
 from torch import nn
+
+from detectors.models.backbones import backbone_map
+from detectors.models.components.rtdetrv2.hybrid_encoder import HybridEncoder
+from detectors.models.components.rtdetrv2.rtdetr_decoder import RTDETRTransformerv2
 
 
 class RTDETR(nn.Module):
-    __inject__ = [
-        "backbone",
-        "encoder",
-        "decoder",
-    ]
 
     def __init__(
         self,
@@ -34,3 +35,34 @@ class RTDETR(nn.Module):
             if hasattr(m, "convert_to_deploy"):
                 m.convert_to_deploy()
         return self
+
+
+def build_rtdetrv2(detector_params: dict[str, Any]):
+    """TODO"""
+
+    detector_components = detector_params["RTDETRv2"]
+    backbone_name = detector_components["backbone"]
+    encoder_name = detector_components["encoder"]
+    decoder_name = detector_components["decoder"]
+
+    backbone = backbone_map.get(backbone_name, None)(**detector_params[backbone_name])
+    if backbone_name is None:
+        raise ValueError("")
+
+    if encoder_name == "HybridEncoder":
+        encoder = HybridEncoder(**detector_params[encoder_name])
+    else:
+        raise ValueError(
+            f"Error: only the HybridEncoder is supported; got {encoder_name}"
+        )
+
+    if decoder_name == "RTDETRTransformerv2":
+        decoder = RTDETRTransformerv2(**detector_params[decoder_name])
+    else:
+        raise ValueError(
+            f"Error: only the RTDETRTransformerv2 is supported for the decoder; got {decoder_name}"
+        )
+
+    model = RTDETR(backbone=backbone, encoder=encoder, decoder=decoder)
+
+    return model

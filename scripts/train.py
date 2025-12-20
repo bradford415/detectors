@@ -274,7 +274,7 @@ def main(
     detector_name = model_config["detector"]
     detector_params = model_config["params"]
 
-    ##### start hereeee build the model 
+    ##### start hereeee build the model
     #### basically, the GLOBAL_CONFIG is built initially by setting the default parameters
     # from every module decorated with @register, then the config files are loaded and overrided
     # TODO; should put this explanation somewhere maybe?
@@ -284,6 +284,8 @@ def main(
         num_classes=dataset_train.num_classes,
     )
     model.to(device)
+
+    breakpoint()
 
     # Wrap the base model in ddp and store a pointer to the model without ddp; when saving the model
     # we want to save the model without ddp for portablility; ddpm wraps the model with additional

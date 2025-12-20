@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Any, Optional
 
 from detectors.models.backbones import backbone_map
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.utils.script import initialize_anchors
 
 from .dino import build_dino
+from .rtdetrv2 import build_rtdetr
 from .yolov3 import Yolov3
 from .yolov4 import Yolov4
 
@@ -12,12 +13,13 @@ detectors_map = {
     "yolov3": Yolov3,
     "yolov4": Yolov4,
     "dino": build_dino,
+    "rtdetrv2": build_rtdetr,
 }
 
 
 def create_detector(
     detector_name: str,
-    detector_args: dict[str, any],
+    detector_args: dict[str, Any],
     num_classes: int,
     anchors: Optional[list] = None,
 ):
@@ -42,14 +44,34 @@ def create_detector(
         raise NotImplementedError
     elif detector_name == "dino":
         model = _create_dino(detector_name, num_classes, detector_args)
+    elif detector_name == "rtdetrv2":
+        model = _create_rtdetrv2(detector_name, num_classes, detector_args)
     else:
         raise ValueError(f"detctor: {detector_name} not recognized")
 
     return model
 
 
-def _create_dino(detector_name: str, num_classes: int, detector_args: dict[str, any]):
-    """Create the dino detector, loss function, and postprocessor
+def _create_rtdetrv2(
+    detector_name: str, num_classes: int, detector_args: dict[str, Any]
+):
+    """Create the RT-DETRV2 detector
+
+    Args:
+        detector_name: the name of the detector to initialize
+        num_classes: the max_obj_id + 1 (background); for coco this should be 91
+        detector_args: a dictionary of paramters specific to the build_rtdetrv2() function;
+                       this should include backbone, encoder, and decoder params:
+                       see models.rtdetrv2.build_rtdetrv2
+    """
+    # TODO: consider changing the keys to "backbone" instead of the exact backbone name
+    #       so we can unpack them here; same with encoder/decoder
+    model = detectors_map[detector_name](detector_args)
+    return model
+
+
+def _create_dino(detector_name: str, num_classes: int, detector_args: dict[str, Any]):
+    """Create the dino detector
 
     TODO: consider intializing the criterion/postprocessor separate from the model
 
@@ -69,7 +91,7 @@ def _create_dino(detector_name: str, num_classes: int, detector_args: dict[str, 
 
 
 def _create_yolov3(
-    detector_name: str, num_classes: str, detector_args: dict[str, any], anchors
+    detector_name: str, num_classes: str, detector_args: dict[str, Any], anchors
 ):
     """TODO
 

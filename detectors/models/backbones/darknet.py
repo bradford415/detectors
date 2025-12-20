@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from detectors.models.backbones import BACKBONE_REGISTRY
 from detectors.models.layers.common import ConvNormLRelu
 from detectors.models.layers.yolo import YoloLayer
 from detectors.utils.box_ops import get_region_boxes
@@ -152,6 +153,7 @@ class DarkNet53(nn.Module):
         return nn.Sequential(*layers)
 
 
+@BACKBONE_REGISTRY.register()
 def darknet53():
     return DarkNet53(block=DarkResidualBlock)
 
@@ -288,6 +290,8 @@ class EmptyModule(nn.Module):
 
 
 # support route shortcut and reorg
+
+
 class Darknet(nn.Module):
     def __init__(self, cfgfile, inference=False):
         super(Darknet, self).__init__()

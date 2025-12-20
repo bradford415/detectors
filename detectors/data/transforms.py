@@ -91,7 +91,9 @@ def hflip(image, target):
     return flipped_image, target
 
 
-def resize(image: PIL.Image, target, size: int | Tuple, max_size: Optional[int] = None):
+def resize(
+    image: PIL.Image, target, size: Union[int, Tuple], max_size: Optional[int] = None
+):
     """Resize an image, and adjusts the targets' bboxes, such that the shortest
     side of the image is resized to `size` preserving the aspect ratio, but if doing
     so would cause the longest side to exceed `max_size`, then it calculats a new `size`
