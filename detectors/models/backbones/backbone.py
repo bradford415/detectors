@@ -6,9 +6,10 @@ from torch import Tensor, nn
 from torch.nn import functional as F
 
 from detectors.data import NestedTensor
-from detectors.models.backbones import BACKBONE_REGISTRY, backbone_map
 from detectors.models.layers.positional import PositionEmbeddingSineHW
 from detectors.utils.distributed import is_main_process
+
+from .registry import BACKBONE_REGISTRY
 
 supported_backbones = ["resnet50"]
 
@@ -307,7 +308,7 @@ class Joiner(nn.Sequential):
         return feat_maps_list, feat_maps_positionals
 
 
-@BACKBONE.register()
+@BACKBONE_REGISTRY.register()
 def build_dino_backbone(
     name: str = "resnet50",
     pretrained: bool = True,

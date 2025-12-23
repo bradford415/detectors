@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
-from detectors.models.backbones import BACKBONE_REGISTRY
+from .registry import BACKBONE_REGISTRY
 
 __all__ = ["ResNet", "resnet18", "resnet50"]
 
@@ -378,7 +378,7 @@ def _resnet(
     return model
 
 
-@BACKBONE.register()
+@BACKBONE_REGISTRY.register()
 def resnet18(
     pretrain=True, remove_top=True, progress: bool = True, **kwargs: Any
 ) -> ResNet:
@@ -406,7 +406,7 @@ def resnet18(
     )
 
 
-@BACKBONE.register()
+@BACKBONE_REGISTRY.register()
 def resnet50(
     pretrain=True,
     remove_top=True,

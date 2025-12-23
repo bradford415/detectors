@@ -6,12 +6,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from detectors.models.backbones import BACKBONE_REGISTRY
 from detectors.models.backbones.backbone import FrozenBatchNorm2d
 from detectors.models.layers.common import activation_map
 
-__all__ = ["PResNet"]
-
+# NOTE: if you do `from detectors.models.backbones import BACKBONE_REGISTRY` it causes a circular import
+#       but `from detectors.models.backbones.registry import BACKBONE_REGISTRY`
+from .registry import BACKBONE_REGISTRY
 
 ResNet_cfg = {
     18: [2, 2, 2, 2],
@@ -169,6 +169,8 @@ class Blocks(nn.Module):
 
 
 BACKBONE_REGISTRY.register()
+
+
 class PResNet(nn.Module):
     """A ResNet variant which combines ResNet-C and ResNet-D improvements from the paper
     "Bag of Tricks for Image Classification with Convolutional Neural Networks"

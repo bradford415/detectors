@@ -5,10 +5,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from detectors.models.backbones import BACKBONE_REGISTRY
 from detectors.models.layers.common import ConvNormLRelu
 from detectors.models.layers.yolo import YoloLayer
 from detectors.utils.box_ops import get_region_boxes
+
+# NOTE: if you do `from detectors.models.backbones import BACKBONE_REGISTRY` it causes a circular import
+#       but `from detectors.models.backbones.registry import BACKBONE_REGISTRY`
+from .registry import BACKBONE_REGISTRY
 
 
 def conv_batch(in_channels, out_channels, kernel_size=3, padding=1, stride=1):

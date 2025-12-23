@@ -7,7 +7,7 @@ from torch.nn import functional as F
 
 from detectors.data.data import NestedTensor
 from detectors.models.backbones.backbone import Joiner, build_dino_backbone
-from detectors.models.components.dino import (
+from detectors.models.components.dino.denoising import (
     dn_post_process,
     setup_contrastive_denoising,
 )

@@ -1,20 +1,27 @@
 from typing import Any, Optional
 
-from detectors.models.backbones import backbone_map
+import torch
+
+from detectors.models.backbones import BACKBONE_REGISTRY
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.utils.script import initialize_anchors
 
-from .dino import build_dino
-from .rtdetrv2 import build_rtdetr
+from .rtdetrv2 import build_rtdetrv2
 from .yolov3 import Yolov3
 from .yolov4 import Yolov4
+
+if torch.cuda.is_available():
+    from .dino import build_dino
+
 
 detectors_map = {
     "yolov3": Yolov3,
     "yolov4": Yolov4,
-    "dino": build_dino,
-    "rtdetrv2": build_rtdetr,
+    "rtdetrv2": build_rtdetrv2,
 }
+
+if torch.cuda.is_available():
+    detectors_map["dino"] = build_dino
 
 
 def create_detector(
@@ -108,7 +115,7 @@ def _create_yolov3(
     backbone_params = detector_args.get("backbone_params", {})
 
     # Initalize the detector backbone; typically some feature extractor
-    backbone = backbone_map[backbone_name](**backbone_params)
+    backbone = BACKBONE_REGISTRY.get(backbone_name)(**backbone_params)
 
     # detector args
     model_components = {
@@ -117,4 +124,4 @@ def _create_yolov3(
         "anchors": anchors,
     }
     # Initialize detection model and transfer to GPU
-    model = detectors_map[detector_name](**model_components)
+    model = BACKBONE_REGISTRY.get(detector_name)(**model_components)

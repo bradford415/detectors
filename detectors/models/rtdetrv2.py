@@ -2,9 +2,9 @@ from typing import Any
 
 from torch import nn
 
-from detectors.models.backbones import backbone_map
+from detectors.models.backbones import BACKBONE_REGISTRY
 from detectors.models.components.rtdetrv2.hybrid_encoder import HybridEncoder
-from detectors.models.components.rtdetrv2.rtdetr_decoder import RTDETRTransformerv2
+from detectors.models.components.rtdetrv2.rtdetrv2_decoder import RTDETRTransformerv2
 
 
 class RTDETR(nn.Module):
@@ -45,7 +45,9 @@ def build_rtdetrv2(detector_params: dict[str, Any]):
     encoder_name = detector_components["encoder"]
     decoder_name = detector_components["decoder"]
 
-    backbone = backbone_map.get(backbone_name, None)(**detector_params[backbone_name])
+    backbone = BACKBONE_REGISTRY.get(backbone_name, None)(
+        **detector_params[backbone_name]
+    )
     if backbone_name is None:
         raise ValueError("")
 

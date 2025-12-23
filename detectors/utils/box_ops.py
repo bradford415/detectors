@@ -43,6 +43,11 @@ def box_cxcywh_to_xyxy(x: torch.Tensor):
 
 
 def box_xyxy_to_cxcywh(x):
+    """Converts bboxes from (tl_x, tl_y, br_x, br_y) (yolo format) to (tl_x, tl_y, br_x, br_y)
+
+    Args:
+        x: bounding boxes in (cx, cy, w, h) format; shape (num_boxes, 4)
+    """
     x0, y0, x1, y1 = x.unbind(-1)
     b = [(x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0), (y1 - y0)]
     return torch.stack(b, dim=-1)

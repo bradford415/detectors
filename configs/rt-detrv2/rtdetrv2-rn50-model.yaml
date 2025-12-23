@@ -70,6 +70,10 @@ params:
 
     # NEW
     num_points: [4, 4, 4] # [3,3,3] [2,2,2]
+
+    # in msda, whether to use grid_sampling continus bilinear interpolation for or
+    # to use discrete smampling; grid_sampling is the normal more accurate method but
+    # discrete sampling works nicer with ONNX conversion but is less accurate
     cross_attn_method: default # default, discrete
     query_select_method: default # default, agnostic
     learn_query_content: False

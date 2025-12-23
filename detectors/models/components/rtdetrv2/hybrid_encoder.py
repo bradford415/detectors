@@ -8,10 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ...core import register
-from .utils import get_activation
-
-__all__ = ["HybridEncoder"]
+from detectors.models.layers.common import activation_map
 
 
 class ConvNormLayer(nn.Module):
@@ -28,7 +25,7 @@ class ConvNormLayer(nn.Module):
             bias=bias,
         )
         self.norm = nn.BatchNorm2d(ch_out)
-        self.act = nn.Identity() if act is None else get_activation(act)
+        self.act = nn.Identity() if act is None else activation_map[act]()
 
     def forward(self, x):
         return self.act(self.norm(self.conv(x)))
@@ -41,7 +38,7 @@ class RepVggBlock(nn.Module):
         self.ch_out = ch_out
         self.conv1 = ConvNormLayer(ch_in, ch_out, 3, 1, padding=1, act=None)
         self.conv2 = ConvNormLayer(ch_in, ch_out, 1, 1, padding=0, act=None)
-        self.act = nn.Identity() if act is None else get_activation(act)
+        self.act = nn.Identity() if act is None else activation_map[act]()
 
     def forward(self, x):
         if hasattr(self, "conv"):
@@ -149,7 +146,7 @@ class TransformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
-        self.activation = get_activation(activation)
+        self.activation = activation_map[activation]()
 
     @staticmethod
     def with_pos_embed(tensor, pos_embed):
@@ -196,7 +193,6 @@ class TransformerEncoder(nn.Module):
         return output
 
 
-@register()
 class HybridEncoder(nn.Module):
     __share__ = [
         "eval_spatial_size",

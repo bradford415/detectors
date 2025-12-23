@@ -19,7 +19,7 @@ from typing import Optional
 import torch
 from torch import Tensor, nn
 
-from detectors.models.components.dino import gen_encoder_output_proposals
+from detectors.models.components.dino.denoising import gen_encoder_output_proposals
 from detectors.models.layers.common import MLP, activation_map
 from detectors.models.layers.positional import gen_sineembed_for_position
 from detectors.models.ops.modules import MSDeformAttn

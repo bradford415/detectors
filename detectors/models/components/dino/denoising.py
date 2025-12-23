@@ -71,8 +71,6 @@ def setup_contrastive_denoising(
         #     (it should not output any confident prediction for real classes)
         denoise_number *= 2
 
-        ############### start here figure out error ##############
-
         # Create a list of tensors (num_objects,) filled with 1s for each sample
         known = [(torch.ones_like(target["labels"])).cuda() for target in targets]
 

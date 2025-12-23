@@ -1,3 +1,4 @@
+import math
 import pickle
 import random
 import time
@@ -21,20 +22,28 @@ def to_cpu(tensor):
 
 
 # TODO: move this to a math module
-def inverse_sigmoid(x, eps=1e-3):
-    """Inverse sigmoid function
+def inverse_sigmoid(x: torch.Tensor, eps: float = 1e-5):
+    """Numercially stable Inverse sigmoid function; converts probablities to logits
 
     sigmoid = (1 / (1+ e^-x))
     inverse_sigmoid = ln( x / (1 - x))
 
     Args:
-        x:
+        x: tensor of probablities; TODO put shape
         eps: float
     """
     x = x.clamp(min=0, max=1)
     x1 = x.clamp(min=eps)
     x2 = (1 - x).clamp(min=eps)
     return torch.log(x1 / x2)
+
+
+def bias_init_with_prob(prior_prob=0.01):
+    """initialize conv/fc bias value according to a given probability value; uses
+    the inverse sigmoid to convert to probabliity to logits
+    """
+    bias_init = float(-math.log((1 - prior_prob) / prior_prob))
+    return bias_init
 
 
 def convert2cpu(gpu_matrix):
