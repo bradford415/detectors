@@ -1,16 +1,50 @@
-# Parameters for the dataset class
+# Parameters for the dataloder and dataset class
 
-# Name of dataset; must be one of the names in the dataset_map dict
-dataset_name: "CocoDetection"
 
-dataset:
-  # Path to the root of the dataset; detects which path to use based on device
-  root: "/mnt/d/datasets/coco" # windows path
-  root_mac: "/Users/bsele/datasets/coco" # mac path
+train_dataloader:
+  dataset:
+    dataset_name: "CocoDetection"
 
-  # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
-  # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
-  num_classes: 91
+    # Path to the root of the dataset; detects which path to use based on device
+    root: "/mnt/d/datasets/coco" # windows path
+    root_mac: "/Users/bsele/datasets/coco" # mac path
 
-  # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
-  num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
+    # data transformations;
+    # NOTE: rtdetr does NOT use imagenet normalization, the author notes
+    #       it shouldn't matter, just be consistent during inference:
+    #       https://github.com/lyuwenyu/RT-DETR/issues/289#issuecomment-2082180429
+    transforms:
+      - {type: RandomPhotometricDistort, params: {p: 0.5}}
+      - {type: RandomZoomOut, parms: {fill: 0}}
+      - {type: RandomIoUCrop, params: {p: 0.8}}
+      - {type: SanitizeBoundingBoxes, params: {min_size: 1}}
+      - {type: RandomHorizontalFlip}
+      - {type: Resize, params: {size: [640, 640]}}
+      - {type: SanitizeBoundingBoxes, params: {min_size: 1}}
+      - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
+      # TODO: add the stop policy for stopping at an epoch
+
+    ## start here collate <src.data.dataloader.BatchImageCollateFuncion object at 0x7d545083b410> ####
+    collate_fn:
+      name: BatchImageCollateFuncion
+      scales: [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
+      stop_epoch: 71 # epoch in [71, ~) stop `multiscales`
+    
+    # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
+    # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
+    num_classes: 91
+
+    # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
+    num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
+
+    batch_size_per_gpu: 2
+    shuffle: True
+
+val_dataloader:
+  dataset: 
+    transforms:
+      - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
+  
+  shuffle: False
+  batch_size_per_gpu: 4
+  num_workers: 2

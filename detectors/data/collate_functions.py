@@ -174,3 +174,48 @@ def get_collate_fn(detector_name: str) -> callable:
         return collate_fn
     else:
         raise ValueError(f"No collate_fn found for: {detector_name}")
+
+
+# TODO START HERE consider not need this base collate function
+class BaseCollateFunction(object):
+    def set_epoch(self, epoch):
+        self._epoch = epoch 
+
+    @property
+    def epoch(self):
+        return self._epoch if hasattr(self, '_epoch') else -1
+
+    def __call__(self, items):
+        raise NotImplementedError('')
+
+
+class BatchImageCollateFuncion(BaseCollateFunction):
+    def __init__(
+        self, 
+        scales=None, 
+        stop_epoch=None, 
+    ) -> None:
+        super().__init__()
+        self.scales = scales
+        self.stop_epoch = stop_epoch if stop_epoch is not None else 100000000
+        # self.interpolation = interpolation
+
+    def __call__(self, items):
+        images = torch.cat([x[0][None] for x in items], dim=0)
+        targets = [x[1] for x in items]
+
+        if self.scales is not None and self.epoch < self.stop_epoch:
+            # sz = random.choice(self.scales)
+            # sz = [sz] if isinstance(sz, int) else list(sz)
+            # VF.resize(inpt, sz, interpolation=self.interpolation)
+
+            # NOTE: we should not need to resize the box coordintes here since
+            #       they are normalized (percentage based)
+            sz = random.choice(self.scales)
+            images = F.interpolate(images, size=sz)
+            if 'masks' in targets[0]:
+                for tg in targets:
+                    tg['masks'] = F.interpolate(tg['masks'], size=sz, mode='nearest')
+                raise NotImplementedError('')
+
+        return images, targets

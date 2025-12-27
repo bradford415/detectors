@@ -13,7 +13,7 @@ import yaml
 from fire import Fire
 from torch.utils.data import DataLoader, DistributedSampler
 
-from detectors.data.coco import build_coco
+from detectors.data.datasets.coco import build_coco
 from detectors.data.collate_functions import get_collate_fn
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
@@ -248,6 +248,8 @@ def main(
         sampler_train, batch_size, drop_last=True
     )
 
+
+    #### start here look at collate <src.data.dataloader.BatchImageCollateFuncion object at 0x7d545083b410>
     num_workers = base_config["dataset"]["num_workers"] if not dev_mode else 0
     collate_fn = get_collate_fn(model_config["detector"])
 

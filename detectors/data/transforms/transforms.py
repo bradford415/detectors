@@ -7,13 +7,16 @@ Transforms and data augmentation for both image + bbox.
 """
 import random
 import sys
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import PIL
 import torch
-import torchvision.transforms as T
+from torchvision.transforms import RandomCrop, RandomErasing
+from torchvision.tv_tensors import BoundingBoxes, BoundingBoxFormat, Mask
+import torchvision.transforms.v2 as T
 import torchvision.transforms.functional as F
+from torch import Tensor
 from PIL.Image import Image as PILImage
 
 from detectors.utils.box_ops import box_xyxy_to_cxcywh
@@ -205,7 +208,7 @@ class RandomCrop:
         self.size = size
 
     def __call__(self, img, target):
-        region = T.RandomCrop.get_params(img, self.size)
+        region = RandomCrop.get_params(img, self.size)
         return crop(img, target, region)
 
 
@@ -226,11 +229,11 @@ class RandomSizeCrop:
     def __call__(self, img: PIL.Image.Image, target: dict):
         w = random.randint(self.min_size, min(img.width, self.max_size))
         h = random.randint(self.min_size, min(img.height, self.max_size))
-        region = T.RandomCrop.get_params(img, [h, w])
+        region = Tv1.RandomCrop.get_params(img, [h, w])
         return crop(img, target, region)
 
 
-class CenterCrop(object):
+class CenterCrop:
     def __init__(self, size):
         self.size = size
 
@@ -242,7 +245,7 @@ class CenterCrop(object):
         return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
 
 
-class RandomHorizontalFlip(object):
+class RandomHorizontalFlip:
     def __init__(self, p=0.5):
         self.p = p
 
@@ -352,20 +355,66 @@ class ToTensorNoNormalization:
 
 class RandomErasing(object):
     def __init__(self, *args, **kwargs):
-        self.eraser = T.RandomErasing(*args, **kwargs)
+        self.eraser = RandomErasing(*args, **kwargs)
 
     def __call__(self, img, target):
         return self.eraser(img), target
 
 
-class Normalize:
-    """Normalize an image by mean and standard deviation. This class also
-    converts the the bounding box coordinates to yolo format [center_x, center_y, w, h].
+class RandomIoUCrop(T.RandomIoUCrop):
+    """A wrapper around torchvision.transforms.v2.RandomIoUCrop to add a proability
+    of this transform being used
     """
 
-    def __init__(self, mean, std):
+    def __init__(
+        self,
+        min_scale: float = 0.3,
+        max_scale: float = 1,
+        min_aspect_ratio: float = 0.5,
+        max_aspect_ratio: float = 2,
+        sampler_options: Optional[List[float]] = None,
+        trials: int = 40,
+        p: float = 1.0,
+    ):
+        super().__init__(
+            min_scale,
+            max_scale,
+            min_aspect_ratio,
+            max_aspect_ratio,
+            sampler_options,
+            trials,
+        )
+        self.p = p
+
+    def __call__(self, *inputs: Any) -> Any:
+        if torch.rand(1) >= self.p:
+            return inputs if len(inputs) > 1 else inputs[0]
+
+        return super().forward(*inputs)
+
+
+class Normalize:
+    """Normalize an image by mean and standard deviation and convert the bounding box
+    coordinates XYXY -> CXCYWH and normalize between [0, 1] (i.e., normalize by image dimensions)
+    """
+
+    def __init__(
+        self,
+        mean: list[float],
+        std: list[float],
+        bbox_fmt: str = "cxcywh",
+        convert_to_tv_tensor: bool = False,
+    ):
+        """Intializes the normalization transforms
+
+        Args:
+            mean: the mean of the dataset for each channel
+            std: the standard deviation of the dataset for each channel
+        """
         self.mean = mean
         self.std = std
+        self.bbox_fmt = bbox_fmt
+        self.convert_to_tv_tensor = convert_to_tv_tensor
 
     def __call__(self, image, target=None) -> Optional[torch.tensor]:
         """Normalize an image by the mean/std and convert the target
@@ -377,7 +426,7 @@ class Normalize:
         if target is None:
             return image, None
 
-        # Convert bounding boxes from pascal_voc format to Yolo format including normalize between [0, 1];
+        # Convert bounding boxes from XYXY to CXCYWH format including normalize between [0, 1];
         # tl_x, tl_y, br_x, br_y -> cx, cy, w, h
         target = target.copy()
         h, w = image.shape[-2:]
@@ -388,8 +437,40 @@ class Normalize:
             # Normalize boxes between [0, 1]
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
 
+            if self.convert_to_tv_tensor:
+                boxes = convert_to_tv_tensor(boxes, "boxes", self.bbox_fmt, (h, w))
             target["boxes"] = boxes
         return image, target
+
+
+def convert_to_tv_tensor(
+    tensor: Tensor, key: str, box_format="cxcywh", spatial_size=None
+) -> Tensor:
+    """Convert bounding boxes to torchvision.tv_tensors.BoundingBoxes
+
+    Used for torchvision.transforms.v2
+
+    Args:
+        tensor (Tensor): input tensor
+        key (str): transform to key
+        box_format: the format of the bounding boxes
+        spatial_size: the spatial size of the image (h, w); also known as canvas_size
+    Return:
+        Dict[str, TV_Tensor]
+    """
+    assert key in ("boxes",), "Only support 'boxes'"
+
+    _boxes_keys = ["format", "canvas_size"]
+
+    if key == "boxes":
+        # NOTE: even though canvas_size is (h, w), the bounding boxes a `tensor` should match the
+        #       `box_format`
+        box_format = getattr(BoundingBoxFormat, box_format.upper())
+        _kwargs = dict(zip(_boxes_keys, [box_format, spatial_size]))
+        return BoundingBoxes(tensor, **_kwargs)
+
+    if key == "masks":
+        return Mask(tensor)
 
 
 class Unnormalize:

@@ -23,22 +23,21 @@ class PreprocessCoco:
     This class was taken from DETR and modified for Yolo architectures
     """
 
-    def __init__(self, return_masks=False, model_name: str = "yolo"):
+    def __init__(self, return_masks=False, contiguous_cat_ids: bool = False):
         """Initalize the preprocessor class
 
         Args:
             return_masks: if True, converts coco polygons to masks for segmentation tasks;
                           if False, only bboxes and class labels are returned
-            model_name: if `yolo` converts the coco class ids to a contiguous range of 0-79;
+            contiguous_cat_ids: if `yolo` converts the coco class ids to a contiguous range of 0-79;
                                 detr-based architectures do not require this conversion
         """
-        assert model_name in ["yolo", "detr", "dino"]
 
         self.return_masks = return_masks
-        self.model_name = model_name
+        self.contiguous_cat_ids = contiguous_cat_ids
 
-        # Used to make the dataset labels sequential
-        if model_name == "yolo":
+        # Used to make the dataset category labels contiguous (no gaps between ids)
+        if contiguous_cat_ids:
             self.coco_class_91_to_80 = coco91_to_coco80_class()
 
     def __call__(
@@ -89,7 +88,7 @@ class PreprocessCoco:
 
         # Create list of object labels, shift the coco ids so they are between 0-79 (i.e., sequential),
         # and convert to tensor
-        if "yolo" in self.model_name:
+        if self.contiguous_cat_ids:
             classes = [
                 self.coco_class_91_to_80[obj["category_id"]] for obj in annotations
             ]
@@ -160,6 +159,8 @@ def coco91_to_coco80_class():
         (list): A list of 91 class IDs where the index represents the 80-index class ID and the value is the
             corresponding 91-index class ID.
     """
+    # index = coco file category id
+    # index value = category to map to
     return [
         None,
         0,
