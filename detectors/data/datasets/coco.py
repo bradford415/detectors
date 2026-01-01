@@ -18,8 +18,8 @@ import numpy as np
 import torch
 import torchvision
 
-from detectors.data.transforms import transforms as T
 from detectors.data.coco_utils import PreprocessCoco, coco_stats
+from detectors.data.transforms import transforms as T
 from detectors.utils.box_ops import box_xyxy_to_cxcywh
 
 

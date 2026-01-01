@@ -5,6 +5,7 @@ from torchvision.transforms.v2 import (
     SanitizeBoundingBoxes,
 )
 
+from .registry import TRANSFORM_REGISTRY
 from .transforms import (
     CenterCrop,
     Compose,
@@ -18,8 +19,6 @@ from .transforms import (
     ToTensor,
     Unnormalize,
 )
-
-from .registry import TRANSFORM_REGISTRY
 
 __all__ = [
     "Compose",

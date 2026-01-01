@@ -12,8 +12,8 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors.data.datasets.coco import build_coco
 from detectors.data.collate_functions import get_collate_fn
+from detectors.data.datasets.coco import build_coco
 from detectors.evaluate import evaluate, load_model_checkpoint, test_detr
 from detectors.models.backbones import backbone_map
 from detectors.models.create import create_detector

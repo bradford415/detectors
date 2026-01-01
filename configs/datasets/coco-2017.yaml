@@ -1,9 +1,17 @@
 # Parameters for the dataloder and dataset class
 
+## start here collate <src.data.dataloader.BatchImageCollateFuncion object at 0x7d545083b410> ####
+collate_fn:
+  name: BatchImageCollateFuncion
+  params:
+    scales: [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
+    stop_epoch: 71 # epoch in [71, ~) stop `multiscales`
+
+
 
 train_dataloader:
   dataset:
-    dataset_name: "CocoDetection"
+    dataset_name: "coco_detection_detr"
 
     # Path to the root of the dataset; detects which path to use based on device
     root: "/mnt/d/datasets/coco" # windows path
@@ -23,22 +31,16 @@ train_dataloader:
       - {type: SanitizeBoundingBoxes, params: {min_size: 1}}
       - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
       # TODO: add the stop policy for stopping at an epoch
-
-    ## start here collate <src.data.dataloader.BatchImageCollateFuncion object at 0x7d545083b410> ####
-    collate_fn:
-      name: BatchImageCollateFuncion
-      scales: [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
-      stop_epoch: 71 # epoch in [71, ~) stop `multiscales`
     
     # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
     # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
     num_classes: 91
 
-    # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
-    num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
+  # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
+  num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
 
-    batch_size_per_gpu: 2
-    shuffle: True
+  batch_size_per_gpu: 2
+  shuffle: True
 
 val_dataloader:
   dataset: 

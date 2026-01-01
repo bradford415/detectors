@@ -1,14 +1,14 @@
 from typing import Any, Optional
 
-import torch
 import albumentations as A
+import torch
 from albumentations.pytorch import ToTensorV2
+from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
+from detectors.data.collate import get_collate
 from detectors.data.datasets.coco import CocoDetectionDETR, CocoDetectionYolo
-from detectors.data.transforms import transforms as T # for legacy
 from detectors.data.transforms import TRANSFORM_REGISTRY
-
-
+from detectors.data.transforms import transforms as T  # for legacy
 
 dataset_map = {
     "coco_detection_detr": CocoDetectionDETR,
@@ -91,18 +91,16 @@ def make_dino_detr_transforms(dataset_split):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
-    
+
 
 def make_config_transforms(config_transforms: list[dict]):
-    """TODO
-    """
+    """TODO"""
 
     all_transforms = []
     for transform in config_transforms:
         TRANSFORM_REGISTRY.get(transform["type"])(transform["params"])
 
     all_transforms = T.Compose(all_transforms)
-
 
     normalize = T.Compose(
         [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
@@ -134,9 +132,7 @@ def make_config_transforms(config_transforms: list[dict]):
         )
     else:
         raise ValueError(f"unknown dataset split {dataset_split}")
-    
 
-    
 
 def make_yolo_transforms(dataset_split, image_size: int = 416):
     """Initialize transforms for the coco dataset using the Albumentations library
@@ -210,11 +206,11 @@ def make_yolo_transforms(dataset_split, image_size: int = 416):
 
 def create_dataset(
     dataset_name: str,
-    model_name: str,
+    split: str,
     root: str,
     num_classes: int,
-    dataset_split: str,
-    model_type: str = "detr",
+    transforms_list: list[str],
+    model_name: Optional[str] = None,
     dev_mode: bool = False,
 ):
     """Initialize the dataset class
@@ -225,46 +221,75 @@ def create_dataset(
     """
     # Set path to images and annotations; TODO: specfic to COCO so need to make it more modular
     # maybe make it a class property
-    if dataset_split == "train":
+    if split == "train":
         images_dir = root / "images" / "train2017"
         annotation_file = root / "annotations" / "instances_train2017.json"
-    elif dataset_split == "val":
+    elif split == "val":
         images_dir = root / "images" / "val2017"
         annotation_file = root / "annotations" / "instances_val2017.json"
-    elif dataset_split == "test":
+    elif split == "test":
         images_dir = root / "images" / "test2017"
         annotation_file = root / "annotations" / "instances_test2017.json"
 
     # create the transforms for the specific model
     if model_name == "dino_detr":
-        data_transforms = make_dino_detr_transforms(dataset_split)
-    elif model_name == "rtdetr-v2":
-        data_transforms =
+        data_transforms = make_dino_detr_transforms(split)
     elif model_name == "yolo":
-        data_transforms = make_yolo_transforms(dataset_split)
-
-    #### start here make the rt detr transforms and config file then build dataset below
+        data_transforms = make_yolo_transforms(split)
     else:
-        raise ValueError(f"transforms not supported for the model: {model_name}")
+        # rt-detr
+        data_transforms = make_config_transforms(transforms_list)
 
     if dataset_name == "coco_detection_detr":
-        
-    elif detector_name == "rtdetrv2":
-        model = _create_rtdetrv2(detector_name, num_classes, detector_args)
+        dataset = CocoDetectionDETR(
+            images_dir, annotation_file, num_classes, split, data_transforms, dev_mode
+        )
     else:
         raise ValueError(f"dataset: {dataset_name} not recognized")
 
-    return model
+    return dataset
 
 
-def _create_rtdetrv2(
-    detector_name: str, num_classes: int, detector_args: dict[str, Any]
+def create_dataloader(
+    is_distributed: bool,
+    dataset: Dataset,
+    batch_size_per_gpu: int,
+    num_workers: int,
+    collate_name: str,
+    collate_params: dict[str, Any],
+    drop_last: bool = True,
+    shuffle: bool = False,
+    pin_memory: bool = False,
 ):
-    """Create the RT-DETRV2 detector
+    if is_distributed:
+        # ensures that each process gets a different subset of the dataset in distributed mode
+        sampler = DistributedSampler(dataset, shuffle=shuffle)
+    else:
+        # using RandomSampler and SequentialSampler w/ default parameters is the same as using
+        # shuffle=True and shuffle=False in the DataLoader, respectively; if you pass a Sampler into
+        # the DataLoader, you cannot set the shuffle parameter (mutually exclusive)
+        if shuffle:
+            sampler = torch.utils.data.RandomSampler(dataset)
+        else:
+            # used for validation
+            sampler = torch.utils.data.SequentialSampler(dataset)
 
-    Args:
-    """
-    # TODO: consider changing the keys to "backbone" instead of the exact backbone name
-    #       so we can unpack them here; same with encoder/decoder
-    model = detectors_map[detector_name](detector_args)
-    return model
+    batch_sampler = torch.utils.BatchSampler(
+        sampler, batch_size=batch_size_per_gpu, drop_last=drop_last
+    )
+
+    collate = get_collate(collate_name, collate_params)
+
+    # NOTE: Consider adding ability to skip batch_sampler (e.g., pass sampler insted of batch_sampler)
+    #       for example batched images in balidation sometimes hurt accuracy due to padding,
+    #       though I don't fully understand why since the padding is masked
+    dataloader = DataLoader(
+        dataset,
+        batch_sampler=batch_sampler,
+        collate_fn=collate,
+        drop_last=drop_last,
+        pin_memory=pin_memory,
+        num_workers=num_workers,
+    )
+
+    return dataloader

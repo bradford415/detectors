@@ -1,4 +1,5 @@
-from typing import Dict, Tuple
+import random
+from typing import Dict, Optional, Tuple
 
 import torch
 from torch.nn import functional as F
@@ -159,42 +160,46 @@ def collate_fn_test(batch: list[Tuple[torch.Tensor, Dict[str, torch.Tensor]]]) -
     return images, annotations
 
 
-def get_collate_fn(detector_name: str) -> callable:
+def get_collate(collate_name: str, collate_params: Optional[dict]) -> callable:
     """Return the appropriate collate function based on the detector
 
     Agrgs:
         detector_name: the name of the detector
     """
 
-    if detector_name == "dino":
+    if collate_name == "collate_fn_nested_tensor":
+        # dino
         return collate_fn_nested_tensor
-    elif detector_name == "yolov3":
-        return collate_fn
-    elif detector_name == "yolov4":
+    elif collate_name == "BatchImageCollateFuncion":
+        # rt detr
+        return BatchImageCollateFuncion(**collate_params)
+    elif collate_name == "collate_fn":
+        # yolov3 yolov4
         return collate_fn
     else:
-        raise ValueError(f"No collate_fn found for: {detector_name}")
+        raise ValueError(f"No collate_fn found for: {collate_name}")
 
 
 # TODO START HERE consider not need this base collate function
 class BaseCollateFunction(object):
     def set_epoch(self, epoch):
-        self._epoch = epoch 
+        self._epoch = epoch
 
     @property
     def epoch(self):
-        return self._epoch if hasattr(self, '_epoch') else -1
+        return self._epoch if hasattr(self, "_epoch") else -1
 
     def __call__(self, items):
-        raise NotImplementedError('')
+        raise NotImplementedError("")
 
 
 class BatchImageCollateFuncion(BaseCollateFunction):
     def __init__(
-        self, 
-        scales=None, 
-        stop_epoch=None, 
+        self,
+        scales=None,
+        stop_epoch=None,
     ) -> None:
+        """TODO"""
         super().__init__()
         self.scales = scales
         self.stop_epoch = stop_epoch if stop_epoch is not None else 100000000
@@ -213,9 +218,11 @@ class BatchImageCollateFuncion(BaseCollateFunction):
             #       they are normalized (percentage based)
             sz = random.choice(self.scales)
             images = F.interpolate(images, size=sz)
-            if 'masks' in targets[0]:
+
+            # NOTE: masks not implemented
+            if "masks" in targets[0]:
                 for tg in targets:
-                    tg['masks'] = F.interpolate(tg['masks'], size=sz, mode='nearest')
-                raise NotImplementedError('')
+                    tg["masks"] = F.interpolate(tg["masks"], size=sz, mode="nearest")
+                raise NotImplementedError("")
 
         return images, targets

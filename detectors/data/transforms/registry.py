@@ -1,5 +1,5 @@
+import detectors.data.transforms as T
 from detectors.utils.registry import Registry
-from detectors.data.transforms import T
 
 TRANSFORM_REGISTRY = Registry("TRANSFORMS")
 TRANSFORM_REGISTRY.__doc__ = (

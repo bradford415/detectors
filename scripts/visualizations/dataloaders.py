@@ -16,9 +16,9 @@ from fire import Fire
 from torch import nn
 from torch.utils.data import DataLoader
 
-from detectors.data.datasets.coco import build_coco
 from detectors.data.coco_utils import get_coco_object
 from detectors.data.collate_functions import collate_fn
+from detectors.data.datasets.coco import build_coco
 from detectors.losses import loss_map
 from detectors.models import Yolov3, Yolov4
 from detectors.models.backbones import backbone_map

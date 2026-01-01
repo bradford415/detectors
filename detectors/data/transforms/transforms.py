@@ -12,12 +12,12 @@ from typing import Any, List, Optional, Tuple, Union
 import numpy as np
 import PIL
 import torch
+import torchvision.transforms.functional as F
+import torchvision.transforms.v2 as T
+from PIL.Image import Image as PILImage
+from torch import Tensor
 from torchvision.transforms import RandomCrop, RandomErasing
 from torchvision.tv_tensors import BoundingBoxes, BoundingBoxFormat, Mask
-import torchvision.transforms.v2 as T
-import torchvision.transforms.functional as F
-from torch import Tensor
-from PIL.Image import Image as PILImage
 
 from detectors.utils.box_ops import box_xyxy_to_cxcywh
 from detectors.utils.misc import interpolate

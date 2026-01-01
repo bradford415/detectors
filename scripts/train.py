@@ -11,10 +11,9 @@ import torch
 import torch.distributed as dist
 import yaml
 from fire import Fire
-from torch.utils.data import DataLoader, DistributedSampler
 
+from detectors.data import create_dataset, create_dataloader
 from detectors.data.datasets.coco import build_coco
-from detectors.data.collate_functions import get_collate_fn
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers
@@ -204,7 +203,7 @@ def main(
                 log.info("    -%s", torch.cuda.get_device_name(gpu))
         elif torch.mps.is_available():
             # setup mps (apple silicon)
-            base_config["dataset"]["root"] = base_config["dataset"]["root_mac"]
+            base_config["train_dataloader"]["dataset"]["root"] = base_config["train_dataloader"]["dataset"]["root_mac"]
             device = torch.device("mps")
             log.info("Using: %s", device)
         else:
@@ -217,61 +216,49 @@ def main(
     if not use_cpu:
         pin_memory = True
 
+    train_ds_params = base_config["train_dataloader"]["dataset"]
+    val_ds_params = base_config["val_dataloader"]["dataset"]
+
     dataset_kwargs = {
-        "root": base_config["dataset"]["root"],
-        "num_classes": base_config["dataset"]["num_classes"],
+        "dataset_name": train_ds_params["dataset_name"],
+        "root": train_ds_params["root"],
+        "num_classes": train_ds_params["num_classes"],
     }
-    dataset_train = dataset_map[base_config["dataset_name"]](
-        dataset_split="train", dev_mode=dev_mode, **dataset_kwargs
+    dataset_train = create_dataset(
+        split="train",
+        transforms_list=train_ds_params["transforms"],
+        dev_mode=dev_mode,
+        **dataset_kwargs,
     )
-    dataset_val = dataset_map[base_config["dataset_name"]](
-        dataset_split="val", dev_mode=dev_mode, **dataset_kwargs
-    )
-
-    if distributed_mode:
-        # ensures that each process gets a different subset of the dataset in distributed mode
-        sampler_train = DistributedSampler(dataset_train)
-        sampler_val = DistributedSampler(dataset_val, shuffle=False)
-    else:
-        # using RandomSampler and SequentialSampler w/ default parameters is the same as using
-        # shuffle=True and shuffle=False in the DataLoader, respectively; if you pass a Sampler into
-        # the DataLoader, you cannot set the shuffle parameter (mutually exclusive)
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-
-    # create a batch sampler for train but not val which means val will only use a batch_size=1
-    # similar as above, when you set shuffle in the DataLoader it automatically wraps
-    # RandomSampler and SequentialSampler in a BatchSampler
-    # NOTE: DistributedSampler pads the last batch with random samples if drop_last=False and the
-    #       batch is incomplete
-    batch_sampler_train = torch.utils.data.BatchSampler(
-        sampler_train, batch_size, drop_last=True
+    dataset_val = create_dataset(
+        split="val",
+        transforms_list=val_ds_params["transforms"],
+        dev_mode=dev_mode,
+        **dataset_kwargs,
     )
 
+    breakpoint()
 
-    #### start here look at collate <src.data.dataloader.BatchImageCollateFuncion object at 0x7d545083b410>
-    num_workers = base_config["dataset"]["num_workers"] if not dev_mode else 0
-    collate_fn = get_collate_fn(model_config["detector"])
+    train_dl_params = base_config["train_dataloader"]
+    val_dl_params = base_config["train_dataloader"]
 
-    # drop_last is true becuase the loss function intializes masks with the first dimension being the batch_size
-    # NOTE this might only be for YOLO;
-    # during the last batch, the batch_size will be different if the length of the dataset is not divisible by the batch_size
-    dataloader_train = DataLoader(
-        dataset_train,
-        batch_sampler=batch_sampler_train,
-        collate_fn=collate_fn,
-        pin_memory=pin_memory,
-        num_workers=num_workers,
+    train_dl_params.pop("train_dataset")
+    val_dl_params.pop("val_dataset")
+
+    dataloader_train = create_dataloader(
+        is_distributed=distributed_mode,
+        dataset=dataset_train,
+        collate_name=base_config["collate_fn"]["name"],
+        **train_dl_params,
     )
-    dataloader_val = DataLoader(
-        dataset_val,
-        batch_size=val_batch_size,
-        sampler=sampler_val,
-        collate_fn=collate_fn,
-        drop_last=False,
-        pin_memory=pin_memory,
-        num_workers=num_workers,
+    dataloader_val = create_dataloader(
+        is_distributed=distributed_mode,
+        dataset=dataset_train,
+        collate_name=base_config["collate_fn"]["name"],
+        **val_dl_params,
     )
+
+    breakpoint()
 
     detector_name = model_config["detector"]
     detector_params = model_config["params"]
