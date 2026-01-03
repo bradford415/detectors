@@ -12,7 +12,7 @@ import torch.distributed as dist
 import yaml
 from fire import Fire
 
-from detectors.data import create_dataset, create_dataloader
+from detectors.data import create_dataloader, create_dataset
 from detectors.data.datasets.coco import build_coco
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
@@ -203,7 +203,9 @@ def main(
                 log.info("    -%s", torch.cuda.get_device_name(gpu))
         elif torch.mps.is_available():
             # setup mps (apple silicon)
-            base_config["train_dataloader"]["dataset"]["root"] = base_config["train_dataloader"]["dataset"]["root_mac"]
+            base_config["train_dataloader"]["dataset"]["root"] = base_config[
+                "train_dataloader"
+            ]["dataset"]["root_mac"]
             device = torch.device("mps")
             log.info("Using: %s", device)
         else:
@@ -239,22 +241,26 @@ def main(
 
     breakpoint()
 
+    #### start here - run script and parse through errors ######
     train_dl_params = base_config["train_dataloader"]
-    val_dl_params = base_config["train_dataloader"]
+    val_dl_params = base_config["val_dataloader"]
 
-    train_dl_params.pop("train_dataset")
-    val_dl_params.pop("val_dataset")
+    # remove unnecessary keys
+    train_dl_params.pop("dataset")
+    val_dl_params.pop("dataset")
 
     dataloader_train = create_dataloader(
         is_distributed=distributed_mode,
         dataset=dataset_train,
         collate_name=base_config["collate_fn"]["name"],
+        collate_params=base_config["collate_fn"]["params"],
         **train_dl_params,
     )
     dataloader_val = create_dataloader(
         is_distributed=distributed_mode,
         dataset=dataset_train,
         collate_name=base_config["collate_fn"]["name"],
+        collate_params=base_config["collate_fn"]["params"],
         **val_dl_params,
     )
 

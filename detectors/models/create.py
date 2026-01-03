@@ -20,6 +20,8 @@ detectors_map = {
     "rtdetrv2": build_rtdetrv2,
 }
 
+# dino-detr c++ msda can be difficult to install and is only
+# supported on nvidia gpus
 if torch.cuda.is_available():
     detectors_map["dino"] = build_dino
 

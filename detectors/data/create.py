@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Optional
 
 import albumentations as A
@@ -98,40 +99,11 @@ def make_config_transforms(config_transforms: list[dict]):
 
     all_transforms = []
     for transform in config_transforms:
-        TRANSFORM_REGISTRY.get(transform["type"])(transform["params"])
-
-    all_transforms = T.Compose(all_transforms)
-
-    normalize = T.Compose(
-        [T.ToTensor(), T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]
-    )
-
-    if dataset_split == "train":
-        return T.Compose(
-            [
-                T.RandomHorizontalFlip(),
-                T.RandomSelect(
-                    T.RandomResize(short_side_scales, max_size=max_size),
-                    T.Compose(
-                        [
-                            T.RandomResize(short_side_scales_2),
-                            T.RandomSizeCrop(*scales_crop),
-                            T.RandomResize(short_side_scales, max_size=max_size),
-                        ]
-                    ),
-                ),
-                normalize,
-            ]
+        all_transforms.append(
+            TRANSFORM_REGISTRY.get(transform["type"])(**transform.get("params", {}))
         )
-    elif dataset_split == "val" or dataset_split == "test":
-        return T.Compose(
-            [
-                T.RandomResize([max(short_side_scales)], max_size=max_size),
-                normalize,
-            ]
-        )
-    else:
-        raise ValueError(f"unknown dataset split {dataset_split}")
+
+    return T.Compose(all_transforms)
 
 
 def make_yolo_transforms(dataset_split, image_size: int = 416):
@@ -219,6 +191,8 @@ def create_dataset(
         dataset_name: the name of the dataset to intitialize; should be in `dataset_map`
         TODO
     """
+    root = Path(root)
+
     # Set path to images and annotations; TODO: specfic to COCO so need to make it more modular
     # maybe make it a class property
     if split == "train":
