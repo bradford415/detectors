@@ -451,3 +451,35 @@ def load_model_checkpoint(
     start_epoch = weights["epoch"]
 
     return start_epoch
+
+
+class AverageMeter:
+    """Computes and stores the average and current value"""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        """Zero out all the values"""
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        """Update the meter with the new value
+
+        Args:
+            val: new value to add
+            n: weight of the new value (e.g., batch size); note that
+                the sum is multiplied by `n`, this is because the loss
+                is typically averged over the batch in the loss function so when we
+                go to compute the average loss for the entire epoch we need to weight
+                the loss by the batch size (essentially undoes the average in the loss function)
+        """
+        self.val = val
+        self.sum += (
+            val * n
+        )  # multiply by n to get the total loss over the batch (undo the average in the loss function)
+        self.count += n
+        self.avg = self.sum / self.count

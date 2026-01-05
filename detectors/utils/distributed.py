@@ -5,6 +5,7 @@ from typing import Optional
 
 import torch
 import torch.distributed as dist
+from torch import nn
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +19,19 @@ def is_dist_avail_and_initialized() -> bool:
     if not dist.is_initialized():
         return False
     return True
+
+
+def is_parallel(model) -> bool:
+    # Returns True if model is of type DP or DDP
+    return type(model) in (
+        torch.nn.parallel.DataParallel,
+        torch.nn.parallel.DistributedDataParallel,
+    )
+
+
+def de_parallel(model) -> nn.Module:
+    # De-parallelize a model: returns single-GPU model if model is of type DP or DDP
+    return model.module if is_parallel(model) else model
 
 
 def get_global_rank():
@@ -134,7 +148,9 @@ def reduce_dict(
             names.append(key)
             values.append(input_dict[key])
 
-        # stack the tensor values so we can perform all_reduce() in one call
+        # stack the tensor values so we can perform all_reduce() in one call;
+        # by default all_reduce sums the values across processes and distributes
+        # this sum to all processes (same value)
         values = torch.stack(values, dim=0)
         dist.all_reduce(values)
 

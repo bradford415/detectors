@@ -7,6 +7,7 @@ Transforms and data augmentation for both image + bbox.
 """
 import random
 import sys
+from this import d
 from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
@@ -410,6 +411,8 @@ class Normalize:
         Args:
             mean: the mean of the dataset for each channel
             std: the standard deviation of the dataset for each channel
+            convert_to_tv_tensor: whether to convert the bounding boxes to torchvision.tv_tensors.BoundingBoxes;
+                                  used for models like rtdetrv2
         """
         self.mean = mean
         self.std = std
@@ -530,16 +533,35 @@ class Unnormalize:
 class Compose:
     """Stores a list of transforms and applies them sequentially on the image and target label"""
 
-    def __init__(self, transforms: list):
+    def __init__(self, transforms: list, policy: Optional[dict] = None):
         """Initalize the compose class
 
         Args:
             transforms: a list of torch transforms or custom transform classes
+            policy: dictionary of parameters which dictates any special behavior for the transforms;
+                    for example, rtdetrv2 stops certain transforms at specific epochs
         """
         self.transforms = transforms
+        self.policy = policy
 
-    def __call__(self, image: PIL.Image, target: dict):
-        """Apply the list of transforms sequentially
+    def forward(self, *inputs: Any):
+        """Selects and calls the appropriate forward method based on the policy
+
+        Args:
+           inputs: positional arguments to be passed to the appropriate forward method
+        """
+        return self._get_forward(self.policy["name"])(*inputs)
+
+    def _get_forward(self, policy_name: str):
+        """Selects the forward method to use"""
+        forward_methods = {
+            "default": self.default_forward,
+            "stop_epoch": self.stop_epoch_forward,
+        }
+        return forward_methods[policy_name]
+
+    def default_forward(self, image: PIL.Image, target: dict):
+        """The standard behavior for the compose class
 
         Args:
             image: a PIL image to be augmented
@@ -553,6 +575,22 @@ class Compose:
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
+
+    def stop_epoch_forward(self, *inputs: Any):
+        sample = inputs if len(inputs) > 1 else inputs[0]
+        dataset = sample[-1]
+
+        cur_epoch = dataset.epoch
+        policy_ops = self.policy["ops"]
+        policy_epoch = self.policy["epoch"]
+
+        for transform in self.transforms:
+            if type(transform).__name__ in policy_ops and cur_epoch >= policy_epoch:
+                pass
+            else:
+                sample = transform(sample)
+
+        return sample
 
     def __repr__(self):
         format_string = self.__class__.__name__ + "("

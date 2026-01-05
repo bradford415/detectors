@@ -9,6 +9,7 @@ activation_map = {
     "gelu": nn.GELU,
     "silu": nn.SiLU,  # silu is swish with beta=1 (essentially the same)
     "swish": nn.SiLU,
+    None: nn.Identity,
 }
 
 

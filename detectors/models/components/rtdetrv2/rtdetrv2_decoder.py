@@ -1,5 +1,4 @@
-"""Copyright(c) 2023 lyuwenyu. All Rights Reserved.
-"""
+"""Copyright(c) 2023 lyuwenyu. All Rights Reserved."""
 
 import copy
 import functools
@@ -346,6 +345,8 @@ class TransformerDecoder(nn.Module):
 
 
 class RTDETRTransformerv2(nn.Module):
+    """RTDETRTransformerv2 decoder module"""
+
     __share__ = ["num_classes", "eval_spatial_size"]
 
     def __init__(

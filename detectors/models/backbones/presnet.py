@@ -44,7 +44,7 @@ class ConvNormLayer(nn.Module):
             bias=bias,
         )
         self.norm = nn.BatchNorm2d(ch_out)
-        self.act = activation_map[act]()
+        self.act = activation_map.get(act)()
 
     def forward(self, x):
         return self.act(self.norm(self.conv(x)))
@@ -64,7 +64,7 @@ class BasicBlock(nn.Module):
                     OrderedDict(
                         [
                             ("pool", nn.AvgPool2d(2, 2, 0, ceil_mode=True)),
-                            ("conv", ConvNormLayer(ch_in, ch_out, 1, 1)),
+                            ("conv", ConvNormLayer(ch_in, ch_out, 1, 1, act=act)),
                         ]
                     )
                 )
@@ -73,7 +73,7 @@ class BasicBlock(nn.Module):
 
         self.branch2a = ConvNormLayer(ch_in, ch_out, 3, stride, act=act)
         self.branch2b = ConvNormLayer(ch_out, ch_out, 3, 1, act=None)
-        self.act = nn.Identity() if act is None else activation_map[act]()
+        self.act = nn.Identity() if act is None else activation_map.get(act)()
 
     def forward(self, x):
         out = self.branch2a(x)
@@ -123,7 +123,7 @@ class BottleNeck(nn.Module):
             else:
                 self.short = ConvNormLayer(ch_in, ch_out * self.expansion, 1, stride)
 
-        self.act = nn.Identity() if act is None else activation_map[act]()
+        self.act = nn.Identity() if act is None else activation_map.get(act)()
 
     def forward(self, x):
         out = self.branch2a(x)
@@ -168,9 +168,7 @@ class Blocks(nn.Module):
         return out
 
 
-BACKBONE_REGISTRY.register()
-
-
+@BACKBONE_REGISTRY.register()
 class PResNet(nn.Module):
     """A ResNet variant which combines ResNet-C and ResNet-D improvements from the paper
     "Bag of Tricks for Image Classification with Convolutional Neural Networks"

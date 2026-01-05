@@ -13,14 +13,14 @@ import yaml
 from fire import Fire
 
 from detectors.data import create_dataloader, create_dataset
-from detectors.data.datasets.coco import build_coco
+
+# from detectors.data.datasets.coco import build_coco
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
-from detectors.solvers.build import build_solvers
+from detectors.solvers.build import build_solvers, create_loss
+from detectors.solvers.ema_model import create_ema_model
 from detectors.trainer import Trainer
 from detectors.utils import config, distributed, reproduce
-
-dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 
 # Initialize the root logger
 log = logging.getLogger(__name__)
@@ -228,20 +228,17 @@ def main(
     }
     dataset_train = create_dataset(
         split="train",
-        transforms_list=train_ds_params["transforms"],
+        transforms_config=train_ds_params["transforms"],
         dev_mode=dev_mode,
         **dataset_kwargs,
     )
     dataset_val = create_dataset(
         split="val",
-        transforms_list=val_ds_params["transforms"],
+        transforms_config=val_ds_params["transforms"],
         dev_mode=dev_mode,
         **dataset_kwargs,
     )
 
-    breakpoint()
-
-    #### start here - run script and parse through errors ######
     train_dl_params = base_config["train_dataloader"]
     val_dl_params = base_config["val_dataloader"]
 
@@ -264,9 +261,7 @@ def main(
         **val_dl_params,
     )
 
-    breakpoint()
-
-    detector_name = model_config["detector"]
+    detector_name = base_config["detector_name"]
     detector_params = model_config["params"]
 
     ##### start hereeee build the model
@@ -279,8 +274,6 @@ def main(
         num_classes=dataset_train.num_classes,
     )
     model.to(device)
-
-    breakpoint()
 
     # Wrap the base model in ddp and store a pointer to the model without ddp; when saving the model
     # we want to save the model without ddp for portablility; ddpm wraps the model with additional
@@ -329,9 +322,9 @@ def main(
     # Compute and log the number of params in the model
     reproduce.count_parameters(model)
 
-    log.info("\nmodel architecture")
-    log.info("\tbackbone: %s", detector_params["backbone"]["name"])
-    log.info("\tdetector: %s", model_config["detector"])
+    # log.info("\nmodel architecture")
+    # log.info("\tbackbone: %s", detector_params["backbone"]["name"])
+    # log.info("\tdetector: %s", model_config["detector"])
 
     # Extract the train arguments from base config
     train_args = base_config["train"]
@@ -346,7 +339,23 @@ def main(
         parameter_strategy=solver_config.get("parameter_strategy", "all"),
     )
 
+    criterion = create_loss(
+        model_name=base_config["detector_name"],
+        num_classes=dataset_train.num_classes,
+        base_config=base_config,
+        device=device,
+    )
+
+    ema_model = None
+    if base_config["solver"]["use_ema"]:
+        ema_model = create_ema_model(
+            model, ema_params=base_config["solver"]["ema_params"]
+        )
+
     trainer = Trainer(
+        model=model,
+        ema_model=ema_model,
+        criterion=criterion,
         output_dir=str(output_path),
         model_name=detector_name,
         use_amp=train_args["use_amp"],

@@ -45,9 +45,8 @@ def build_rtdetrv2(detector_params: dict[str, Any]):
     encoder_name = detector_components["encoder"]
     decoder_name = detector_components["decoder"]
 
-    backbone = BACKBONE_REGISTRY.get(backbone_name, None)(
-        **detector_params[backbone_name]
-    )
+    backbone = BACKBONE_REGISTRY.get(backbone_name)(**detector_params[backbone_name])
+
     if backbone_name is None:
         raise ValueError("")
 

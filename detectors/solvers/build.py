@@ -1,4 +1,5 @@
 import re
+from asyncio.unix_events import BaseChildWatcher
 from typing import Any, Optional, Sequence
 
 import torch
@@ -147,7 +148,6 @@ def get_optimizer_params(
 
 def create_loss(
     model_name: str,
-    model: nn.Module,
     num_classes: int,
     device: torch.device,
     base_config: dict,
@@ -156,15 +156,14 @@ def create_loss(
 
     Args:
         model_name: the name of the model
-        model: the pytorch model being trained; if using ddp pass the pointer to the underlying model
         num_classes: the number of classes in the dataset
         base_config: the base configuration dictionary containing all parameters
     """
 
     # initalize loss with specific args
     if model_name == "yolov3":
-        num_anchors = model.yolo_layers[0].num_anchors
-        criterion = Yolov3Loss(num_anchors=num_anchors, device=device)
+        # TODO: fix this to properly work with yolo (num_anchors)
+        criterion = Yolov3Loss(num_anchors=base_config["num_anchors"], device=device)
     elif model_name == "dino":
         num_decoder_layers = base_config["detector"]["transformer"][
             "num_decoder_layers"

@@ -53,7 +53,7 @@ def create_detector(
         raise NotImplementedError
     elif detector_name == "dino":
         model = _create_dino(detector_name, num_classes, detector_args)
-    elif detector_name == "rtdetrv2":
+    elif detector_name.lower() == "rtdetrv2":
         model = _create_rtdetrv2(detector_name, num_classes, detector_args)
     else:
         raise ValueError(f"detctor: {detector_name} not recognized")

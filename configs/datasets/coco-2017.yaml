@@ -22,6 +22,7 @@ train_dataloader:
     #       it shouldn't matter, just be consistent during inference:
     #       https://github.com/lyuwenyu/RT-DETR/issues/289#issuecomment-2082180429
     transforms:
+      transforms:
       - {type: RandomPhotometricDistort, params: {p: 0.5}}
       - {type: RandomZoomOut, parms: {fill: 0}}
       - {type: RandomIoUCrop, params: {p: 0.8}}
@@ -30,7 +31,10 @@ train_dataloader:
       - {type: Resize, params: {size: [640, 640]}}
       - {type: SanitizeBoundingBoxes, params: {min_size: 1}}
       - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
-      # TODO: add the stop policy for stopping at an epoch
+      policy:
+        name: stop_epoch
+        epoch: 71 # epoch in [71, ~) stop `ops`
+        ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
     
     # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
     # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
@@ -45,7 +49,8 @@ train_dataloader:
 val_dataloader:
   dataset: 
     transforms:
-      - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
+      transforms:
+        - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
   
   shuffle: False
   batch_size_per_gpu: 4

@@ -1,9 +1,8 @@
-name: "rtdetrv2"
+detector_name: "rtdetrv2"
 
 params:
 
-
-  RTDETR: 
+  RTDETRv2: 
     backbone: PResNet
     encoder: HybridEncoder
     decoder: RTDETRTransformerv2
@@ -57,7 +56,7 @@ params:
     dim_feedforward: 1024
     num_queries: 300
     dropout: 0.
-    actitvation: relu
+    activation: relu
 
     num_denoising: 100
     label_noise_ratio: 0.5

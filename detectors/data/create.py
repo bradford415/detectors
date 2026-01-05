@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from detectors.data.collate import get_collate
 from detectors.data.datasets.coco import CocoDetectionDETR, CocoDetectionYolo
 from detectors.data.transforms import TRANSFORM_REGISTRY
-from detectors.data.transforms import transforms as T  # for legacy
+from detectors.data.transforms import transforms as T
 
 dataset_map = {
     "coco_detection_detr": CocoDetectionDETR,
@@ -94,16 +94,16 @@ def make_dino_detr_transforms(dataset_split):
         raise ValueError(f"unknown dataset split {dataset_split}")
 
 
-def make_config_transforms(config_transforms: list[dict]):
-    """TODO"""
+def make_config_transforms(config_transforms: dict):
+    """Initialize the transformations to use from a config file"""
 
     all_transforms = []
-    for transform in config_transforms:
+    for transform in config_transforms["transforms"]:
         all_transforms.append(
             TRANSFORM_REGISTRY.get(transform["type"])(**transform.get("params", {}))
         )
 
-    return T.Compose(all_transforms)
+    return T.Compose(all_transforms, config_transforms.get("policy"))
 
 
 def make_yolo_transforms(dataset_split, image_size: int = 416):
@@ -181,7 +181,7 @@ def create_dataset(
     split: str,
     root: str,
     num_classes: int,
-    transforms_list: list[str],
+    transforms_config: dict[str],
     model_name: Optional[str] = None,
     dev_mode: bool = False,
 ):
@@ -212,7 +212,7 @@ def create_dataset(
         data_transforms = make_yolo_transforms(split)
     else:
         # rt-detr
-        data_transforms = make_config_transforms(transforms_list)
+        data_transforms = make_config_transforms(transforms_config)
 
     if dataset_name == "coco_detection_detr":
         dataset = CocoDetectionDETR(
@@ -248,7 +248,7 @@ def create_dataloader(
             # used for validation
             sampler = torch.utils.data.SequentialSampler(dataset)
 
-    batch_sampler = torch.utils.BatchSampler(
+    batch_sampler = torch.utils.data.BatchSampler(
         sampler, batch_size=batch_size_per_gpu, drop_last=drop_last
     )
 
@@ -257,13 +257,24 @@ def create_dataloader(
     # NOTE: Consider adding ability to skip batch_sampler (e.g., pass sampler insted of batch_sampler)
     #       for example batched images in balidation sometimes hurt accuracy due to padding,
     #       though I don't fully understand why since the padding is masked
-    dataloader = DataLoader(
-        dataset,
-        batch_sampler=batch_sampler,
-        collate_fn=collate,
-        drop_last=drop_last,
-        pin_memory=pin_memory,
-        num_workers=num_workers,
-    )
+    if batch_sampler is not None:
+        dataloader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            collate_fn=collate,
+            pin_memory=pin_memory,
+            num_workers=num_workers,
+        )
+    else:
+        # TODO: this isn't possible at the moment since we always create a batch_sampler above
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size_per_gpu,
+            sampler=sampler,
+            collate_fn=collate,
+            drop_last=drop_last,
+            pin_memory=pin_memory,
+            num_workers=num_workers,
+        )
 
     return dataloader
