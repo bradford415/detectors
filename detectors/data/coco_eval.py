@@ -124,9 +124,9 @@ class CocoEvaluator:
     def prepare_for_coco_detection(self, predictions):
         """Prepare results for COCO detection evaluation.
 
-        1. Convert bounding boxes to from XYXY to COCO format XYWH
+        1. Convert bounding boxes from XYXY to COCO format XYWH
         2. Convert labels and scores to lists if they are not already
-        3. Create a list of dictionaries for the processed predictionms
+        3. Create a list of dictionaries for the processed predictions
 
         Returns:
             coco_results: a list of dictionaries containing box predictions across all imagse in the

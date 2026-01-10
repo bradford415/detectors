@@ -1,5 +1,6 @@
 import datetime
 import logging
+import math
 import time
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
@@ -7,10 +8,12 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import numpy as np
+from detectors.data import coco_eval
 import pandas as pd
 import torch
 import torch.distributed as dist
 from pycocotools.coco import COCO
+from timm.scheduler.scheduler import Scheduler
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
@@ -106,7 +109,6 @@ class BaseTrainer(ABC):
 
     def _save_model_master(
         self,
-        model,
         optimizer,
         current_epoch,
         save_path,
@@ -120,7 +122,7 @@ class BaseTrainer(ABC):
             TODO
         """
         # extract the model without DDP wrapper if it exists; we do not want to save the DDP wrapper
-        model_to_save = model.module if hasattr(model, "module") else model
+        model_to_save = distributed.de_parallel(self.model)
 
         if distributed.is_main_process():
             save_path.parents[0].mkdir(parents=True, exist_ok=True)
@@ -131,6 +133,8 @@ class BaseTrainer(ABC):
                 "epoch": current_epoch
                 + 1,  # + 1 bc when we resume training we want to start at the next step
             }
+            if self.ema_model is not None:
+                save_dict["ema_model"] = self.ema_model.state_dict()
             if lr_scheduler is not None:
                 save_dict["lr_scheduler"] = lr_scheduler.state_dict()
 
@@ -537,7 +541,7 @@ class RTDETRTrainer(BaseTrainer):
             base_kwargs: parameters for the base class
         """
         super().__init__(**base_kwargs)
-        
+
         tb_log_dir = self.output_dir / "tensorboard-logs"
         tb_log_dir.mkdir(parents=True, exist_ok=True)
         self.tb_writer = SummaryWriter(tb_log_dir)
@@ -619,7 +623,7 @@ class RTDETRTrainer(BaseTrainer):
         best_ap = 0.0
         for epoch in range(start_epoch, epochs + 1):
             self.model.train()
-            self.criterion.train() # Setting this doesn't really do anything but better to be safe
+            self.criterion.train()  # Setting this doesn't really do anything but better to be safe
 
             if self.is_distributed:
                 # IMPORTANT: DistributedSampler needs to shuffle the dataset in a coordinated way across all ranks.
@@ -641,61 +645,79 @@ class RTDETRTrainer(BaseTrainer):
                 max_norm,
                 scaler,
             )
-            
+
             ### start here ####
 
             curr_lr = optimizer.param_groups[0]["lr"]
 
             # Increment lr scheduler every epoch if set for "epochs"
+            # NOTE: RTDETRV2 steps here but it's step to 1000 which would be 1000 epochs,
+            #       it has a seperate lr scheduler for the warmup which is in train_one_epcoh
+            #       so it steps on steps; from the code, it looks like it just warms up to the base
+            #       lr rate and stays there sense it will never hit 1000 epochs to drop
             if scheduler is not None and self.step_lr_on == "epochs":
                 scheduler.step()
 
-            # Save a checkpoint before the LR drop; this is beneficial for several reasons:
+            # TODO: consider saving a checkpoint before the LR drop; this is beneficial for several reasons:
             #   1. Fallback point: if training after the LR drop doesn't improve performance or
             #      overfits, you can go back to this checkpoint and try different strategies
-            if epoch % scheduler.step_size == 0:
-                ckpt_path = (
-                    self.output_dir
-                    / "checkpoints"
-                    / f"checkpoint{epoch:04}_lr_{str(curr_lr).replace('.', '-')}.pt"
-                )
-                self._save_model_master(
-                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
-                )
+            # NOTE: I don't think RTDETR every drops LR so this might not be needed
 
-            # Save the model every ckpt_epochs
+            # Save and overwrite the last model and a model every ckpt_epochs
+            ckpt_path = self.output_dir / "checkpoints"
+            checkpoint_paths = [ckpt_path / "last_model.pth"]
             if epoch % ckpt_epochs == 0:
-                ckpt_path = self.output_dir / "checkpoints" / f"checkpoint{epoch:04}.pt"
+                checkpoint_paths.append(
+                    self.output_dir / "checkpoints" / f"checkpoint{epoch:04}.pt"
+                )
+            for save_path in checkpoint_paths:
                 self._save_model_master(
-                    model, optimizer, epoch, save_path=ckpt_path, lr_scheduler=scheduler
+                    optimizer, epoch, save_path=save_path, lr_scheduler=scheduler
                 )
 
             # Evaluate the model on the validation set
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
             # TODO: probably save metrics output into csv
-            if self.model_name == "dino":
-                stats = evaluate_detr(
-                    model,
-                    dataloader_val,
-                    coco_api,
-                    postprocessors,
-                    criterion=criterion,
-                    enable_amp=self.enable_amp,
-                    output_path=self.output_dir,
-                    device=self.device,
-                )
-            else:
-                # evaluate() is used by both val and test set; this can be customized in the future if needed
-                # but for now validation and test behave the same
-                metrics_output, detections, val_loss = evaluate(
-                    model,
-                    dataloader_val,
-                    class_names,
-                    criterion=criterion,
-                    output_path=self.output_dir,
-                    device=self.device,
-                )
+            stats, coco_evaluator = evaluate_detr(
+                self.ema_model,
+                dataloader_val,
+                coco_api,
+                postprocessors,
+                criterion=self.criterion,
+                enable_amp=self.enable_amp,
+                output_path=self.output_dir,
+                device=self.device,
+            )
+            
+            # saves the coco eval dictionary
+            # dictionary contains the keys:
+            #   precision: 5D tensor: IoU × recall × class × area × maxDets
+            #              example how to interprete the 5D tensor:
+            #               Get the PRECISION values for all max detections allowed,
+            #               for allarea thresholds, for all classes, 
+            #               for all recall thresholds, for all iou thresholds
+            #             NOTE: maxDets is the number of allowable detections per image (1, 10, 100);
+            #                   when computing AP, it computes over all thresholds except maxDEts
+            #                   as this is fixed at 100 (index 2)
+            #             concrete example:
+            #               precision[3, :, 17, 0, 2] means
+            #               At IoU = 0.65
+            #               For class #17 (say “cat”)
+            #               For all object sizes
+            #               Using max 100 detections
+            #               What is precision as recall goes from 0 → 1?            
+            #   recall: 4D tensor: IoU × class × area × maxDets
+            #   scores:	detection scores used in PR curves
+            #   params:	IoU thresholds, area ranges, maxDets
+            #   counts:	dimensions of the tensors
+            #   date: timestamp
+            #   iouType: "bbox"
+            # Example of how to interpret the 5D
+            if distributed.distributed.is_main_process():
+                torch.save(coco_evaluator.coco_eval["bbox"].eval, self.output_dir / "coco_eval.pth")
+
+            #### start here
 
             train_loss = epoch_train_loss_dict["loss"]
             val_loss = stats["loss"]
@@ -801,7 +823,11 @@ class RTDETRTrainer(BaseTrainer):
         epoch_lr = []
         running_loss_dict = {}  # TODO should make these default dicts
         epoch_loss_dict = {}
+
+        num_updates_per_epoch = math.ceil(len(dataloader_train) / grad_accum_steps)
         num_update_steps = 0
+
+        num_steps_per_epoch = len(dataloader_train)
 
         # Create the metric logger generator which keeps track of and synchornizes
         # different metrics across proccesses
@@ -809,7 +835,7 @@ class RTDETRTrainer(BaseTrainer):
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=20))
         header = f"Epoch: [{epoch}]"
-        
+
         for steps, (samples, targets) in enumerate(
             metric_logger.log_every(dataloader_train, self.log_train_steps, header), 1
         ):
@@ -823,7 +849,7 @@ class RTDETRTrainer(BaseTrainer):
                 }
                 for t in targets
             ]
-            
+
             # TODO: might need to account for grad accumulation but probably doesn't matter
             global_step = epoch * len(dataloader_train) + steps
 
@@ -842,7 +868,7 @@ class RTDETRTrainer(BaseTrainer):
                 with torch.autocast(enabled=False):
                     loss_dict = self.criterion(preds, targets)
 
-                # sum all the loss componenets
+                # sum all the loss components
                 loss = sum(loss_dict.values())
 
                 if grad_accum_steps > 1:
@@ -874,7 +900,28 @@ class RTDETRTrainer(BaseTrainer):
                         nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
                     optimizer.step()
 
+                # update the ema model
+                self.ema_model.update(self.model)
+
                 optimizer.zero_grad()
+
+                # Increment lr scheduler every effective batch_size (grad_accum_steps)
+                if scheduler is not None and self.step_lr_on == "steps":
+                    if not isinstance(
+                        scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+                    ):
+                        if isinstance(scheduler, Scheduler):
+                            # timm scheduler, need to pass in the number of steps that we've taken so far;
+                            # NOTE: the calculation passed here takes into account gradient accumulation
+                            scheduler.step_update(
+                                (epoch - 1) * num_updates_per_epoch + num_update_steps
+                            )
+                        else:
+                            # pytorch scheduler we just call step()
+                            # TODO: does this need to take into account gradient accumulation?
+                            scheduler.step()
+                    else:
+                        scheduler.step(loss.item())
 
             # trying to use metric logger  instead of this
             # if (steps) % self.log_train_steps == 0:
@@ -892,26 +939,29 @@ class RTDETRTrainer(BaseTrainer):
             # average the loss components across all processes and compute the total loss
             loss_dict_reduced = distributed.reduce_dict(loss_dict)
             loss_value = sum(loss_dict_reduced.values())
-            
+
             # update the metric logger with th averaged losses and current learning rate
             metric_logger.update(loss=loss_value, **loss_dict_reduced)
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-            
+
             # TODO: consider adding tensorboard, probably shoould
             if self.writer and distributed.is_main_process():
-                self.writer.add_scalar('Loss/total', loss_value.item(), global_step)
+                self.writer.add_scalar("Loss/total", loss_value.item(), global_step)
                 for j, pg in enumerate(optimizer.param_groups):
-                    self.writer.add_scalar(f'Lr/pg_{j}', pg['lr'], global_step)
+                    self.writer.add_scalar(f"Lr/pg_{j}", pg["lr"], global_step)
                 for k, v in loss_dict_reduced.items():
-                    self.writer.add_scalar(f'Loss/{k}', v.item(), global_step)
+                    self.writer.add_scalar(f"Loss/{k}", v.item(), global_step)
 
         # Sum the total count and value for all processes across all meters
         metric_logger.synchronize_between_processes()
         print("Averaged stats:", metric_logger)
-        
+
         # create a dictionary of averaged stats across all processes for the entire epoch
-        epoch_averaged_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+        epoch_averaged_stats = {
+            k: meter.global_avg for k, meter in metric_logger.meters.items()
+        }
         return epoch_averaged_stats
+
 
 # TODO: update this for yolo (remove detr items)
 class BaseTrainer(ABC):
@@ -1524,3 +1574,47 @@ class BaseTrainer(ABC):
                 save_dict,
                 save_path,
             )
+
+
+def create_trainer(
+    model_name: str,
+    model: nn.Module,
+    output_dir: str,
+    step_lr_on: str,
+    criterion: Optional[nn.Module] = None,
+    device: torch.device = torch.device("cpu"),
+    log_train_steps: int = 20,
+    amp_dtype: str = "float16",
+    disable_amp: bool = False,
+):
+    """Initializes the trainer class based on the task type
+
+    Args:
+        trainer_type: the type of trainer to use; either "classification" or "ssl"
+        see the Trainer subclass for more details on the specific arguments
+    """
+    if model_name.lower() == "dino_detr":
+        return DINODETRTrainer(
+            model=model,
+            output_dir=output_dir,
+            step_lr_on=step_lr_on,
+            criterion=criterion,
+            device=device,
+            log_train_steps=log_train_steps,
+            amp_dtype=amp_dtype,
+            disable_amp=disable_amp,
+        )
+    elif model_name.lower() in ["rtdetrv2"]:
+        return RTDETRTrainer(
+            model=model,
+            output_dir=output_dir,
+            step_lr_on=step_lr_on,
+            device=device,
+            log_train_steps=log_train_steps,
+            amp_dtype=amp_dtype,
+            disable_amp=disable_amp,
+        )  # TODO: intialize
+    else:
+        raise ValueError(f"Unknown trainer type: {model_name}")
+
+    ### start her build trainer class and test swin

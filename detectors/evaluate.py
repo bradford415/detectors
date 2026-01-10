@@ -3,6 +3,7 @@ from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
+from faster_coco_eval.utils.pytorch import FasterCocoEvaluator
 from pycocotools.coco import COCO
 from torch import nn
 from tqdm import tqdm
@@ -14,8 +15,9 @@ from detectors.postprocessing.eval import (
     print_eval_stats,
 )
 from detectors.postprocessing.nms import non_max_suppression
-from detectors.utils import distributed, misc
+from detectors.utils import distributed
 from detectors.utils.box_ops import xywh2xyxy
+from detectors.utils.logger import MetricLogger
 
 log = logging.getLogger(__name__)
 
@@ -159,6 +161,8 @@ def evaluate_detr(
     device: torch.device = torch.device("cpu"),
 ) -> Tuple[Tuple, List]:
     """A single forward pass to evluate the val set after training an epoch
+    
+    Supports: Dino Detr, RT-Detr
 
     Args:
         model: Model to train
@@ -175,17 +179,23 @@ def evaluate_detr(
 
     """
     model.eval()
+    criterion.eval()  # again, I don't think this is needed
 
     # typically just "bbox" iou
     iou_types = tuple(postprocessors.keys())
 
-    coco_evaluator = CocoEvaluator(coco_api, iou_types)
+    coco_evaluator = FasterCocoEvaluator(coco_api, iou_types)
+
+    metric_logger = MetricLogger(delimiter="  ")
+    header = "Test"
 
     epoch_loss = []
     running_loss_dict = {}  # TODO should make these default dicts
     running_total_loss_scaled = 0.0
     num_steps = 0
-    for steps, (samples, targets) in enumerate(dataloader_test, 1):
+    for steps, (samples, targets) in enumerate(
+        metric_logger.log_every(dataloader_test, 1)
+    ):
         num_steps += 1
         samples = samples.to(device)
 
@@ -198,48 +208,43 @@ def evaluate_detr(
             for t in targets
         ]
 
-        with torch.autocast(
+        with torch.autocast(  # NOTE: RT-DETR and Detectronv2 disable amp for validation/testing
             device_type=device.type,
             dtype=torch.float16,
             enabled=enable_amp,
         ):
             preds = model(samples, targets)
 
-            loss_dict = criterion(preds, targets)
+        loss_dict = criterion(preds, targets)
 
-        weight_dict = criterion.weight_dict
+        if hasattr(criterion, "weight_dict"):
+            weight_dict = criterion.weight_dict
+        else:
+            weight_dict = None
 
-        # compute the total loss by scaling each component of the loss by its weight value;
-        # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
-        # dino sums a total of 39 losses w/ the default values;
-        # see detectors/models/README.md for information on the losses that propagate gradients
-        loss = sum(
-            loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict
-        )
+        if weight_dict is not None:  # dino detr
+            # average the losses across all processes; represents the current step loss
+            reduced_loss_dict = distributed.reduce_dict(loss_dict, average=True)
+
+            # compute the total loss by scaling each component of the loss by its weight value;
+            # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
+            # dino sums a total of 39 losses w/ the default values;
+            # see detectors/models/README.md for information on the losses that propagate gradients
+            loss = sum(
+                loss_dict[k] * weight_dict[k]
+                for k in loss_dict.keys()
+                if k in weight_dict
+            )
+        else:
+            reduced_loss_dict = distributed.reduce_dict(loss_dict, average=True)
+            # sum all the loss components
+            loss = sum(loss_dict.values())
+
+        # update the metric logger with the validation losses
+        metric_logger.update(loss=loss, **loss_dict)
 
         ## Remove this maybe? ###
         epoch_loss.append(loss.detach().cpu())
-
-        # average the losses across all processes; represents the current step loss
-        reduced_loss_dict = distributed.reduce_dict(loss_dict, average=True)
-
-        # scale the loss components in the reduced dict just like the total loss computation;
-        # this is the average loss across all processes
-        reduced_loss_dict_scaled = {
-            k: v * weight_dict[k]
-            for k, v in reduced_loss_dict.items()
-            if k in weight_dict
-        }
-
-        # sum the averaged (avg num boxes per node) loss components; at the end of validation
-        # we'll divide by the numbber of steps to get an average loss
-        for key, val in reduced_loss_dict_scaled.items():
-            if key in running_loss_dict:
-                running_loss_dict[key] += val.detach()
-            else:
-                running_loss_dict[key] = val.detach()
-
-        running_total_loss_scaled += sum(reduced_loss_dict_scaled.values()).item()
 
         # extract the original image sizes (b, 2) where 2 = (h, w)
         orig_target_sizes = torch.stack([img["orig_size"] for img in targets], dim=0)
@@ -265,9 +270,10 @@ def evaluate_detr(
         # example: per-category will give us an IoU for each class (dog, cat, mouse)
         coco_evaluator.update(res)
 
-    running_loss_dict["loss"] = running_total_loss_scaled
-    stats = distributed.synchronize_loss_between_processes(num_steps, running_loss_dict)
+    #stats = distributed.synchronize_loss_between_processes(num_steps, running_loss_dict)
+    metric_logger.synchronize_between_processes()
 
+    stats = {}
     if coco_evaluator is not None:
         # Update the coco_eval object with the image ids and evaluations from all processes
         coco_evaluator.synchronize_between_processes()
@@ -296,7 +302,7 @@ def evaluate_detr(
         # by default this contains the 12 values AP/AR values that are printed
         stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
 
-    return stats
+    return stats, coco_evaluator
 
 
 @torch.no_grad()

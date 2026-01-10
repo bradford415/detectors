@@ -19,7 +19,7 @@ from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.solvers.build import build_solvers, create_loss
 from detectors.solvers.ema_model import create_ema_model
-from detectors.trainer import Trainer
+from detectors.trainer import create_trainer
 from detectors.utils import config, distributed, reproduce
 
 # Initialize the root logger
@@ -339,6 +339,8 @@ def main(
         parameter_strategy=solver_config.get("parameter_strategy", "all"),
     )
 
+    breakpoint()
+
     criterion = create_loss(
         model_name=base_config["detector_name"],
         num_classes=dataset_train.num_classes,
@@ -352,12 +354,12 @@ def main(
             model, ema_params=base_config["solver"]["ema_params"]
         )
 
-    trainer = Trainer(
+    trainer = create_trainer(
+        model_name=detector_name,
         model=model,
         ema_model=ema_model,
         criterion=criterion,
         output_dir=str(output_path),
-        model_name=detector_name,
         use_amp=train_args["use_amp"],
         is_distributed=distributed_mode,
         step_lr_on=solver_config["lr_scheduler"]["step_lr_on"],

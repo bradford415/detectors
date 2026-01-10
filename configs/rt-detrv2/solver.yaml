@@ -32,13 +32,18 @@ solver:
         # sets the weight decay for the encoder/decoder norm/batch norm layers
         weight_decay: 0.0
 
+# NOTE: RTDETRV2 steps here but it's step to 1000 which would be 1000 epochs,
+#       it has a seperate lr scheduler for the warmup which is in train_one_epcoh
+#       so it steps on steps; from the code, it looks like it just warms up to the base
+#       lr rate and stays there sense it will never hit 1000 epochs to drop; therefore
+#       if I set milestones to 300 million it should warmup then never drop the LR
   lr_scheduler:
     name: multistep_lr
     step_lr_on: "steps"
 
     params:
       # after 1000 steps decay the learning rate by lr*gamma
-      milestones: [3000] # (1000 steps after the warmup?) TODO might need to change this
+      milestones: [300000000] # (1000 steps after the warmup?) TODO might need to change this
       gamma: 0.1
       warmup_t: 2000
       t_in_epochs: False # timesteps are in steps
