@@ -161,7 +161,7 @@ def evaluate_detr(
     device: torch.device = torch.device("cpu"),
 ) -> Tuple[Tuple, List]:
     """A single forward pass to evluate the val set after training an epoch
-    
+
     Supports: Dino Detr, RT-Detr
 
     Args:
@@ -270,7 +270,7 @@ def evaluate_detr(
         # example: per-category will give us an IoU for each class (dog, cat, mouse)
         coco_evaluator.update(res)
 
-    #stats = distributed.synchronize_loss_between_processes(num_steps, running_loss_dict)
+    # stats = distributed.synchronize_loss_between_processes(num_steps, running_loss_dict)
     metric_logger.synchronize_between_processes()
 
     stats = {}

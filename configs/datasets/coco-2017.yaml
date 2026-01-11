@@ -23,6 +23,7 @@ train_dataloader:
     #       https://github.com/lyuwenyu/RT-DETR/issues/289#issuecomment-2082180429
     transforms:
       transforms:
+      - {type: ConvertToTVTensor, params: {bbox_format: "xyxy"}}
       - {type: RandomPhotometricDistort, params: {p: 0.5}}
       - {type: RandomZoomOut, parms: {fill: 0}}
       - {type: RandomIoUCrop, params: {p: 0.8}}
@@ -30,12 +31,12 @@ train_dataloader:
       - {type: RandomHorizontalFlip}
       - {type: Resize, params: {size: [640, 640]}}
       - {type: SanitizeBoundingBoxes, params: {min_size: 1}}
-      - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
+      - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], out_bbox_format: "cxcywh"}}
       policy:
         name: stop_epoch
         epoch: 71 # epoch in [71, ~) stop `ops`
         ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
-    
+
     # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
     # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
     num_classes: 91
@@ -50,7 +51,8 @@ val_dataloader:
   dataset: 
     transforms:
       transforms:
-        - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], bbox_fmt: "cxcywh", convert_to_tv_tensor: True}}
+        - {type: ConvertToTVTensor, params: {bbox_format: "xyxy"}}
+        - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], out_bbox_format: "cxcywh"}}
   
   shuffle: False
   batch_size_per_gpu: 4

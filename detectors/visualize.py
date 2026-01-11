@@ -10,7 +10,6 @@ import torch
 from matplotlib.ticker import NullLocator
 from PIL import Image
 
-from detectors.data.collate_functions import resize
 from detectors.data.transforms.transforms import Unnormalize
 from detectors.utils.box_ops import rescale_boxes
 from detectors.utils.misc import to_cpu

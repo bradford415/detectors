@@ -13,6 +13,7 @@ from typing import Any, List, Optional, Tuple, Union
 import numpy as np
 import PIL
 import torch
+import torchvision
 import torchvision.transforms.functional as F
 import torchvision.transforms.v2 as T
 from PIL.Image import Image as PILImage
@@ -394,6 +395,25 @@ class RandomIoUCrop(T.RandomIoUCrop):
         return super().forward(*inputs)
 
 
+class ConvertToTVTensor:
+    """TODO"""
+
+    def __init__(self, bbox_format):
+        """TODO
+
+        Args:
+        """
+        self.bbox_format = bbox_format
+
+    def __call__(self, image, target) -> Optional[torch.tensor]:
+        """TODO"""
+        h, w = np.array(image).shape[:2]
+        boxes = target["boxes"]
+        boxes = convert_to_tv_tensor(boxes, "boxes", self.bbox_format, (h, w))
+        target["boxes"] = boxes
+        return image, target
+
+
 class Normalize:
     """Normalize an image by mean and standard deviation and convert the bounding box
     coordinates XYXY -> CXCYWH and normalize between [0, 1] (i.e., normalize by image dimensions)
@@ -403,7 +423,7 @@ class Normalize:
         self,
         mean: list[float],
         std: list[float],
-        bbox_fmt: str = "cxcywh",
+        out_bbox_format: str = "cxcywh",
         convert_to_tv_tensor: bool = False,
     ):
         """Intializes the normalization transforms
@@ -416,7 +436,7 @@ class Normalize:
         """
         self.mean = mean
         self.std = std
-        self.bbox_fmt = bbox_fmt
+        self.out_bbox_fmt = out_bbox_format
         self.convert_to_tv_tensor = convert_to_tv_tensor
 
     def __call__(self, image, target=None) -> Optional[torch.tensor]:
@@ -424,6 +444,12 @@ class Normalize:
         bounding boxes to yolo format [center_x, center_y, w, h] normalized by
         the image dimensions (0-1).
         """
+        if isinstance(image, PIL.Image.Image):
+            image = F.pil_to_tensor(image)
+
+        image = image.float()  # uint8 -> float32
+
+        image = image / 255.0
 
         image = F.normalize(image, mean=self.mean, std=self.std)
         if target is None:
@@ -435,13 +461,26 @@ class Normalize:
         h, w = image.shape[-2:]
         if "boxes" in target:
             boxes = target["boxes"]
-            boxes = box_xyxy_to_cxcywh(boxes)
 
-            # Normalize boxes between [0, 1]
+            # convert BoundingBoxes from XYXY -> CXCYWH
+            if isinstance(boxes, BoundingBoxes):
+                in_fmt = boxes.format.value.lower()
+                boxes = torchvision.ops.box_convert(
+                    boxes, in_fmt=in_fmt, out_fmt=self.out_bbox_fmt.lower()
+                )
+                boxes = convert_to_tv_tensor(
+                    boxes,
+                    key="boxes",
+                    box_format=self.out_bbox_fmt.upper(),
+                    spatial_size=(h, w),
+                )
+            else:
+                # regular torch tensor
+                boxes = box_xyxy_to_cxcywh(boxes)
+
+            # Normalize boxes between [0, 1]; NOTE: this converts the BoundingBox back to regular tensor
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
 
-            if self.convert_to_tv_tensor:
-                boxes = convert_to_tv_tensor(boxes, "boxes", self.bbox_fmt, (h, w))
             target["boxes"] = boxes
         return image, target
 
@@ -544,13 +583,13 @@ class Compose:
         self.transforms = transforms
         self.policy = policy
 
-    def forward(self, *inputs: Any):
+    def __call__(self, **inputs: Any):
         """Selects and calls the appropriate forward method based on the policy
 
         Args:
            inputs: positional arguments to be passed to the appropriate forward method
         """
-        return self._get_forward(self.policy["name"])(*inputs)
+        return self._get_forward(self.policy["name"])(**inputs)
 
     def _get_forward(self, policy_name: str):
         """Selects the forward method to use"""
@@ -560,7 +599,7 @@ class Compose:
         }
         return forward_methods[policy_name]
 
-    def default_forward(self, image: PIL.Image, target: dict):
+    def default_forward(self, image: PIL.Image, target: dict, current_epoch: int):
         """The standard behavior for the compose class
 
         Args:
@@ -570,27 +609,27 @@ class Compose:
                         labels: class IDs for each object (num_objects,)
                         orig_size: the original image size before data augmentation
                         size: the current image size; updated later in the pipeline after augmentation
-
         """
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
 
-    def stop_epoch_forward(self, *inputs: Any):
-        sample = inputs if len(inputs) > 1 else inputs[0]
-        dataset = sample[-1]
+    def stop_epoch_forward(self, image: PIL.Image, target: dict, current_epoch: int):
+        # sample = inputs if len(inputs) > 1 else inputs[0]
+        # dataset = sample[-1]
+        sample = image
 
-        cur_epoch = dataset.epoch
+        # cur_epoch = dataset.epoch
         policy_ops = self.policy["ops"]
         policy_epoch = self.policy["epoch"]
 
         for transform in self.transforms:
-            if type(transform).__name__ in policy_ops and cur_epoch >= policy_epoch:
+            if type(transform).__name__ in policy_ops and current_epoch >= policy_epoch:
                 pass
             else:
-                sample = transform(sample)
+                sample, target = transform(sample, target)
 
-        return sample
+        return sample, target
 
     def __repr__(self):
         format_string = self.__class__.__name__ + "("

@@ -365,6 +365,9 @@ def create_rtdetrv2_loss(
         gamma: the gamma parameter for focal loss
         num_classes: the number of classes to predict
     """
+    weight_dict = matcher_params.pop("weight_dict")
+
+    matcher_params = {**weight_dict, **matcher_params}
     matcher = HungarianMatcher(**matcher_params)
 
     criterion = RTDETRCriterionv2(

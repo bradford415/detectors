@@ -1,4 +1,5 @@
 from torchvision.transforms.v2 import (
+    RandomHorizontalFlip,
     RandomIoUCrop,
     RandomPhotometricDistort,
     RandomZoomOut,
@@ -12,9 +13,9 @@ from detectors.utils.registry import Registry
 from .transforms import (
     CenterCrop,
     Compose,
+    ConvertToTVTensor,
     Normalize,
     RandomCrop,
-    RandomHorizontalFlip,
     RandomIoUCrop,
     RandomPad,
     RandomResize,
@@ -31,6 +32,7 @@ TRANSFORM_REGISTRY.__doc__ = (
 to_register = [
     CenterCrop,
     Compose,
+    ConvertToTVTensor,
     Normalize,
     RandomCrop,
     RandomHorizontalFlip,

@@ -4,7 +4,6 @@ from torch import nn
 from detectors.utils.box_ops import box_cxcywh_to_xyxy
 
 
-# TODO: need to go through and comment
 class PostProcess(nn.Module):
     """This module converts the model's output into the format expected by the coco api;
 
@@ -80,17 +79,25 @@ class PostProcess(nn.Module):
 
         # decode the topk indices to which queries they belong to `topk_boxes` and which
         # class they belong to `labels`
+        # NOTE: out_logits.shape[2] is the number of classes
         topk_boxes = topk_indexes // out_logits.shape[2]
         labels = topk_indexes % out_logits.shape[2]
 
         if not_to_xyxy:
             boxes = out_bbox
         else:
+            print("delete the if or comment")
             boxes = box_cxcywh_to_xyxy(out_bbox)
 
         if test:
+            print("do not delete me")
             assert not not_to_xyxy
             boxes[:, :, 2:] = boxes[:, :, 2:] - boxes[:, :, :2]
+        print("remove test if not called")
+
+        # NOTE: RT-Detr remaps coco categories to sequential in the dataloader but then
+        #       here maps back to the original class ids; I'll try to do it first with
+        #       leaving at as the original class indices like dino-detr does
 
         # extract the topk boxes coords in xyxy format
         boxes = torch.gather(boxes, 1, topk_boxes.unsqueeze(-1).repeat(1, 1, 4))
@@ -100,6 +107,7 @@ class PostProcess(nn.Module):
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]
 
+        # Not used, here just in case; DETRs say they don't need nms but sometimes still do
         if self.nms_iou_threshold > 0:
             item_indices = [
                 nms(b, s, iou_threshold=self.nms_iou_threshold)

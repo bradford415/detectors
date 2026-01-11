@@ -182,7 +182,7 @@ def create_loss(
         criterion_params = base_config["criterion"]
 
         criterion = create_rtdetrv2_loss(
-            matcher_params=criterion_params["matcher_params"],
+            matcher_params=criterion_params["matcher"]["params"],
             weight_dict=criterion_params["weight_dict"],
             losses=criterion_params["losses"],
             alpha=criterion_params["alpha"],

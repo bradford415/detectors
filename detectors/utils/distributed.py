@@ -10,6 +10,13 @@ from torch import nn
 log = logging.getLogger(__name__)
 
 
+def cleanup():
+    """cleanup distributed environment"""
+    if is_dist_avail_and_initialized():
+        torch.distributed.barrier()
+        torch.distributed.destroy_process_group()
+
+
 def is_dist_avail_and_initialized() -> bool:
     """Returns whether distributed training is available and initialized;
     if not, no distributed operations can be used

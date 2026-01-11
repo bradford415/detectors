@@ -182,6 +182,8 @@ def main(
         batch_size = 1
         val_batch_size = 1
         grad_accum_steps = 2
+        base_config["train_dataloader"]["num_workers"] = 0
+        base_config["val_dataloader"]["num_workers"] = 0
 
     log.info(
         "\neffective_batch_size: %-5d grad_accum_steps: %-5d batch_size_per_gpu: %d",
@@ -246,14 +248,14 @@ def main(
     train_dl_params.pop("dataset")
     val_dl_params.pop("dataset")
 
-    dataloader_train = create_dataloader(
+    dataloader_train, sampler_train = create_dataloader(
         is_distributed=distributed_mode,
         dataset=dataset_train,
         collate_name=base_config["collate_fn"]["name"],
         collate_params=base_config["collate_fn"]["params"],
         **train_dl_params,
     )
-    dataloader_val = create_dataloader(
+    dataloader_val, _ = create_dataloader(
         is_distributed=distributed_mode,
         dataset=dataset_train,
         collate_name=base_config["collate_fn"]["name"],
@@ -287,15 +289,17 @@ def main(
             model.module
         )  # this line is technically not needed but helps for clarity
 
-    # Initalize postprocessor if using DINO DETR
-    if "postprocess" in detector_params:
+    # Initalize postprocessor if using a detr model
+    if "postprocessor" in base_config:
         # converts the models output to the expected output by the coco api, during inference
         # and visualization only; not used during training
-        postprocess_args = detector_params["postprocess"]
+        postprocess_args = base_config["postprocessor"]
         postprocessors = {
             "bbox": PostProcess(
-                num_select=postprocess_args["num_select"],
-                nms_iou_threshold=postprocess_args["nms_iou_threshold"],
+                num_select=postprocess_args["num_top_queries"],
+                nms_iou_threshold=postprocess_args.get(
+                    "nms_iou_threshold"
+                ),  # usually None for detr
             )
         }
 
@@ -339,8 +343,6 @@ def main(
         parameter_strategy=solver_config.get("parameter_strategy", "all"),
     )
 
-    breakpoint()
-
     criterion = create_loss(
         model_name=base_config["detector_name"],
         num_classes=dataset_train.num_classes,
@@ -374,11 +376,9 @@ def main(
 
     # Build trainer args used for the training
     trainer_args = {
-        "model": model,
-        "criterion": criterion,
         "dataloader_train": dataloader_train,
-        "sampler_train": sampler_train,
         "dataloader_val": dataloader_val,
+        "sampler_train": sampler_train,
         "optimizer": optimizer,
         "scheduler": lr_scheduler,
         "class_names": dataset_train.class_names,
@@ -392,6 +392,8 @@ def main(
         "checkpoint_path": train_args["checkpoint_path"],
     }
     trainer.train(**trainer_args)
+
+    distributed.cleanup()
 
 
 if __name__ == "__main__":

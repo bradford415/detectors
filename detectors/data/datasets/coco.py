@@ -59,6 +59,7 @@ class CocoDetectionDETR(torchvision.datasets.CocoDetection):
         num_classes: int,
         split: str,
         transforms: T = None,
+        curr_epoch: int = 0,
         dev_mode: bool = False,
     ):
         """Initialize the COCO dataset class
@@ -102,6 +103,9 @@ class CocoDetectionDETR(torchvision.datasets.CocoDetection):
         # Extract dataset ontology
         categories_list = self.coco.loadCats(self.coco.getCatIds())
         self.class_names = {cat["id"]: cat["name"] for cat in categories_list}
+
+        # used to disable the transforms at a certain epoch
+        self.current_epoch = 0
 
         # Substantially reduces the dataset size to quickly test code
         if dev_mode:
@@ -148,8 +152,9 @@ class CocoDetectionDETR(torchvision.datasets.CocoDetection):
         image, target = self.prepare(image, target)
 
         if self._transforms is not None:
-
-            image, target = self._transforms(image=image, target=target)
+            image, target = self._transforms(
+                image=image, target=target, current_epoch=self.current_epoch
+            )
 
         return image, target
 

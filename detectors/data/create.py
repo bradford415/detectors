@@ -183,6 +183,7 @@ def create_dataset(
     num_classes: int,
     transforms_config: dict[str],
     model_name: Optional[str] = None,
+    current_epoch: int = 0,
     dev_mode: bool = False,
 ):
     """Initialize the dataset class
@@ -216,7 +217,13 @@ def create_dataset(
 
     if dataset_name == "coco_detection_detr":
         dataset = CocoDetectionDETR(
-            images_dir, annotation_file, num_classes, split, data_transforms, dev_mode
+            images_dir,
+            annotation_file,
+            num_classes,
+            split,
+            data_transforms,
+            current_epoch,
+            dev_mode,
         )
     else:
         raise ValueError(f"dataset: {dataset_name} not recognized")
@@ -277,4 +284,4 @@ def create_dataloader(
             num_workers=num_workers,
         )
 
-    return dataloader
+    return dataloader, sampler

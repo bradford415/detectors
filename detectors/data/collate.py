@@ -181,7 +181,7 @@ def get_collate(collate_name: str, collate_params: Optional[dict]) -> callable:
 
 
 # TODO START HERE consider not need this base collate function
-class BaseCollateFunction(object):
+class BaseCollateFunction:
     def set_epoch(self, epoch):
         self._epoch = epoch
 

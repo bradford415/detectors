@@ -10,7 +10,7 @@ __include__:
 
 # Whether to run in development/debugging mode; this only uses a few samples in in the train/val dataset
 # to quickly run the code as well as sets num_workers=0
-dev_mode: False
+dev_mode: True
 
 # Base directory for output files
 output_dir: "output"

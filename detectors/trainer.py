@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import numpy as np
-from detectors.data import coco_eval
 import pandas as pd
 import torch
 import torch.distributed as dist
@@ -19,6 +18,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils import data
 from torch.utils.tensorboard import SummaryWriter
 
+from detectors.data import coco_eval
 from detectors.evaluate import (
     AverageMeter,
     evaluate,
@@ -27,6 +27,7 @@ from detectors.evaluate import (
 )
 from detectors.utils import distributed
 from detectors.utils.logger import MetricLogger, SmoothedValue
+from detectors.visualize import plot_loss, plot_mAP
 
 log = logging.getLogger(__name__)
 
@@ -621,6 +622,7 @@ class RTDETRTrainer(BaseTrainer):
         scaler = torch.amp.GradScaler(self.device.type)
 
         best_ap = 0.0
+        best_stats = {"epoch": -1}
         for epoch in range(start_epoch, epochs + 1):
             self.model.train()
             self.criterion.train()  # Setting this doesn't really do anything but better to be safe
@@ -631,6 +633,10 @@ class RTDETRTrainer(BaseTrainer):
                 #   - If they didn’t, one process might sample data in a completely different order than another, leading to overlaps or missing samples
                 #   - this is required even for one process or else the sampler will shuffle the data the same way every epoch
                 sampler_train.set_epoch(epoch)
+
+            # to disable rt-detr transforms at a specific epoch
+            dataloader_train.dataset.current_epoch = epoch - 1
+            dataloader_train.collate_fn.set_epoch(epoch - 1)
 
             # Track the time it takes for one epoch (train and val)
             one_epoch_start_time = time.time()
@@ -679,7 +685,7 @@ class RTDETRTrainer(BaseTrainer):
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
             # TODO: probably save metrics output into csv
-            stats, coco_evaluator = evaluate_detr(
+            val_stats, coco_evaluator = evaluate_detr(
                 self.ema_model,
                 dataloader_val,
                 coco_api,
@@ -689,13 +695,36 @@ class RTDETRTrainer(BaseTrainer):
                 output_path=self.output_dir,
                 device=self.device,
             )
-            
+
+            for k in val_stats:
+                # Write the validation stats to tensorboard
+                if self.writer and distributed.is_main_process():
+                    for i, v in enumerate(val_stats[k]):
+                        self.writer.add_scalar(f"Test/{k}_{i}".format(k), v, epoch)
+
+                # Update the best mAP (there are 12 elements in the list and mAP is the 0th element)
+                if k in best_stats:
+                    best_stats["epoch"] = (
+                        epoch
+                        if val_stats[k][0] > best_stats[k]
+                        else best_stats["epoch"]
+                    )
+                    best_stats[k] = max(best_stats[k], val_stats[k][0])
+                else:
+                    best_stats["epoch"] = epoch
+                    best_stats[k] = val_stats[k][0]
+
+                if best_stats["epoch"] == epoch and self.output_dir:
+                    self._save_model_master(
+                        optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
+                    )
+
             # saves the coco eval dictionary
             # dictionary contains the keys:
             #   precision: 5D tensor: IoU × recall × class × area × maxDets
             #              example how to interprete the 5D tensor:
             #               Get the PRECISION values for all max detections allowed,
-            #               for allarea thresholds, for all classes, 
+            #               for allarea thresholds, for all classes,
             #               for all recall thresholds, for all iou thresholds
             #             NOTE: maxDets is the number of allowable detections per image (1, 10, 100);
             #                   when computing AP, it computes over all thresholds except maxDEts
@@ -706,7 +735,7 @@ class RTDETRTrainer(BaseTrainer):
             #               For class #17 (say “cat”)
             #               For all object sizes
             #               Using max 100 detections
-            #               What is precision as recall goes from 0 → 1?            
+            #               What is precision as recall goes from 0 → 1?
             #   recall: 4D tensor: IoU × class × area × maxDets
             #   scores:	detection scores used in PR curves
             #   params:	IoU thresholds, area ranges, maxDets
@@ -715,14 +744,15 @@ class RTDETRTrainer(BaseTrainer):
             #   iouType: "bbox"
             # Example of how to interpret the 5D
             if distributed.distributed.is_main_process():
-                torch.save(coco_evaluator.coco_eval["bbox"].eval, self.output_dir / "coco_eval.pth")
-
-            #### start here
+                torch.save(
+                    coco_evaluator.coco_eval["bbox"].eval,
+                    self.output_dir / "coco_eval.pth",
+                )
 
             train_loss = epoch_train_loss_dict["loss"]
-            val_loss = stats["loss"]
+            val_loss = val_stats["loss"]
 
-            mAP = stats["coco_eval_bbox"][0]
+            mAP = val_stats["coco_eval_bbox"][0]
 
             # precision, recall, AP, f1, ap_class = metrics_output
             # mAP = AP.mean()
@@ -839,6 +869,7 @@ class RTDETRTrainer(BaseTrainer):
         for steps, (samples, targets) in enumerate(
             metric_logger.log_every(dataloader_train, self.log_train_steps, header), 1
         ):
+            breakpoint()
             samples = samples.to(self.device)
 
             # move label tensors to gpu
@@ -964,7 +995,7 @@ class RTDETRTrainer(BaseTrainer):
 
 
 # TODO: update this for yolo (remove detr items)
-class BaseTrainer(ABC):
+class YoloTrainer(ABC):
     """The base trainer class; not to be used directly"""
 
     def __init__(
@@ -1187,12 +1218,8 @@ class BaseTrainer(ABC):
 
             mAP = stats["coco_eval_bbox"][0]
 
-            # precision, recall, AP, f1, ap_class = metrics_output
-            # mAP = AP.mean()
-            # epoch_mAP.append(mAP * 100)
-
-            # plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
-            # plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
+            plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
+            plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
 
             # Create csv file of training stats per epoch
             train_dict = {
@@ -1578,14 +1605,16 @@ class BaseTrainer(ABC):
 
 def create_trainer(
     model_name: str,
+    is_distributed: bool,
     model: nn.Module,
+    ema_model: nn.Module,
     output_dir: str,
     step_lr_on: str,
     criterion: Optional[nn.Module] = None,
     device: torch.device = torch.device("cpu"),
     log_train_steps: int = 20,
     amp_dtype: str = "float16",
-    disable_amp: bool = False,
+    use_amp: bool = True,
 ):
     """Initializes the trainer class based on the task type
 
@@ -1602,17 +1631,21 @@ def create_trainer(
             device=device,
             log_train_steps=log_train_steps,
             amp_dtype=amp_dtype,
-            disable_amp=disable_amp,
+            use_amp=use_amp,
         )
     elif model_name.lower() in ["rtdetrv2"]:
         return RTDETRTrainer(
             model=model,
+            ema_model=ema_model,
+            criterion=criterion,
+            model_name=model_name,
             output_dir=output_dir,
             step_lr_on=step_lr_on,
+            is_distributed=is_distributed,
             device=device,
             log_train_steps=log_train_steps,
             amp_dtype=amp_dtype,
-            disable_amp=disable_amp,
+            use_amp=use_amp,
         )  # TODO: intialize
     else:
         raise ValueError(f"Unknown trainer type: {model_name}")
