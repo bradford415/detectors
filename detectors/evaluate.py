@@ -224,21 +224,22 @@ def evaluate_detr(
 
         if weight_dict is not None:  # dino detr
             # average the losses across all processes; represents the current step loss
-            reduced_loss_dict = distributed.reduce_dict(loss_dict, average=True)
+            loss_dict_reduced = distributed.reduce_dict(loss_dict, average=True)
 
             # compute the total loss by scaling each component of the loss by its weight value;
             # if the loss key is not a key in the weight_dict, then it is not used in the total loss;
             # dino sums a total of 39 losses w/ the default values;
             # see detectors/models/README.md for information on the losses that propagate gradients
-            loss = sum(
-                loss_dict[k] * weight_dict[k]
-                for k in loss_dict.keys()
+            loss_dict_reduced_scaled = {
+                k: v * weight_dict[k]
+                for k, v in loss_dict_reduced.items()
                 if k in weight_dict
-            )
+            }
+            loss = sum(loss_dict_reduced_scaled.values())
         else:
-            reduced_loss_dict = distributed.reduce_dict(loss_dict, average=True)
-            # sum all the loss components
-            loss = sum(loss_dict.values())
+            # average the loss components across all processes and compute the total loss
+            loss_dict_reduced = distributed.reduce_dict(loss_dict, average=True)
+            loss = sum(loss_dict_reduced.values())
 
         # update the metric logger with the validation losses
         metric_logger.update(loss=loss, **loss_dict)
@@ -300,7 +301,7 @@ def evaluate_detr(
         # by default this contains the 12 values AP/AR values that are printed
         stats["coco_eval_bbox"] = coco_evaluator.coco_eval["bbox"].stats.tolist()
 
-    return stats, coco_evaluator
+    return stats, coco_evaluator, loss.item()
 
 
 @torch.no_grad()

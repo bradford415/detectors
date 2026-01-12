@@ -623,6 +623,8 @@ class RTDETRTrainer(BaseTrainer):
 
         best_ap = 0.0
         best_stats = {"epoch": -1}
+        running_train_loss = []
+        running_val_loss = []
         for epoch in range(start_epoch, epochs + 1):
             self.model.train()
             self.criterion.train()  # Setting this doesn't really do anything but better to be safe
@@ -683,7 +685,7 @@ class RTDETRTrainer(BaseTrainer):
             log.info("\nEvaluating on validation set — epoch %d", epoch)
 
             # TODO: probably save metrics output into csv
-            val_stats, coco_evaluator = evaluate_detr(
+            val_stats, coco_evaluator, val_loss = evaluate_detr(
                 self.ema_model.module,
                 dataloader_val,
                 coco_api,
@@ -694,7 +696,11 @@ class RTDETRTrainer(BaseTrainer):
                 device=self.device,
             )
 
-            for k in val_stats:
+            for (
+                k
+            ) in (
+                val_stats
+            ):  # currently only has one key "coco_eval_bbox" which is the 12 AP values
                 # Write the validation stats to tensorboard
                 if self.tb_writer and distributed.is_main_process():
                     for i, v in enumerate(val_stats[k]):
@@ -712,10 +718,10 @@ class RTDETRTrainer(BaseTrainer):
                     best_stats["epoch"] = epoch
                     best_stats[k] = val_stats[k][0]
 
-                if best_stats["epoch"] == epoch and self.output_dir:
-                    self._save_model_master(
-                        optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
-                    )
+                # if best_stats["epoch"] == epoch and self.output_dir:
+                #     self._save_model_master(
+                #         optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
+                #     )
 
             # saves the coco eval dictionary
             # dictionary contains the keys:
@@ -740,23 +746,25 @@ class RTDETRTrainer(BaseTrainer):
             #   counts:	dimensions of the tensors
             #   date: timestamp
             #   iouType: "bbox"
-            # Example of how to interpret the 5D
-            if distributed.distributed.is_main_process():
+            # An example of why this is useful is to save precision recall curves for each class
+            # (i.e., precision = eval["precision"][iou_index, :, class_id, area_index, maxdet_index]
+            #        `:` in the 2nd index because we want all the recall values 0 to 1)
+            # TODO: this is only probably necessary for evaluation on the  best model
+            if distributed.is_main_process():
                 torch.save(
                     coco_evaluator.coco_eval["bbox"].eval,
                     self.output_dir / "coco_eval.pth",
                 )
 
             train_loss = epoch_train_loss_dict["loss"]
-            val_loss = val_stats["loss"]
+            running_train_loss.append(train_loss)
+            running_val_loss.append(val_loss)
 
             mAP = val_stats["coco_eval_bbox"][0]
 
-            # precision, recall, AP, f1, ap_class = metrics_output
-            # mAP = AP.mean()
-            # epoch_mAP.append(mAP * 100)
-
-            # plot_loss(train_loss, val_loss, save_dir=str(self.output_dir))
+            plot_loss(
+                running_train_loss, running_val_loss, save_dir=str(self.output_dir)
+            )
             # plot_mAP(epoch_mAP, save_dir=str(self.output_dir))
 
             # Create csv file of training stats per epoch
@@ -793,7 +801,7 @@ class RTDETRTrainer(BaseTrainer):
                     epoch,
                 )
                 self._save_model_master(
-                    model, optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
+                    optimizer, epoch, save_path=best_path, lr_scheduler=scheduler
                 )
 
                 # delete the previous best mAP model's checkpoint
@@ -965,7 +973,7 @@ class RTDETRTrainer(BaseTrainer):
             #
 
             # average the loss components across all processes and compute the total loss
-            loss_dict_reduced = distributed.reduce_dict(loss_dict)
+            loss_dict_reduced = distributed.reduce_dict(loss_dict, average=True)
             loss_value = sum(loss_dict_reduced.values())
 
             # update the metric logger with th averaged losses and current learning rate
