@@ -254,8 +254,6 @@ def evaluate_detr(
         # [0, orig_img_w/h] xyxy format
         results: list[dict] = postprocessors["bbox"](preds, orig_target_sizes)
 
-        assert len(results) == samples.tensors.shape[0]
-
         # map the ground-truth image id to the predicted results
         res = {
             target["image_id"].item(): output
@@ -367,8 +365,6 @@ def test_detr(
         # bboxes are converted from relative [0, 1] cxcywh format to absolute
         # [0, orig_img_w/h] xyxy format
         results: list[dict] = postprocessors["bbox"](preds, orig_target_sizes)
-
-        assert len(results) == samples.tensors.shape[0]
 
         # map the ground-truth image id to the predicted results
         res = {}

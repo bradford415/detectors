@@ -652,8 +652,6 @@ class RTDETRTrainer(BaseTrainer):
                 scaler,
             )
 
-            ### start here ####
-
             curr_lr = optimizer.param_groups[0]["lr"]
 
             # Increment lr scheduler every epoch if set for "epochs"
@@ -686,7 +684,7 @@ class RTDETRTrainer(BaseTrainer):
 
             # TODO: probably save metrics output into csv
             val_stats, coco_evaluator = evaluate_detr(
-                self.ema_model,
+                self.ema_model.module,
                 dataloader_val,
                 coco_api,
                 postprocessors,
@@ -698,9 +696,9 @@ class RTDETRTrainer(BaseTrainer):
 
             for k in val_stats:
                 # Write the validation stats to tensorboard
-                if self.writer and distributed.is_main_process():
+                if self.tb_writer and distributed.is_main_process():
                     for i, v in enumerate(val_stats[k]):
-                        self.writer.add_scalar(f"Test/{k}_{i}".format(k), v, epoch)
+                        self.tb_writer.add_scalar(f"Test/{k}_{i}".format(k), v, epoch)
 
                 # Update the best mAP (there are 12 elements in the list and mAP is the 0th element)
                 if k in best_stats:
@@ -861,7 +859,7 @@ class RTDETRTrainer(BaseTrainer):
 
         # Create the metric logger generator which keeps track of and synchornizes
         # different metrics across proccesses
-        metric_logger = MetricLogger(delimiter="  ")
+        metric_logger = MetricLogger(delimiter="  ", meters_to_log=["loss"])
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=20))
         header = f"Epoch: [{epoch}]"
@@ -869,7 +867,7 @@ class RTDETRTrainer(BaseTrainer):
         for steps, (samples, targets) in enumerate(
             metric_logger.log_every(dataloader_train, self.log_train_steps, header), 1
         ):
-            breakpoint()
+            ##### start here run code #####
             samples = samples.to(self.device)
 
             # move label tensors to gpu
@@ -894,10 +892,9 @@ class RTDETRTrainer(BaseTrainer):
                 ):
                     preds = self.model(samples, targets)
 
-                # NOTE: RT-DETR disables autocast on the loss function; I can probably
-                # just move this outside the first autocast but I'm just keeping it for consistency
-                with torch.autocast(enabled=False):
-                    loss_dict = self.criterion(preds, targets)
+                # NOTE: RT-DETR disables autocast on the loss function
+                # with torch.autocast(enabled=False):
+                loss_dict = self.criterion(preds, targets)
 
                 # sum all the loss components
                 loss = sum(loss_dict.values())
@@ -976,12 +973,12 @@ class RTDETRTrainer(BaseTrainer):
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
             # TODO: consider adding tensorboard, probably shoould
-            if self.writer and distributed.is_main_process():
-                self.writer.add_scalar("Loss/total", loss_value.item(), global_step)
+            if self.tb_writer and distributed.is_main_process():
+                self.tb_writer.add_scalar("Loss/total", loss_value.item(), global_step)
                 for j, pg in enumerate(optimizer.param_groups):
-                    self.writer.add_scalar(f"Lr/pg_{j}", pg["lr"], global_step)
+                    self.tb_writer.add_scalar(f"Lr/pg_{j}", pg["lr"], global_step)
                 for k, v in loss_dict_reduced.items():
-                    self.writer.add_scalar(f"Loss/{k}", v.item(), global_step)
+                    self.tb_writer.add_scalar(f"Loss/{k}", v.item(), global_step)
 
         # Sum the total count and value for all processes across all meters
         metric_logger.synchronize_between_processes()

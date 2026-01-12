@@ -227,6 +227,7 @@ def main(
         "dataset_name": train_ds_params["dataset_name"],
         "root": train_ds_params["root"],
         "num_classes": train_ds_params["num_classes"],
+        "contiguous_cat_ids": train_ds_params["contiguous_cat_ids"],
     }
     dataset_train = create_dataset(
         split="train",
@@ -257,7 +258,7 @@ def main(
     )
     dataloader_val, _ = create_dataloader(
         is_distributed=distributed_mode,
-        dataset=dataset_train,
+        dataset=dataset_val,
         collate_name=base_config["collate_fn"]["name"],
         collate_params=base_config["collate_fn"]["params"],
         **val_dl_params,
@@ -297,9 +298,7 @@ def main(
         postprocessors = {
             "bbox": PostProcess(
                 num_select=postprocess_args["num_top_queries"],
-                nms_iou_threshold=postprocess_args.get(
-                    "nms_iou_threshold"
-                ),  # usually None for detr
+                contiguous_cat_ids=train_ds_params["contiguous_cat_ids"],
             )
         }
 
@@ -369,7 +368,7 @@ def main(
         log_train_steps=base_config["log_train_steps"],
     )
 
-    if detector_name in ["dino"]:
+    if hasattr(dataset_val, "coco"):
         coco_api = dataset_val.coco
     else:
         coco_api = None

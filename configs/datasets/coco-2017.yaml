@@ -23,7 +23,7 @@ train_dataloader:
     #       https://github.com/lyuwenyu/RT-DETR/issues/289#issuecomment-2082180429
     transforms:
       transforms:
-      - {type: ConvertToTVTensor, params: {bbox_format: "xyxy"}}
+      - {type: ConvertToTVTensor, params: {bbox_format: "xyxy"}} # convert boxes to torchvision.BoundingBox object
       - {type: RandomPhotometricDistort, params: {p: 0.5}}
       - {type: RandomZoomOut, parms: {fill: 0}}
       - {type: RandomIoUCrop, params: {p: 0.8}}
@@ -37,9 +37,14 @@ train_dataloader:
         epoch: 71 # epoch in [71, ~) stop `ops`
         ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
 
+    
+    # whether to remap the sparse coco IDs to contiguous, dense IDs (0-79); I think this required for RT-DETR
+    contiguous_cat_ids: True
+
     # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
-    # NOTE: the max_id of the "categories" key in the coco annotation file is 90 (so 90 + 1 = 91)
-    num_classes: 91
+    # NOTE: the max_id of the "categories" AFTER remapping to contiguous IDs is 79 (so 79 + 1 = 80)
+    # TODO: I should check if rt-detr auto increments this anywhere
+    num_classes: 80 
 
   # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
   num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
@@ -52,8 +57,9 @@ val_dataloader:
     transforms:
       transforms:
         - {type: ConvertToTVTensor, params: {bbox_format: "xyxy"}}
+        - {type: Resize, params: {size: [640, 640]}}
         - {type: Normalize, params: {mean: [0.0, 0.0, 0.0], std: [1.0, 1.0, 1.0], out_bbox_format: "cxcywh"}}
-  
+
   shuffle: False
   batch_size_per_gpu: 4
   num_workers: 2

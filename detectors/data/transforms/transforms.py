@@ -589,7 +589,11 @@ class Compose:
         Args:
            inputs: positional arguments to be passed to the appropriate forward method
         """
-        return self._get_forward(self.policy["name"])(**inputs)
+        if self.policy is not None:
+            policy_name = self.policy["name"]
+        else:
+            policy_name = "default"
+        return self._get_forward(policy_name)(**inputs)
 
     def _get_forward(self, policy_name: str):
         """Selects the forward method to use"""

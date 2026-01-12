@@ -8,7 +8,7 @@ import datetime
 import pickle
 import time
 from collections import defaultdict, deque
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 import torch.distributed as tdist
@@ -158,10 +158,11 @@ def reduce_dict(input_dict, average=True) -> Dict[str, torch.Tensor]:
     return reduced_dict
 
 
-class MetricLogger(object):
-    def __init__(self, delimiter="\t"):
+class MetricLogger:
+    def __init__(self, delimiter="\t", meters_to_log: Optional[list] = None):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
+        self.meters_to_log = meters_to_log
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -182,7 +183,11 @@ class MetricLogger(object):
     def __str__(self):
         loss_str = []
         for name, meter in self.meters.items():
-            loss_str.append("{}: {}".format(name, str(meter)))
+            if self.meters_to_log is not None:
+                if name in self.meters_to_log:
+                    loss_str.append("{}: {}".format(name, str(meter)))
+            else:
+                loss_str.append("{}: {}".format(name, str(meter)))
         return self.delimiter.join(loss_str)
 
     def synchronize_between_processes(self):
@@ -206,7 +211,7 @@ class MetricLogger(object):
             log_msg = self.delimiter.join(
                 [
                     header,
-                    "[{0" + space_fmt + "}/{1}]",
+                    "[{0" + space_fmt + "}/{1}] (batches_per_gpu)",
                     "eta: {eta}",
                     "{meters}",
                     "time: {time}",

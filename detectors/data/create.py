@@ -181,6 +181,7 @@ def create_dataset(
     split: str,
     root: str,
     num_classes: int,
+    contiguous_cat_ids: bool,
     transforms_config: dict[str],
     model_name: Optional[str] = None,
     current_epoch: int = 0,
@@ -222,6 +223,7 @@ def create_dataset(
             num_classes,
             split,
             data_transforms,
+            contiguous_cat_ids,
             current_epoch,
             dev_mode,
         )

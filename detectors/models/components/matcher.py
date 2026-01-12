@@ -109,13 +109,16 @@ class HungarianMatcher(nn.Module):
         indices = [
             linear_sum_assignment(c[i]) for i, c in enumerate(C.split(sizes, -1))
         ]
-        return [
+
+        indices = [
             (
                 torch.as_tensor(i, dtype=torch.int64),
                 torch.as_tensor(j, dtype=torch.int64),
             )
             for i, j in indices
         ]
+
+        return {"indices": indices}
 
 
 def build_matcher(

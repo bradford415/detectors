@@ -106,5 +106,5 @@ def create_ema_model(model, ema_params: dict[str, Any]):
         model (_type_): _description_
         ema_params (dict[str, Any]): _description_
     """
-    ema_model = ModelEMA(model, ema_params)
+    ema_model = ModelEMA(model, **ema_params)
     return ema_model

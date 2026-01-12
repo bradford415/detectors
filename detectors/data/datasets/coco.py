@@ -59,6 +59,7 @@ class CocoDetectionDETR(torchvision.datasets.CocoDetection):
         num_classes: int,
         split: str,
         transforms: T = None,
+        contiguous_cat_ids: bool = False,
         curr_epoch: int = 0,
         dev_mode: bool = False,
     ):
@@ -78,7 +79,9 @@ class CocoDetectionDETR(torchvision.datasets.CocoDetection):
 
         self._transforms = transforms
 
-        self.prepare = PreprocessCoco(return_masks=False, contiguous_cat_ids=False)
+        self.prepare = PreprocessCoco(
+            return_masks=False, contiguous_cat_ids=contiguous_cat_ids
+        )
 
         # for DINO DETR, num_classes should always be set to the max_class_id + 1; if you check the COCO 2017 file
         # `instances_train2017.json` and look at the "categories" key, the max_id is "90" for "toothbrush" therefore

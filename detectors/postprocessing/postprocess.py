@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 
+from detectors.data.coco_utils import mscoco_label2category
 from detectors.utils.box_ops import box_cxcywh_to_xyxy
 
 
@@ -17,10 +18,16 @@ class PostProcess(nn.Module):
 
     """
 
-    def __init__(self, num_select=100, nms_iou_threshold=-1) -> None:
+    def __init__(
+        self,
+        num_select: int = 100,
+        contiguous_cat_ids: bool = False,
+        nms_iou_threshold: int = -1,
+    ) -> None:
         super().__init__()
         self.num_select = num_select
         self.nms_iou_threshold = nms_iou_threshold
+        self.contiguous_cat_ids = contiguous_cat_ids
 
     @torch.no_grad()
     def forward(
@@ -96,8 +103,16 @@ class PostProcess(nn.Module):
         print("remove test if not called")
 
         # NOTE: RT-Detr remaps coco categories to sequential in the dataloader but then
-        #       here maps back to the original class ids; I'll try to do it first with
-        #       leaving at as the original class indices like dino-detr does
+        #       here maps back to the original class ids; setting contiguous class ids is required
+        #       or else you receive a cuda memory access error
+        if self.contiguous_cat_ids:
+            labels = (
+                torch.tensor(
+                    [mscoco_label2category[int(x.item())] for x in labels.flatten()]
+                )
+                .to(boxes.device)
+                .reshape(labels.shape)
+            )
 
         # extract the topk boxes coords in xyxy format
         boxes = torch.gather(boxes, 1, topk_boxes.unsqueeze(-1).repeat(1, 1, 4))

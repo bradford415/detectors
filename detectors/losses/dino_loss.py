@@ -342,7 +342,8 @@ class SetCriterion(nn.Module):
         device = next(iter(outputs.values())).device
 
         # TODO: comment what this does
-        indices = self.matcher(outputs_without_aux, targets)
+        matched = self.matcher(outputs_without_aux, targets)
+        indices = matched["indices"]
 
         if return_indices:
             indices0_copy = indices

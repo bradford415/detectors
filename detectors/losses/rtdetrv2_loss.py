@@ -190,7 +190,7 @@ class RTDETRCriterionv2(nn.Module):
         num_boxes = torch.as_tensor(
             [num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device
         )
-        if is_dist_available_and_initialized():
+        if is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
@@ -347,7 +347,7 @@ class RTDETRCriterionv2(nn.Module):
 
 def create_rtdetrv2_loss(
     matcher_params: dict,
-    weight_dict: dict,
+    loss_weight_dict: dict,
     losses: list,
     alpha: float = 0.2,
     gamma: float = 2.0,
@@ -365,14 +365,14 @@ def create_rtdetrv2_loss(
         gamma: the gamma parameter for focal loss
         num_classes: the number of classes to predict
     """
-    weight_dict = matcher_params.pop("weight_dict")
+    matcher_weight_dict = matcher_params.pop("weight_dict")
 
-    matcher_params = {**weight_dict, **matcher_params}
+    matcher_params = {**matcher_weight_dict, **matcher_params}
     matcher = HungarianMatcher(**matcher_params)
 
     criterion = RTDETRCriterionv2(
         matcher=matcher,
-        weight_dict=weight_dict,
+        weight_dict=loss_weight_dict,
         losses=losses,
         alpha=alpha,
         gamma=gamma,

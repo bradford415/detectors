@@ -30,7 +30,7 @@ class PreprocessCoco:
             return_masks: if True, converts coco polygons to masks for segmentation tasks;
                           if False, only bboxes and class labels are returned
             contiguous_cat_ids: if `yolo` converts the coco class ids to a contiguous range of 0-79;
-                                detr-based architectures do not require this conversion
+                                TODO: update; dino detr-based architectures do not require this conversion
         """
 
         self.return_masks = return_masks
@@ -79,22 +79,22 @@ class PreprocessCoco:
         # (although this is typically called before augmentations); no boxes shape (0, 4)
         boxes = torch.as_tensor(boxes, dtype=torch.float32).reshape(-1, 4)
 
+        # Convert the sparse coco class ids to dense, contiguous ids if desired;
+        # i.e., shift coco ids so they are between 0-79;
+        # so far I know Yolo and RT-Detr require this; dino detr does not
+        if self.contiguous_cat_ids:
+            classes = [mscoco_category2label[obj["category_id"]] for obj in annotations]
+        else:
+            classes = [obj["category_id"] for obj in annotations]
+
+        classes = torch.tensor(classes, dtype=torch.int64)
+
         # Convert XYWH [tl_x, tl_y, w, h] -> XYXY [tl_x, tl_y, br_x, br_y]
         boxes[:, 2:] += boxes[:, :2]
 
         # Clip the the x and y coordinates to the image size; guards against boxes being larger than image
         boxes[:, 0::2].clamp_(min=0, max=w)
         boxes[:, 1::2].clamp_(min=0, max=h)
-
-        # Create list of object labels, shift the coco ids so they are between 0-79 (i.e., sequential),
-        # and convert to tensor
-        if self.contiguous_cat_ids:
-            classes = [
-                self.coco_class_91_to_80[obj["category_id"]] for obj in annotations
-            ]
-        else:
-            classes = [obj["category_id"] for obj in annotations]
-        classes = torch.tensor(classes, dtype=torch.int64)
 
         # Convert coco polygons to masks if return_masks is True (default False)
         if self.return_masks:
@@ -382,3 +382,93 @@ def convert_to_coco_api(ds, bbox_fmt="voc"):
         with contextlib.redirect_stdout(devnull):
             coco_ds.createIndex()
     return coco_ds
+
+
+mscoco_category2name = {
+    1: "person",
+    2: "bicycle",
+    3: "car",
+    4: "motorcycle",
+    5: "airplane",
+    6: "bus",
+    7: "train",
+    8: "truck",
+    9: "boat",
+    10: "traffic light",
+    11: "fire hydrant",
+    13: "stop sign",
+    14: "parking meter",
+    15: "bench",
+    16: "bird",
+    17: "cat",
+    18: "dog",
+    19: "horse",
+    20: "sheep",
+    21: "cow",
+    22: "elephant",
+    23: "bear",
+    24: "zebra",
+    25: "giraffe",
+    27: "backpack",
+    28: "umbrella",
+    31: "handbag",
+    32: "tie",
+    33: "suitcase",
+    34: "frisbee",
+    35: "skis",
+    36: "snowboard",
+    37: "sports ball",
+    38: "kite",
+    39: "baseball bat",
+    40: "baseball glove",
+    41: "skateboard",
+    42: "surfboard",
+    43: "tennis racket",
+    44: "bottle",
+    46: "wine glass",
+    47: "cup",
+    48: "fork",
+    49: "knife",
+    50: "spoon",
+    51: "bowl",
+    52: "banana",
+    53: "apple",
+    54: "sandwich",
+    55: "orange",
+    56: "broccoli",
+    57: "carrot",
+    58: "hot dog",
+    59: "pizza",
+    60: "donut",
+    61: "cake",
+    62: "chair",
+    63: "couch",
+    64: "potted plant",
+    65: "bed",
+    67: "dining table",
+    70: "toilet",
+    72: "tv",
+    73: "laptop",
+    74: "mouse",
+    75: "remote",
+    76: "keyboard",
+    77: "cell phone",
+    78: "microwave",
+    79: "oven",
+    80: "toaster",
+    81: "sink",
+    82: "refrigerator",
+    84: "book",
+    85: "clock",
+    86: "vase",
+    87: "scissors",
+    88: "teddy bear",
+    89: "hair drier",
+    90: "toothbrush",
+}
+
+# create a map of original class ids to its index
+mscoco_category2label = {k: i for i, k in enumerate(mscoco_category2name.keys())}
+
+# create a map of the class ids index to its original class id value
+mscoco_label2category = {v: k for k, v in mscoco_category2label.items()}
