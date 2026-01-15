@@ -160,11 +160,13 @@ def main(
     # Extract training and val params
     train_args = base_config["train"]
 
-    # batch size per gpu
-    batch_size = train_args["batch_size"]
-    effective_bs = train_args["effective_batch_size"]
+    train_dl_params = base_config["train_dataloader"]
+    val_dl_params = base_config["val_dataloader"]
 
-    val_batch_size = train_args["validation_batch_size"]
+    # batch size per gpu
+    batch_size = train_dl_params["batch_size"]
+    effective_bs = train_dl_params["effective_batch_size"]
+    train_dl_params.pop("effective_batch_size")  # pop unexcepted key to the dataloader
 
     # calculate the number of gradient accumulation steps to simulate a larger batch;
     # if using DDP, grad_accum_steps = effective_batch_size // batch_size * num_gpus
@@ -241,9 +243,6 @@ def main(
         dev_mode=dev_mode,
         **dataset_kwargs,
     )
-
-    train_dl_params = base_config["train_dataloader"]
-    val_dl_params = base_config["val_dataloader"]
 
     # remove unnecessary keys
     train_dl_params.pop("dataset")

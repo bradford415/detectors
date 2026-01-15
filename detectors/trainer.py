@@ -873,7 +873,10 @@ class RTDETRTrainer(BaseTrainer):
         header = f"Epoch: [{epoch}]"
 
         for steps, (samples, targets) in enumerate(
-            metric_logger.log_every(dataloader_train, self.log_train_steps, header), 1
+            metric_logger.log_every(
+                dataloader_train, self.log_train_steps, header, logger=log
+            ),
+            1,
         ):
             ##### start here run code #####
             samples = samples.to(self.device)
