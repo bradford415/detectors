@@ -1,8 +1,9 @@
 # Detectors
-Objection detection model implementations.
+Object detection model implementations in PyTorch.
 
 ## Table of Contents
 * [Training a Model](#training-a-model)
+* [Converting to ONNX](#converting-a-model-to-onnx)
 * [Resources](#resources)
 
 ## Download the COCO dataset
@@ -62,6 +63,17 @@ python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path 
 # distributed training dino w/ a resnet50 backbone
 torchrun --nproc_per_node=<num_gpus> scripts/train.py configs/train-coco-dino-rn50.yaml configs/dino/dino-rn50.yaml
 ```
+
+## Converting a Model to ONNX
+Run the following command to convert the model to ONNX format
+```bash
+python scripts/to_onnx.py <training_config.yaml>
+
+# example of converting an RTDETRv2 model to ONNX
+python scripts/to_onnx.py configs/train-coco-rt-detr-rn50.yaml 
+```
+
+The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
 
 ## Inferencing
 TODO
