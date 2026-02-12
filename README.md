@@ -76,7 +76,14 @@ python scripts/to_onnx.py configs/train-coco-rt-detr-rn50.yaml
 The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
 
 ## Inferencing
-TODO
+Inference uses a trained model to perform object detection on a directory of images without labels.
+
+Example running inference on an RT-DETRv2 using ONNX Runtime backend
+```bash
+python scripts/inference.py configs/inference/inference-rtdetrv2.yaml --backend onnx
+```
+
+Below shows how to run 
 
 ## Results
 | Detector / Backbone  | Pretrained Backbone | Dataset  | Best mAP / Epoch |
