@@ -14,8 +14,10 @@ profile = "black" # prevents isort from reformatting black
 # installed, so they must be valid existing projects.
 [tool.poetry.dependencies]
 albumentations = "*"
-python = ">=3.9"
 matplotlib = "*"
+onnx = "*"
+onnxruntime = "*"
+python = ">=3.9"
 pytest = "*"
 pyyaml = "*"
 fire = "*"

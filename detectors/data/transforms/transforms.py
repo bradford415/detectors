@@ -7,7 +7,8 @@ Transforms and data augmentation for both image + bbox.
 """
 import random
 import sys
-from this import d
+
+# from this import d # zen of python
 from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
@@ -603,7 +604,7 @@ class Compose:
         }
         return forward_methods[policy_name]
 
-    def default_forward(self, image: PIL.Image, target: dict, current_epoch: int):
+    def default_forward(self, image: PIL.Image, target: Optional[dict] = None):
         """The standard behavior for the compose class
 
         Args:

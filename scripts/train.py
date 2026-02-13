@@ -266,7 +266,6 @@ def main(
     detector_name = base_config["detector_name"]
     detector_params = model_config["params"]
 
-    ##### start hereeee build the model
     #### basically, the GLOBAL_CONFIG is built initially by setting the default parameters
     # from every module decorated with @register, then the config files are loaded and overrided
     # TODO; should put this explanation somewhere maybe?
