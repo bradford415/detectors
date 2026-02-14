@@ -46,7 +46,19 @@ def main(cli_args: argparse.Namespace):
     dummy_inputs = (torch.randn(1, 3, 640, 640),)
     print(f"Created dummy input for ONNX export of shape: {dummy_inputs[0].shape}")
 
-    onnx_model = torch.onnx.export(model, dummy_inputs, dynamo=True)
+    # Notes:
+    #     - `input_names` and `output_names` are the `name` param when you call
+    #       `bind_cpu_input` and `bind_output` during onnxruntime inference
+    #     - onnx runtime cannot handle dictionaries as outputs, which is what detr models return, so
+    #       they will be flattened to a list of outputs, so when we call
+    #       `outputs = copy_outputs_to_cpu[0]` outputs[0] = pred_logits and outputs[1] = pred_boxes
+    onnx_model = torch.onnx.export(
+        model,
+        dummy_inputs,
+        input_names=["images"],
+        output_names=["pred_logits", "pred_boxes"],
+        dynamo=True,
+    )
     print("Exported model to ONNX format")
 
     output_dir = Path("output") / "onnx" / detector_name

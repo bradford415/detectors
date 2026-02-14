@@ -39,7 +39,6 @@ class PostProcess(nn.Module):
             outputs: raw output model predictions dict with contains the keys:
                         pred_logits: pred class logits for each class (b, num_queries, num_classes)
                         pred_boxes: pred bboxes normalized [0, 1] (b, num_queries, 4) where 4 = cxcywh
-
             target_sizes: tensor (b, 2) where 2 is the (h, w) of each images of the batch; used to scale
                           normalized coordinates to absolute coordinates i.e., [0, 1] -> [0, h/w]
                           for evaluation/inference:

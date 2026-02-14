@@ -1,10 +1,12 @@
 import argparse
 import glob
 from pathlib import Path
+
 from PIL import Image
 
 from detectors.data.create import make_config_transforms
 from detectors.inference import create_inferencer
+from detectors.postprocessing.postprocess import PostProcess
 from detectors.utils import config
 
 
@@ -45,23 +47,37 @@ def main(cli_args: argparse.Namespace):
     transforms_config = base_config["transforms"]
     data_transforms = make_config_transforms(transforms_config)
 
+    # Initalize postprocessor
+    # converts the models output to the expected output by the coco api, during inference
+    # and visualization only; not used during training
+    postprocess_args = base_config["postprocessor"]
+    postprocessors = {
+        "bbox": PostProcess(
+            num_select=postprocess_args["num_top_queries"],
+            contiguous_cat_ids=base_config["train_dataloader"]["dataset"][
+                "contiguous_cat_ids"
+            ],
+        )
+    }
+
     inferencer = create_inferencer(
         cli_args.backend,
         model_path=base_config["trained_model_path"],
         transforms=data_transforms,
+        postprocessor=postprocessors,
     )
 
     img_paths = glob.glob(
         str(Path(base_config["images_dir"]) / "**" / "*.jpg"), recursive=True
     )
-    
+
     for img_path in img_paths:
         print(f"Running inference on {img_path}...")
         input_data = Image.open(img_path).convert("RGB")
         detections = inferencer.inference_image(input_data)
         print(f"Detections: {detections}")
         break
-    
+
     breakpoint()
 
     output_dir = Path("output") / "onnx" / detector_name
