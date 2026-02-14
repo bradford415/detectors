@@ -70,7 +70,7 @@ Run the following command to convert the model to ONNX format
 python scripts/export/to_onnx.py <training_config.yaml>
 
 # example of converting an RTDETRv2 model to ONNX
-python scripts/to_onnx.py configs/train-coco-rt-detr-rn50.yaml 
+python scripts/export/to_onnx.py configs/train-coco-rt-detr-rn50.yaml 
 ```
 
 The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
