@@ -63,6 +63,7 @@ class ONNXInference(BaseInference):
             print("Type:", output.type)
             print("-----")
 
+    ### start here; fix onnx inference; probably need to load weights when converting to onnx
     def inference_image(self, img_path: str):
         """Inference TODO"""
         input_data = Image.open(img_path).convert("RGB")
