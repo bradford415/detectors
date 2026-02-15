@@ -67,10 +67,10 @@ torchrun --nproc_per_node=<num_gpus> scripts/train.py configs/train-coco-dino-rn
 ## Converting a Model to ONNX
 Run the following command to convert the model to ONNX format
 ```bash
-python scripts/export/to_onnx.py <training_config.yaml>
+python scripts/export/to_onnx.py <training_config.yaml> <trained_model_weights_path.pt>
 
 # example of converting an RTDETRv2 model to ONNX
-python scripts/export/to_onnx.py configs/train-coco-rt-detr-rn50.yaml 
+python scripts/export/to_onnx.py configs/train-coco-rt-detr-rn50.yaml /home/bselee/programming/detectors/output/rt-detr-development/2026_01_11-10_55_08_PM/train/checkpoints/best_mAP_46-11.pt
 ```
 
 The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
