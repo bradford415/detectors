@@ -10,13 +10,14 @@ __include__:
 # Base directory for output files
 output_dir: "output"
 
-# Experiment name; this will be used for the output directory; use "development" when developing
-exp_name: "rtdetrv2-inference"
+# # Experiment name; this will be used for the output directory; use "development" when developing
+# exp_name: "rtdetrv2-inference"
 
-# Path to the trained model; e.g., if using ONNX runtime this should be a .onnx file
+# Path to the trained model; e.g., if using ONNX runtime this should be a .onnx file, if using torch this be a .pt file
 trained_model_path: /home/bselee/programming/detectors/output/onnx/rtdetrv2/rtdetrv2.onnx
 
 images_dir: "/mnt/d/datasets/coco/images/test2017"
+viz_n_images: 10
 
 transforms:
   transforms:

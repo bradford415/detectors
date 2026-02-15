@@ -92,14 +92,13 @@ class PostProcess(nn.Module):
         if not_to_xyxy:
             boxes = out_bbox
         else:
-            print("delete the if or comment")
             boxes = box_cxcywh_to_xyxy(out_bbox)
 
-        if test:
-            print("do not delete me")
-            assert not not_to_xyxy
-            boxes[:, :, 2:] = boxes[:, :, 2:] - boxes[:, :, :2]
-        print("remove test if not called")
+        # was in rt detr code but pretty sure it's not used
+        # if test:
+        #     print("do not delete me")
+        #     assert not not_to_xyxy
+        #     boxes[:, :, 2:] = boxes[:, :, 2:] - boxes[:, :, :2]
 
         # NOTE: RT-Detr remaps coco categories to sequential in the dataloader but then
         #       here maps back to the original class ids; setting contiguous class ids is required

@@ -19,7 +19,7 @@ from detectors.models.backbones import backbone_map
 from detectors.models.create import create_detector
 from detectors.postprocessing.postprocess import PostProcess
 from detectors.utils import reproduce
-from detectors.visualize import plot_all_detections, plot_test_detections
+from detectors.visualize import plot_test_detections
 
 dataset_map: Dict[str, Any] = {"CocoDetection": build_coco}
 

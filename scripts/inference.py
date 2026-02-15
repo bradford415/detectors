@@ -24,7 +24,7 @@ def cli_parser():
         "--backend",
         type=str,
         required=True,
-        choices=["onnx"],
+        choices=["onnx", "torch"],
         help="The inference backend to use.",
     )
 
@@ -54,39 +54,41 @@ def main(cli_args: argparse.Namespace):
     postprocessors = {
         "bbox": PostProcess(
             num_select=postprocess_args["num_top_queries"],
-            contiguous_cat_ids=base_config["train_dataloader"]["dataset"][
-                "contiguous_cat_ids"
-            ],
+            contiguous_cat_ids=True,
+            # contiguous_cat_ids=base_config["train_dataloader"]["dataset"][
+            #     "contiguous_cat_ids"
+            # ],
         )
     }
 
+    output_dir = (
+        Path(base_config["output_dir"]) / "inference" / cli_args.backend / detector_name
+    )
     inferencer = create_inferencer(
         cli_args.backend,
         model_path=base_config["trained_model_path"],
         transforms=data_transforms,
         postprocessor=postprocessors,
+        output_dir=output_dir,
+        viz_n_images=base_config["viz_n_images"],
+        detector_name=detector_name,
+        detector_params=base_config["params"],
+        num_classes=base_config["train_dataloader"]["dataset"]["num_classes"],
     )
 
     img_paths = glob.glob(
         str(Path(base_config["images_dir"]) / "**" / "*.jpg"), recursive=True
     )
 
-    for img_path in img_paths:
+    viz_n_images = base_config.get("viz_n_images", 10)
+    for idx, img_path in enumerate(img_paths, 1):
         print(f"Running inference on {img_path}...")
-        input_data = Image.open(img_path).convert("RGB")
-        detections = inferencer.inference_image(input_data)
-        print(f"Detections: {detections}")
-        break
+        inferencer.inference_image(img_path)
 
-    breakpoint()
-
-    output_dir = Path("output") / "onnx" / detector_name
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    model_save_path = output_dir / f"{detector_name}.onnx"
-
-    onnx_model.save(model_save_path)
-    print(f"Saved onnx model to {model_save_path}")
+        if idx == viz_n_images:
+            break
+        
+    print(f"Saved {viz_n_images} visualizations of the detections to {output_dir}")
 
 
 if __name__ == "__main__":

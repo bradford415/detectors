@@ -162,7 +162,7 @@ def evaluate_detr(
 ) -> Tuple[Tuple, List]:
     """A single forward pass to evluate the val set after training an epoch
 
-    Supports: Dino Detr, RT-Detr
+    Supports: Dino DETR, RT-DETR
 
     Args:
         model: Model to train
