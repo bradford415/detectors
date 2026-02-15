@@ -161,12 +161,12 @@ class PyTorchInference(BaseInference):
 
             # add batch dimension and move to gpu
             transformed_data = transformed_data[None, ...].to(self.device)
-            
+
             detections = self.model(transformed_data)
 
         # move detections back to cpu; detections[0] = pred_logits (b, top_k, num_classes) and
         # detections[1] = pred_boxes (b, top_k, 4)
-        #detections = detections.to("cpu")
+        # detections = detections.to("cpu")
 
         detections = {
             "pred_logits": detections["pred_logits"].cpu(),

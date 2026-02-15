@@ -6,6 +6,7 @@ import torch
 import yaml
 from torch import device
 
+from detectors.evaluate import load_model_checkpoint
 from detectors.models.create import create_detector
 from detectors.utils import config
 
@@ -19,6 +20,11 @@ def cli_parser():
         "config",
         type=str,
         help="Path to the config file used for training the model.",
+    )
+    parser.add_argument(
+        "weights_file",
+        type=str,
+        help="Path to the weights file of the trained model.",
     )
 
     return parser.parse_args()
@@ -38,6 +44,14 @@ def main(cli_args: argparse.Namespace):
         num_classes=num_classes,
     )
     print(f"Initialized model: {detector_name}")
+
+    # load the trained weights into the model
+    _ = load_model_checkpoint(
+        checkpoint_path=cli_args.weights_file,
+        model=model,
+        device="cpu",
+    )
+    print(f"Loaded trained weights from {cli_args.weights_file}")
 
     # set model to eval so it does not require labels (for denoising)
     model.eval()

@@ -87,7 +87,7 @@ def main(cli_args: argparse.Namespace):
 
         if idx == viz_n_images:
             break
-        
+
     print(f"Saved {viz_n_images} visualizations of the detections to {output_dir}")
 
 
