@@ -78,9 +78,13 @@ The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
 ## Inferencing
 Inference uses a trained model to perform object detection on a directory of images without labels.
 
-Example running inference on an RT-DETRv2 using ONNX Runtime backend
+Example running inference on an RT-DETRv2
 ```bash
+# onnx runtime backend
 python scripts/inference.py configs/inference/inference-rtdetrv2.yaml --backend onnx
+
+# pytorch backend
+python scripts/inference.py configs/inference-rtdetrv2-torch.yaml --backend torch
 ```
 
 Below shows how to run 
