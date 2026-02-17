@@ -4,6 +4,8 @@ Object detection model implementations in PyTorch.
 ## Table of Contents
 * [Training a Model](#training-a-model)
 * [Converting to ONNX](#converting-a-model-to-onnx)
+* [Results](#results)
+* [Example Detections] (#example-detections)
 * [Resources](#resources)
 
 ## Download the COCO dataset
@@ -95,6 +97,14 @@ Below shows how to run
 | YoloV3 / DarkNet53   | Scratch             | COCO     | 39.2% / 59       |
 | YoloV3 / DarkNet53   | ImageNet            | COCO     | 40.3% / 46       |
 | DINO DETR / ResNet50 | Scratch             | COCO     | 46.6% / 20       |
+
+## Example Detections
+Example detections of an RT-DETRv2 model with ONNX inference
+
+<img width="50%" height="50%" alt="image" src="https://github.com/user-attachments/assets/6bf1c30c-4bf3-474b-8d8f-bd60ab8e9824" />
+
+<img width="50%" height="50%" alt="image" src="https://github.com/user-attachments/assets/e0b19f5a-9f08-4988-9be3-2a230985ecc4" />
+
 
 
 ## Troubleshooting
