@@ -5,7 +5,7 @@ Object detection model implementations in PyTorch.
 * [Training a Model](#training-a-model)
 * [Converting to ONNX](#converting-a-model-to-onnx)
 * [Results](#results)
-* [Example Detections] (#example-detections)
+* [Example Detections](#example-detections)
 * [Resources](#resources)
 
 ## Download the COCO dataset
