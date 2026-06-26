@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import onnxruntime
-import PIL
 import torch
 from PIL import Image
 from torchvision.transforms import Compose
@@ -21,7 +20,7 @@ class BaseInference(ABC):
         self,
         transforms: Compose,
         postprocessor,
-        output_dir: Path,
+        output_dir: Optional[Path] = None,
         viz_n_images: int = 10,
     ):
         self.transforms = transforms
@@ -35,8 +34,19 @@ class BaseInference(ABC):
         """Run inference on the input data."""
         pass
 
+    def __call__(self, input_data, visualize: bool = True):
+        """Run inference and optionally visualize detections."""
+        detections = self.inference_image(input_data)
+
+        if visualize and self.output_dir is not None:
+            self._visualize_detections(detections)
+            self._img_counter += 1
+
+        return detections
+
     def _visualize_detections(self, detections: dict):
         """Visualize the detections on the input image."""
+
         plot_all_detections(
             detections,
             conf_threshold=0.5,
@@ -63,10 +73,20 @@ class ONNXInference(BaseInference):
             print("Type:", output.type)
             print("-----")
 
-    ### start here; fix onnx inference; probably need to load weights when converting to onnx
-    def inference_image(self, img_path: str):
-        """Inference TODO"""
-        input_data = Image.open(img_path).convert("RGB")
+    def inference_image(self, image: Union[str, np.ndarray]):
+        """Inference TODO
+        
+        Args:
+            image: Either file path to image or a numpy array of the image data itself;
+                passing a numpy array is beneifical if you load frames from OpenCV
+        """
+        if isinstance(image, str):
+            input_data = Image.open(image).convert("RGB")
+        elif isinstance(image, np.ndarray):
+            input_data = Image.fromarray(image.astype(np.uint8))
+        else:
+            raise ValueError(f"Image type {type(image)} not supported")
+
 
         # save the original image size so we can scale the predicted bboxes back
         orig_w, orig_h = input_data.size
@@ -101,12 +121,8 @@ class ONNXInference(BaseInference):
 
         postprocessed_detections = self.postprocessor["bbox"](detections, orig_dims)
 
-        postprocessed_detections[0]["image_path"] = img_path
-
-        ### start here run the code see if it visualizes
-
-        self._visualize_detections(postprocessed_detections)
-        self._img_counter += 1
+        if isinstance(image, str):
+            postprocessed_detections[0]["image_path"] = image
 
         return postprocessed_detections
 
@@ -177,11 +193,6 @@ class PyTorchInference(BaseInference):
 
         postprocessed_detections[0]["image_path"] = img_path
 
-        ### start here run the code see if it visualizes
-
-        self._visualize_detections(postprocessed_detections)
-        self._img_counter += 1
-
         return postprocessed_detections
 
 
@@ -190,8 +201,8 @@ def create_inferencer(
     model_path: str,
     transforms: Compose,
     postprocessor,
-    output_dir: Path,
     viz_n_images: int,
+    output_dir: Optional[Path],
     num_classes: Optional[int] = None,
     detector_name: Optional[str] = None,
     detector_params: Optional[dict] = None,

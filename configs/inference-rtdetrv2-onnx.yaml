@@ -17,7 +17,7 @@ output_dir: "output"
 trained_model_path: /home/bselee/programming/detectors/output/onnx/rtdetrv2/rtdetrv2.onnx
 
 images_dir: "/mnt/d/datasets/coco/images/test2017"
-viz_n_images: 10
+viz_n_images: 30
 
 transforms:
   transforms:

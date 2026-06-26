@@ -16,7 +16,7 @@ profile = "black" # prevents isort from reformatting black
 albumentations = "*"
 matplotlib = "*"
 onnx = "*"
-onnxruntime = "*"
+onnxruntime-gpu = "*"
 python = ">=3.9"
 pytest = "*"
 pyyaml = "*"
