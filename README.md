@@ -3,7 +3,7 @@ Object detection model implementations in PyTorch.
 
 ## Table of Contents
 * [Training a Model](#training-a-model)
-* [Converting to ONNX](#converting-a-model-to-onnx)
+* [Converting to ONNX](#converting-a-model-to-onnx-and-tensorrt)
 * [Results](#results)
 * [Example Detections](#example-detections)
 * [Resources](#resources)
@@ -66,7 +66,7 @@ python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path 
 torchrun --nproc_per_node=<num_gpus> scripts/train.py configs/train-coco-dino-rn50.yaml configs/dino/dino-rn50.yaml
 ```
 
-## Converting a Model to ONNX
+## Converting a Model to ONNX and TensorRT
 Run the following command to convert the model to ONNX format
 ```bash
 python scripts/export/to_onnx.py <training_config.yaml> <trained_model_weights_path.pt>
@@ -76,6 +76,16 @@ python scripts/export/to_onnx.py configs/train-coco-rt-detr-rn50.yaml /home/bsel
 ```
 
 The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
+
+After creating the onnx model, we can convert it to a TensorRT model with:
+```bash
+# usage
+trtexec --onnx=<path to onnx file>.onnx --saveEngine=<trt_engine_file_output_path>.engine --optShapes=<onnx_input_name>:<optimal_input_shape>
+
+# example
+trtexec --onnx=output/onnx/rtdetrv2/rtdetrv2.onnx --saveEngine=output/trt/retdetrv2/rtdetrv2.engine --optShapes=images:1x3x640x640
+```
+
 
 ## Inferencing
 Inference uses a trained model to perform object detection on a directory of images without labels.
