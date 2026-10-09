@@ -3,7 +3,7 @@ Object detection model implementations in PyTorch.
 
 ## Table of Contents
 * [Training a Model](#training-a-model)
-* [Converting to ONNX](#converting-a-model-to-onnx-and-tensorrt)
+* [Converting to ONNX and TensorRT](#converting-a-model-to-onnx-and-tensorrt)
 * [Results](#results)
 * [Example Detections](#example-detections)
 * [Resources](#resources)
