@@ -80,10 +80,16 @@ The model will be saved to `output/onnx/<detector_name>/<detector_name>.onnx`
 After creating the onnx model, we can convert it to a TensorRT model with:
 ```bash
 # usage
-trtexec --onnx=<path to onnx file>.onnx --saveEngine=<trt_engine_file_output_path>.engine --optShapes=<onnx_input_name>:<optimal_input_shape>
+trtexec \
+  --onnx=<path to onnx file>.onnx \
+  --saveEngine=<trt_engine_file_output_path>.engine \
+  # --optShapes=<onnx_input_name>:<optimal_input_shape> # NOTE: our rt-detr does not use this flag since the shapes are static
 
 # example
-trtexec --onnx=output/onnx/rtdetrv2/rtdetrv2.onnx --saveEngine=output/trt/retdetrv2/rtdetrv2.engine --optShapes=images:1x3x640x640
+trtexec \
+  --onnx=output/onnx/rtdetrv2/rtdetrv2.onnx \
+  --saveEngine=output/trt/retdetrv2/rtdetrv2.engine \
+  # --optShapes=images:1x3x640x640 # NOTE: our rt-detr does not use this flag since the shapes are static
 ```
 
 
