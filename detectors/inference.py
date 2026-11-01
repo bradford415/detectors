@@ -103,7 +103,7 @@ class ONNXInference(BaseInference):
         # https://onnxruntime.ai/docs/performance/tune-performance/iobinding.html
         io_binding = self.inference_session.io_binding()
         io_binding.bind_cpu_input("images", np.array(transformed_data))
-        io_binding.bind_output("pred_logits")
+        io_binding.bind_output("pred_logits") 
         io_binding.bind_output("pred_boxes")
 
         # copy inputs to gpu, run inference on gpu, and store model outputs on gpu
