@@ -80,27 +80,6 @@ def main(
     # contention on shared file systems like EFS
     time.sleep(global_rank * 0.02)
 
-    # TODO: Verify if this new method works instead of hardcoding the overrides
-    # Override configuration parameters if CLI arguments are provided; this allows external users
-    # to easily run the project without messing with the configuration files
-    # if dataset_root is not None:
-    #     base_config["dataset"]["root"] = dataset_root
-
-    # # overwrite config values with CLI values if specified
-    # if checkpoint_path is not None:
-    #     base_config["train"]["checkpoint_path"] = checkpoint_path
-    #     base_config["train"]["backbone_weights"] = None
-    # elif backbone_weights is not None:
-    #     base_config["train"]["backbone_weights"] = backbone_weights
-
-    # if (
-    #     base_config["train"]["checkpoint_path"] is not None
-    #     and base_config["train"]["backbone_weights"] is not None
-    # ):
-    #     raise ValueError(
-    #         "checkpoint_path and backbone_weights cannot both have a value. Set one of the values to 'null'."
-    #     )
-
     dev_mode = base_config["dev_mode"]
 
     # Initialize paths

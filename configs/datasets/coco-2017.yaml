@@ -8,7 +8,6 @@ collate_fn:
     stop_epoch: 71 # epoch in [71, ~) stop `multiscales`
 
 
-
 train_dataloader:
   dataset:
     dataset_name: "coco_detection_detr"
