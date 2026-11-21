@@ -40,6 +40,9 @@ cd ../../..
 ## Training a model
 This project is designed to use the configuration specified in `scripts/configs/`, but for ease of use the CLI arguments specified below will overwrite the main default config parameters for quick setup.
 
+<details>
+<summary>2D Detectors</summary>
+  
 ## Single-GPU training
 ### Training from scratch (or backbone pretrained from ImageNet weights)
 ```bash
@@ -65,7 +68,18 @@ python scripts/train.py --dataset_root "/mnt/d/datasets/coco" --checkpoint_path 
 # distributed training dino w/ a resnet50 backbone
 torchrun --nproc_per_node=<num_gpus> scripts/train.py configs/train-coco-dino-rn50.yaml configs/dino/dino-rn50.yaml
 ```
+</details>
+<details>
+<summary>3D Detection</summary>
 
+## Single-GPU training
+### Training from scratch
+```bash
+# CenterPoint
+python scripts/train.py configs/centerpoint_base.yaml
+```
+
+</details>
 ## Converting a Model to ONNX and TensorRT
 Run the following command to convert the model to ONNX format
 ```bash
