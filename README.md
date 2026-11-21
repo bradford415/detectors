@@ -80,6 +80,7 @@ python scripts/train.py configs/centerpoint_base.yaml
 ```
 
 </details>
+
 ## Converting a Model to ONNX and TensorRT
 Run the following command to convert the model to ONNX format
 ```bash
