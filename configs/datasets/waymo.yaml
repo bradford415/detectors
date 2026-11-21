@@ -1,6 +1,5 @@
 datasets: WaymoDataset
-root_path: 'TODO
-PROCESSED_DATA_TAG: 'waymo_processed_data_v0_5_0'
+root_path: 'TODO'
 
 # 3D spatial region of the point cloud that the detector processes;
 # [x_min, y_min, z_min, x_max, y_max, z_max]
@@ -13,8 +12,68 @@ point_cloud_range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
 
 point_feature_encoding:
     encoding_type: absolute_coordinates_encoding,
+
+    # the lidar point features to keep and pass downstream
     used_feature_list: ['x', 'y', 'z', 'intensity', 'elongation']
+
+    # the format/schema of the lidar points (after the coversion of range image to points and before preprocessing)
     src_feature_list: ['x', 'y', 'z', 'intensity', 'elongation']
+
+
+train_dataloader:
+  dataset:
+    dataset_name: "WaymoDataset"
+
+    # Path to the root of the dataset; detects which path to use based on device
+    root_path: "TODO" # windows path
+
+    # preprocessed version of the waymo dataset; appended to root_path
+    processed_data_tag: 'waymo_processed_data_v0_5_0'
+
+
+    # data transformations;
+    # NOTE: rtdetr does NOT use imagenet normalization, the author notes
+    #       it shouldn't matter, just be consistent during inference:
+    #       https://github.com/lyuwenyu/RT-DETR/issues/289#issuecomment-2082180429
+    transforms:
+      transforms:
+      - type: GTSampling # essentially a copy and past augmentation for 3D point clouds
+        params:
+          use_road_plane: false
+          db_info_path:
+            - waymo_processed_data_v0_5_0_waymo_dbinfos_train_sampled_1.pkl
+          use_shared_memory: false
+          db_data_path:
+            - waymo_processed_data_v0_5_0_gt_database_train_sampled_1_global.npy
+          backup_db_info:
+            db_info_path: waymo_processed_data_v0_5_0_waymo_dbinfos_train_sampled_1_multiframe_-4_to_0.pkl
+            db_data_path: waymo_processed_data_v0_5_0_gt_database_train_sampled_1_multiframe_-4_to_0_global.npy
+            num_point_features: 6
+          prepare:
+            filter_by_min_points: ['Vehicle:5', 'Pedestrian:5', 'Cyclist:5']
+            filter_by_difficulty: [-1]
+          sample_groups: ['Vehicle:15', 'Pedestrian:10', 'Cyclist:10']
+          num_point_features: 5
+          remove_extra_width: [0.0, 0.0, 0.0]
+          limit_whole_scene: true
+      - {type: RandomWorldFlip, params: {along_axis_list: ['x', 'y']}}
+      - {type: RandomWorldRotation, params: {world_rot_angle: [-0.78539816, 0.78539816]}}
+      - {type: RandomWorldScaling, params: {world_scale_range: [0.95, 1.05]}}
+    
+    # whether to remap the sparse coco IDs to contiguous, dense IDs (0-79); I think this required for RT-DETR
+    contiguous_cat_ids: True
+
+    # max_class_id + 1 in the coco file; see data.coco_ds.CocoDetection.num_classes for more info;
+    # NOTE: the max_id of the "categories" AFTER remapping to contiguous IDs is 79 (so 79 + 1 = 80)
+    # TODO: I should check if rt-detr auto increments this anywhere
+    num_classes: 80 
+
+  # Number of CPU processes the next sample in the dataset; use 0 to only use the main process
+  num_workers: 2 # TODO: this could be why I'm running out of memory at num_worker=4
+
+  batch_size_per_gpu: 4
+  effective_batch_size: 16
+  shuffle: True
 
 DATA_SPLIT: {
     'train': train,
@@ -31,51 +90,6 @@ DISABLE_NLZ_FLAG_ON_POINTS: True
 
 USE_SHARED_MEMORY: False  # it will load the data to shared memory to speed up (DO NOT USE IT IF YOU DO NOT FULLY UNDERSTAND WHAT WILL HAPPEN)
 SHARED_MEMORY_FILE_LIMIT: 35000  # set it based on the size of your shared memory
-
-DATA_AUGMENTOR:
-    DISABLE_AUG_LIST: ['placeholder']
-    AUG_CONFIG_LIST:
-        - NAME: gt_sampling
-          USE_ROAD_PLANE: False
-          DB_INFO_PATH:
-              - waymo_processed_data_v0_5_0_waymo_dbinfos_train_sampled_1.pkl
-
-          USE_SHARED_MEMORY: False  # set it to True to speed up (it costs about 15GB shared memory)
-          DB_DATA_PATH:
-              - waymo_processed_data_v0_5_0_gt_database_train_sampled_1_global.npy
-
-          BACKUP_DB_INFO:
-              # if the above DB_INFO cannot be found, will use this backup one
-              DB_INFO_PATH: waymo_processed_data_v0_5_0_waymo_dbinfos_train_sampled_1_multiframe_-4_to_0.pkl
-              DB_DATA_PATH: waymo_processed_data_v0_5_0_gt_database_train_sampled_1_multiframe_-4_to_0_global.npy
-              NUM_POINT_FEATURES: 6
-
-          PREPARE: {
-             filter_by_min_points: ['Vehicle:5', 'Pedestrian:5', 'Cyclist:5'],
-             filter_by_difficulty: [-1],
-          }
-
-          SAMPLE_GROUPS: ['Vehicle:15', 'Pedestrian:10', 'Cyclist:10']
-          NUM_POINT_FEATURES: 5
-          REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
-          LIMIT_WHOLE_SCENE: True
-
-        - NAME: random_world_flip
-          ALONG_AXIS_LIST: ['x', 'y']
-
-        - NAME: random_world_rotation
-          WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]
-
-        - NAME: random_world_scaling
-          WORLD_SCALE_RANGE: [0.95, 1.05]
-
-
-POINT_FEATURE_ENCODING: {
-    encoding_type: absolute_coordinates_encoding,
-    used_feature_list: ['x', 'y', 'z', 'intensity', 'elongation'],
-    src_feature_list: ['x', 'y', 'z', 'intensity', 'elongation'],
-}
-
 
 DATA_PROCESSOR:
     - NAME: mask_points_and_boxes_outside_range

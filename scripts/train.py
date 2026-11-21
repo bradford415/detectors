@@ -204,23 +204,16 @@ def main(
     train_ds_params = base_config["train_dataloader"]["dataset"]
     val_ds_params = base_config["val_dataloader"]["dataset"]
 
-    dataset_kwargs = {
-        "dataset_name": train_ds_params["dataset_name"],
-        "root": train_ds_params["root"],
-        "num_classes": train_ds_params["num_classes"],
-        "contiguous_cat_ids": train_ds_params["contiguous_cat_ids"],
-    }
+    breakpoint()
     dataset_train = create_dataset(
         split="train",
-        transforms_config=train_ds_params["transforms"],
         dev_mode=dev_mode,
-        **dataset_kwargs,
+        dataset_params=train_ds_params,
     )
     dataset_val = create_dataset(
         split="val",
-        transforms_config=val_ds_params["transforms"],
         dev_mode=dev_mode,
-        **dataset_kwargs,
+        dataset_params=val_ds_params,
     )
 
     # remove unnecessary keys

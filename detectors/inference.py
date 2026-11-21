@@ -75,7 +75,7 @@ class ONNXInference(BaseInference):
 
     def inference_image(self, image: Union[str, np.ndarray]):
         """Inference TODO
-        
+
         Args:
             image: Either file path to image or a numpy array of the image data itself;
                 passing a numpy array is beneifical if you load frames from OpenCV
@@ -86,7 +86,6 @@ class ONNXInference(BaseInference):
             input_data = Image.fromarray(image.astype(np.uint8))
         else:
             raise ValueError(f"Image type {type(image)} not supported")
-
 
         # save the original image size so we can scale the predicted bboxes back
         orig_w, orig_h = input_data.size
@@ -103,7 +102,7 @@ class ONNXInference(BaseInference):
         # https://onnxruntime.ai/docs/performance/tune-performance/iobinding.html
         io_binding = self.inference_session.io_binding()
         io_binding.bind_cpu_input("images", np.array(transformed_data))
-        io_binding.bind_output("pred_logits") 
+        io_binding.bind_output("pred_logits")
         io_binding.bind_output("pred_boxes")
 
         # copy inputs to gpu, run inference on gpu, and store model outputs on gpu

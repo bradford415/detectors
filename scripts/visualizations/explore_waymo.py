@@ -1,25 +1,23 @@
 # NOTE: if authentication fails run the following in your terminal: gcloud auth application-default login
 
 import glob
-from typing import Optional
 import warnings
+from typing import Optional
 
 # Disable annoying warnings from PyArrow using under the hood.
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 import dask.dataframe as dd
-from waymo_open_dataset import v2
 
 # good cloud storage api
 import gcsfs
-
 import matplotlib.pyplot as plt
 import numpy as np
-
-from waymo_open_dataset.v2.perception.utils import lidar_utils
+from waymo_open_dataset import v2
 from waymo_open_dataset.v2.perception import lidar as lidar_module
+from waymo_open_dataset.v2.perception.utils import lidar_utils
 
-#mode = "overview"
+# mode = "overview"
 mode = "viz-lidar"
 
 # google cloud storage uri bucket path
@@ -37,12 +35,10 @@ def read(tag: str, context: str) -> dd.DataFrame:
     return dd.read_parquet(paths, filesystem=fs)
 
 
-
 if mode == "overview":
     # name of the driving segment parquet file
     lidar_context_name = "10017090168044687777_6380_000_6400_000"
     cam_lidar_df = read("training/lidar", context=lidar_context_name)
-
 
     # Lazily read camera images and boxes
     cam_context_name = "10023947602400723454_1120_000_1140_000"
@@ -73,7 +69,9 @@ if mode == "overview":
         )
 
         for j, (object_id, x, y) in enumerate(
-            zip(cam_box.key.camera_object_id, cam_box.box.center.x, cam_box.box.center.y)
+            zip(
+                cam_box.key.camera_object_id, cam_box.box.center.x, cam_box.box.center.y
+            )
         ):
             print(f"\tid: {object_id},  center: ({x:.1f}, {y:.1f}) px")
             if j > 2:
@@ -94,7 +92,6 @@ if mode == "overview":
         .reset_index()
     )
 
-
     # Read a single row, which contains data for all available frames.
     _, row = next(iter(lidar_box_df.iterrows()))
 
@@ -108,7 +105,6 @@ if mode == "overview":
     print(f"\t{lidar_box.box.center.x=}")
     print(f"\t{lidar_box.box.center.y=}")
     print(f"\t{lidar_box.box.center.z=}")
-
 
     ##### object level
     ##### at this level each row of a table represents a single object at a single frame.
@@ -165,20 +161,19 @@ elif mode == "viz-lidar":
     calibration_df = read("training/lidar_calibration", context=context_name)
     lidar_pose_df = read("training/lidar_pose", context=context_name)
     vehicle_pose_df = read("training/vehicle_pose", context=context_name)
-    
+
     # lidar_df.to_csv("output/waymo-dataset/lidar_df.csv", single_file=True)
     # calibration_df.to_csv("output/waymo-dataset/lidar_calibration_df.csv", single_file=True)
     # lidar_pose_df.to_csv("output/waymo-dataset/lidar_pose_df.csv", single_file=True)
     # vehicle_pose_df.to_csv("output/waymo-dataset/vehicle_pose_df.csv", single_file=True)
-    
-    
+
     # Per-pixel LiDAR pose is provided for the TOP LiDAR.
     top_lidar_df = lidar_df[lidar_df["key.laser_name"] == 1]
 
     merged_df = v2.merge(top_lidar_df, calibration_df)
     merged_df = v2.merge(merged_df, lidar_pose_df)
     merged_df = v2.merge(merged_df, vehicle_pose_df)
-    
+
     merged_df.to_csv("output/waymo-dataset/merged_df.csv", single_file=True)
 
     # grab the first row of the df
@@ -187,7 +182,7 @@ elif mode == "viz-lidar":
         raise RuntimeError("No merged TOP LiDAR data found")
 
     _, row = result
-    
+
     # Convert the merged row into Waymo component objects.
     lidar = v2.LiDARComponent.from_dict(row)
     calibration = v2.LiDARCalibrationComponent.from_dict(row)
@@ -206,17 +201,13 @@ elif mode == "viz-lidar":
         frame_pose=vehicle_pose,
         keep_polar_features=False,
     ).numpy()
-    
+
     print("Point-cloud shape:", xyz.shape)
-    print("First point:", xyz[0]) 
-    
-    
+    print("First point:", xyz[0])
+
     ############ plot a top down view #################
     # Keep nearby points to make the scene easier to see.
-    nearby = (
-        (np.abs(xyz[:, 0]) < 75)
-        & (np.abs(xyz[:, 1]) < 75)
-    )
+    nearby = (np.abs(xyz[:, 0]) < 75) & (np.abs(xyz[:, 1]) < 75)
 
     points = xyz[nearby]
 
@@ -247,9 +238,9 @@ elif mode == "viz-lidar":
     plt.colorbar(scatter, label="Z — height (meters)")
     plt.legend()
     plt.show()
-    plt.savefig("output/waymo-dataset/top_lidar_scan_top_down.png", dpi=300, bbox_inches="tight")
-
-
+    plt.savefig(
+        "output/waymo-dataset/top_lidar_scan_top_down.png", dpi=300, bbox_inches="tight"
+    )
 
     ############## plot a 3d view ###################
     # Subsample because rendering every point in 3D is slow.
@@ -273,5 +264,6 @@ elif mode == "viz-lidar":
     ax.set_title("Waymo TOP LiDAR")
     fig.colorbar(plot, ax=ax, label="Height")
     plt.show()
-    plt.savefig("output/waymo-dataset/top_lidar_scan_3d.png", dpi=300, bbox_inches="tight")
-    
+    plt.savefig(
+        "output/waymo-dataset/top_lidar_scan_3d.png", dpi=300, bbox_inches="tight"
+    )

@@ -10,6 +10,7 @@ from detectors.data.collate import get_collate
 from detectors.data.datasets.coco import CocoDetectionDETR, CocoDetectionYolo
 from detectors.data.transforms import TRANSFORM_REGISTRY
 from detectors.data.transforms import transforms as T
+from detectors.data.datasets.waymo import WaymoDataset
 
 dataset_map = {
     "coco_detection_detr": CocoDetectionDETR,
@@ -179,11 +180,7 @@ def make_yolo_transforms(dataset_split, image_size: int = 416):
 def create_dataset(
     dataset_name: str,
     split: str,
-    root: str,
-    num_classes: int,
-    contiguous_cat_ids: bool,
-    transforms_config: dict[str],
-    model_name: Optional[str] = None,
+    dataset_params: dict[str, Any],
     current_epoch: int = 0,
     dev_mode: bool = False,
 ):
@@ -207,26 +204,28 @@ def create_dataset(
         images_dir = root / "images" / "test2017"
         annotation_file = root / "annotations" / "instances_test2017.json"
 
-    # create the transforms for the specific model
-    if model_name == "dino_detr":
-        data_transforms = make_dino_detr_transforms(split)
-    elif model_name == "yolo":
-        data_transforms = make_yolo_transforms(split)
-    else:
-        # rt-detr
-        data_transforms = make_config_transforms(transforms_config)
+    # # create the transforms for the specific model
+    # if model_name == "dino_detr":
+    #     data_transforms = make_dino_detr_transforms(split)
+    # elif model_name == "yolo":
+    #     data_transforms = make_yolo_transforms(split)
+    # else:
+    #     # rt-detr
+    data_transforms = make_config_transforms(dataset_params["transforms_config"])
 
     if dataset_name == "coco_detection_detr":
         dataset = CocoDetectionDETR(
             images_dir,
             annotation_file,
-            num_classes,
+            dataset_params["num_classes"],
             split,
             data_transforms,
-            contiguous_cat_ids,
-            current_epoch,
+            dataset_params["contiguous_cat_ids"],
+            dataset_params["current_epoch"],
             dev_mode,
         )
+    elif dataset_name == "WaymoDataset":
+        WaymoDataset
     else:
         raise ValueError(f"dataset: {dataset_name} not recognized")
 
