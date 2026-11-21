@@ -29,6 +29,7 @@ def load_config(config_path, cfg=dict()):
         file_cfg = yaml.safe_load(f)
 
     # load and merge additional yaml configs if specified in the INCLUDE_KEY field
+    breakpoint()
     if INCLUDE_KEY in file_cfg:
         base_yamls = list(file_cfg[INCLUDE_KEY].values())
         for base_yaml in base_yamls:

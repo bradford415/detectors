@@ -5,8 +5,8 @@
 __include__:
   # use the relative path from the project root
   dataset_config: configs/datasets/waymo.yaml
-  solver_config: TODO
-  model_config: configs/models/centerpoint.yaml
+  #solver_config: TODO
+  model_config: configs/centerpoint/centerpoint.yaml
 
 classes: ["vehicle", "pedestrian", "cyclist"]
 

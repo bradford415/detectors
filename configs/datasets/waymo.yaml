@@ -75,6 +75,8 @@ train_dataloader:
   effective_batch_size: 16
   shuffle: True
 
+# TODO: add val_dataloader for waymo dataset; see coco-2017.yaml for example
+
 DATA_SPLIT: {
     'train': train,
     'test': val

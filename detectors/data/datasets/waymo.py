@@ -11,15 +11,15 @@ from functools import partial
 from pathlib import Path
 
 import numpy as np
-import SharedArray
 import torch
 import torch.distributed as dist
 from tqdm import tqdm
 
 from detectors.data.datasets.detection3dbase import Detection3DBase
 
-from ...ops.roiaware_pool3d import roiaware_pool3d_utils
-from ...utils import box_utils, common_utils
+# TODO: go back and figure out if this is needed
+# from ...ops.roiaware_pool3d import roiaware_pool3d_utils
+# from ...utils import box_utils, common_utils
 
 
 class WaymoDataset(Detection3DBase):

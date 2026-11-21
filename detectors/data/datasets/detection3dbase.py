@@ -8,7 +8,7 @@ from detectors.data.processors.point_feature_encoder import PointFeatureEncoder
 from detectors.data.processors.point_processor import PointProcessor
 
 
-class Detection3DBase(torch.data.Dataset):
+class Detection3DBase(torch.utils.data.Dataset):
     """Base class for 3D lidar object detection datasets"""
 
     def __init__(
